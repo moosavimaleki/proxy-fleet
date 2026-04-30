@@ -1,5 +1,6 @@
 services:
   config-orchestrator:
+    image: src-config-orchestrator:latest
     build:
       context: .
       dockerfile: Dockerfile
