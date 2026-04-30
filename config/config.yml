@@ -1,0 +1,109 @@
+service:
+  name: config-orchestrator
+  environment: production
+
+subscriptions:
+  refresh_interval_seconds: 60
+  urls:
+    - name: sub_1
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub1.txt"
+    - name: sub_2
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub2.txt"
+    - name: sub_3
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub3.txt"
+    - name: sub_4
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub4.txt"
+    - name: sub_5
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub5.txt"
+    - name: sub_6
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub6.txt"
+    - name: sub_7
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub7.txt"
+    - name: sub_8
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub8.txt"
+ports:
+  main:
+    start: 30000
+    end: 31999
+  test:
+    start: 32000
+    end: 39999
+
+database:
+  type: sqlite
+  path: ./data/app.db
+
+health:
+  active_pool_relay_check_interval_seconds: 10
+  probation_recheck_interval_seconds: 120
+  candidate_recheck_interval_seconds: 10
+  candidate_batch_size: 256
+  candidate_batch_concurrency: 128
+  candidate_parallel_batches: 4
+  candidate_batch_timeout_seconds: 12
+  relay_timeout_ms: 3000
+  max_relay_delay_ms: 1500
+  test_url: "http://www.msftconnecttest.com/connecttest.txt"
+
+download_test:
+  enabled: true
+  timeout_seconds: 8
+  min_download_kbps: 100
+  target_download_kbps: 1000
+  test_url: "https://speed.cloudflare.com/__down?bytes=10000000"
+
+dead_pool:
+  ttl_hours: 24
+
+client_penalty:
+  broken:
+    base_cooldown_seconds: 300
+    max_cooldown_seconds: 21600
+    jitter_ratio: 0.2
+  rate_limited:
+    base_cooldown_seconds: 900
+    max_cooldown_seconds: 43200
+    jitter_ratio: 0.2
+
+selection:
+  strategy: weighted_power_of_choices
+  sample_size: 5
+  weights:
+    latency: 0.35
+    download: 0.20
+    availability: 0.20
+    fairness: 0.15
+    client_history: 0.10
+
+api:
+  host: "0.0.0.0"
+  port: 8080
+  auth_enabled: false
+
+vip_port:
+  enabled: true
+  port: 5050
+  check_interval_seconds: 10
+  min_switch_interval_seconds: 60
+  switch_threshold_score_diff: 0.15
+
+network_guard:
+  enabled: true
+  check_interval_seconds: 5
+  failure_threshold: 1
+  recovery_threshold: 1
+  minimum_successful_targets: 1
+  require_http_success: true
+  mass_failure_threshold_percent: 40
+  sentinel_targets:
+    - type: tcp
+      host: "1.1.1.1"
+      port: 53
+    - type: tcp
+      host: "8.8.8.8"
+      port: 53
+    - type: http
+      url: "https://www.gstatic.com/generate_204"
+
+assignment_ttl_seconds: 60
+xray_bin: "/usr/local/bin/xray"
