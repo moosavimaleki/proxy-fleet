@@ -92,7 +92,7 @@ network_guard:
   check_interval_seconds: 5
   failure_threshold: 1
   recovery_threshold: 1
-  minimum_successful_targets: 3
+  minimum_successful_targets: 2
   require_http_success: true
   mass_failure_threshold_percent: 40
   sentinel_targets:
