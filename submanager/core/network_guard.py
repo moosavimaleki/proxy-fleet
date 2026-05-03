@@ -3,12 +3,13 @@ from __future__ import annotations
 import socket
 import ssl
 import threading
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
 from submanager.config.models import NetworkGuardSettings, SentinelTarget
-from submanager.core.models import NetworkStateSnapshot, ServiceState
+from submanager.core.models import NetworkStateSnapshot, NetworkTargetResult, ServiceState
 from submanager.utils.logging import get_logger
 
 
@@ -33,7 +34,7 @@ class NetworkGuard:
         with self.lock:
             current = self.state.network
             assert current is not None
-            return NetworkStateSnapshot(**current.__dict__)
+            return self._copy_snapshot(current)
 
     def is_online(self) -> bool:
         if not self.settings.enabled:
@@ -46,6 +47,7 @@ class NetworkGuard:
         successes = 0
         http_successes = 0
         last_error = ""
+        target_results: list[NetworkTargetResult] = []
         total = len(self.settings.sentinel_targets)
         required_successes = min(total or 1, max(1, self.settings.minimum_successful_targets))
         if total == 0:
@@ -53,19 +55,40 @@ class NetworkGuard:
             http_successes = 1
             total = 1
             required_successes = 1
+            target_results.append(
+                NetworkTargetResult(type="implicit", endpoint="no sentinel targets configured", ok=True, duration_ms=0)
+            )
         else:
             for target in self.settings.sentinel_targets:
+                target_started = time.monotonic()
                 try:
                     self._check_target(target)
                     successes += 1
                     if target.type.lower().strip() == "http":
                         http_successes += 1
+                    target_results.append(
+                        NetworkTargetResult(
+                            type=target.type.lower().strip(),
+                            endpoint=self._target_endpoint(target),
+                            ok=True,
+                            duration_ms=int((time.monotonic() - target_started) * 1000),
+                        )
+                    )
                 except Exception as exc:
                     last_error = str(exc)
+                    target_results.append(
+                        NetworkTargetResult(
+                            type=target.type.lower().strip(),
+                            endpoint=self._target_endpoint(target),
+                            ok=False,
+                            duration_ms=int((time.monotonic() - target_started) * 1000),
+                            error=str(exc),
+                        )
+                    )
         has_required_successes = successes >= required_successes
         has_required_http = (not self.settings.require_http_success) or http_successes > 0
-        online_now = has_required_successes and has_required_http
-        if not online_now:
+        probe_online = has_required_successes and has_required_http
+        if not probe_online:
             reasons = []
             if not has_required_successes:
                 reasons.append(f"successful targets {successes}/{total}, required {required_successes}")
@@ -81,29 +104,60 @@ class NetworkGuard:
             current.last_checked_at = now
             current.successful_targets = successes
             current.total_targets = total
+            current.target_results = target_results
             was_online = current.online
-            if online_now:
+            if probe_online:
                 current.failure_streak = 0
                 current.recovery_streak += 1
                 current.last_success_at = now
                 current.last_error = ""
-                current.online = True
-                current.status = "online"
-                if not was_online:
+                if was_online or current.recovery_streak >= self.settings.recovery_threshold:
+                    current.online = True
+                    current.status = "online"
+                else:
+                    current.status = "recovering"
+                if not was_online and current.online:
                     current.last_changed_at = now
                     logger.warning("Network guard recovered: %s/%s targets succeeded", successes, total)
             else:
                 current.recovery_streak = 0
                 current.failure_streak += 1
                 current.last_error = last_error
-                current.online = False
-                current.status = "offline"
-                if was_online:
+                if (not was_online) or current.failure_streak >= self.settings.failure_threshold:
+                    current.online = False
+                    current.status = "offline"
+                else:
+                    current.status = "degraded"
+                if was_online and not current.online:
                     current.last_changed_at = now
                     logger.error("Network guard marked host offline: %s", last_error)
                 elif current.last_changed_at is None:
                     current.last_changed_at = now
-            return NetworkStateSnapshot(**current.__dict__)
+            return self._copy_snapshot(current)
+
+    def _copy_snapshot(self, snapshot: NetworkStateSnapshot) -> NetworkStateSnapshot:
+        return NetworkStateSnapshot(
+            enabled=snapshot.enabled,
+            online=snapshot.online,
+            status=snapshot.status,
+            failure_streak=snapshot.failure_streak,
+            recovery_streak=snapshot.recovery_streak,
+            last_checked_at=snapshot.last_checked_at,
+            last_changed_at=snapshot.last_changed_at,
+            last_success_at=snapshot.last_success_at,
+            last_error=snapshot.last_error,
+            successful_targets=snapshot.successful_targets,
+            total_targets=snapshot.total_targets,
+            target_results=list(snapshot.target_results),
+        )
+
+    def _target_endpoint(self, target: SentinelTarget) -> str:
+        kind = target.type.lower().strip()
+        if kind == "http":
+            return target.url
+        if kind in {"tcp", "dns"}:
+            return f"{target.host}:{target.port or 53}"
+        return target.host or target.url or target.type
 
     def _check_target(self, target: SentinelTarget) -> None:
         kind = target.type.lower().strip()

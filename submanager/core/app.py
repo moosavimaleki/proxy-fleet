@@ -331,6 +331,16 @@ class OrchestratorApp:
             "total_targets": snapshot.total_targets,
             "minimum_successful_targets": self.settings.network_guard.minimum_successful_targets,
             "require_http_success": self.settings.network_guard.require_http_success,
+            "targets": [
+                {
+                    "type": target.type,
+                    "endpoint": target.endpoint,
+                    "ok": target.ok,
+                    "duration_ms": target.duration_ms,
+                    "error": target.error,
+                }
+                for target in snapshot.target_results
+            ],
         }
 
     def get_reload_status_payload(self) -> dict[str, Any]:
@@ -495,26 +505,48 @@ class OrchestratorApp:
                 self._move_to_probation(node)
 
     def _network_guard_loop(self) -> None:
+        last_online = self.network_guard.snapshot().online
         while not self.stop_event.is_set():
             started = time.monotonic()
             try:
                 snapshot = self.network_guard.refresh()
+                details = {
+                    "online": snapshot.online,
+                    "successful_targets": snapshot.successful_targets,
+                    "total_targets": snapshot.total_targets,
+                    "minimum_successful_targets": self.settings.network_guard.minimum_successful_targets,
+                    "require_http_success": self.settings.network_guard.require_http_success,
+                    "failure_streak": snapshot.failure_streak,
+                    "recovery_streak": snapshot.recovery_streak,
+                    "duration_ms": int((time.monotonic() - started) * 1000),
+                    "last_error": snapshot.last_error,
+                    "targets": [
+                        {
+                            "type": target.type,
+                            "endpoint": target.endpoint,
+                            "ok": target.ok,
+                            "duration_ms": target.duration_ms,
+                            "error": target.error,
+                        }
+                        for target in snapshot.target_results
+                    ],
+                }
+                if snapshot.online != last_online:
+                    transition_event = "sentinel_recovered" if snapshot.online else "sentinel_offline"
+                    transition_level = "info" if snapshot.online else "error"
+                    transition_message = (
+                        "Network guard recovered; workers may resume"
+                        if snapshot.online
+                        else "Network guard marked host offline; workers will pause"
+                    )
+                    self._event(transition_level, "network", transition_event, transition_message, details)
+                    last_online = snapshot.online
                 self._event(
                     "info" if snapshot.online else "warning",
                     "network",
                     "sentinel_check",
                     f"Network sentinel check: {snapshot.status}",
-                    {
-                        "online": snapshot.online,
-                        "successful_targets": snapshot.successful_targets,
-                        "total_targets": snapshot.total_targets,
-                        "minimum_successful_targets": self.settings.network_guard.minimum_successful_targets,
-                        "require_http_success": self.settings.network_guard.require_http_success,
-                        "failure_streak": snapshot.failure_streak,
-                        "recovery_streak": snapshot.recovery_streak,
-                        "duration_ms": int((time.monotonic() - started) * 1000),
-                        "last_error": snapshot.last_error,
-                    },
+                    details,
                 )
             except Exception:
                 logger.exception("Network guard check failed unexpectedly")

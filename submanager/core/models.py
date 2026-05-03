@@ -115,6 +115,15 @@ class VipSelectionDecision:
 
 
 @dataclass
+class NetworkTargetResult:
+    type: str
+    endpoint: str
+    ok: bool
+    duration_ms: int
+    error: str = ""
+
+
+@dataclass
 class NetworkStateSnapshot:
     enabled: bool
     online: bool
@@ -127,6 +136,7 @@ class NetworkStateSnapshot:
     last_error: str = ""
     successful_targets: int = 0
     total_targets: int = 0
+    target_results: list[NetworkTargetResult] = field(default_factory=list)
 
 
 @dataclass
