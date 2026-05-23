@@ -37,20 +37,42 @@ health:
   active_pool_relay_check_interval_seconds: 10
   probation_recheck_interval_seconds: 120
   candidate_recheck_interval_seconds: 10
-  candidate_batch_size: 256
-  candidate_batch_concurrency: 128
-  candidate_parallel_batches: 4
-  candidate_batch_timeout_seconds: 12
-  relay_timeout_ms: 3000
-  max_relay_delay_ms: 1500
-  test_url: "http://www.msftconnecttest.com/connecttest.txt"
+  candidate_batch_size: 64
+  candidate_batch_concurrency: 32
+  candidate_parallel_batches: 1
+  candidate_batch_timeout_seconds: 45
+  relay_timeout_ms: 8000
+  max_relay_delay_ms: 5000
+  test_url: "https://www.cloudflare.com/cdn-cgi/trace"
+  fallback_urls:
+    - "https://www.gstatic.com/generate_204"
+    - "https://www.google.com/generate_204"
+    - "http://www.gstatic.com/generate_204"
+    - "http://www.msftconnecttest.com/connecttest.txt"
 
 download_test:
   enabled: true
-  timeout_seconds: 8
+  timeout_seconds: 5
+  per_url_timeout_seconds: 1.5
   min_download_kbps: 100
   target_download_kbps: 1000
-  test_url: "https://speed.cloudflare.com/__down?bytes=10000000"
+  test_url: "https://proof.ovh.net/files/1Mb.dat"
+  fallback_urls:
+    - "https://speed.cloudflare.com/__down?bytes=1000000"
+    - "https://speed.cloudflare.com/__down?bytes=5000000"
+    - "https://speed.cloudflare.com/__down?bytes=10000000"
+    - "https://fsn1-speed.hetzner.com/100MB.bin"
+    - "https://nbg1-speed.hetzner.com/100MB.bin"
+    - "https://hel1-speed.hetzner.com/100MB.bin"
+    - "https://ash-speed.hetzner.com/100MB.bin"
+    - "https://sin-speed.hetzner.com/100MB.bin"
+    - "https://proof.ovh.net/files/10Mb.dat"
+    - "https://proof.ovh.net/files/100Mb.dat"
+    - "https://proof.ovh.net/files/1Gb.dat"
+    - "http://speedtest.newark.linode.com/100MB-newark.bin"
+    - "http://speedtest.london.linode.com/100MB-london.bin"
+    - "http://speedtest.frankfurt.linode.com/100MB-frankfurt.bin"
+    - "http://speedtest.singapore.linode.com/100MB-singapore.bin"
 
 dead_pool:
   ttl_hours: 24

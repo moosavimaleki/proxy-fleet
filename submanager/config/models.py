@@ -49,15 +49,18 @@ class HealthSettings:
     relay_timeout_ms: int = 3000
     max_relay_delay_ms: int = 1500
     test_url: str = "http://www.msftconnecttest.com/connecttest.txt"
+    fallback_urls: list[str] = field(default_factory=list)
 
 
 @dataclass
 class DownloadTestSettings:
     enabled: bool = True
     timeout_seconds: int = 8
+    per_url_timeout_seconds: float = 1.5
     min_download_kbps: int = 100
     target_download_kbps: int = 1000
     test_url: str = "https://speed.cloudflare.com/__down?bytes=10000000"
+    fallback_urls: list[str] = field(default_factory=list)
 
 
 @dataclass

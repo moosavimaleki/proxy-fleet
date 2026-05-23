@@ -47,6 +47,16 @@ class NodeRecord:
     main_port: int | None = None
     relay_delay_ms: int | None = None
     download_kbps: int | None = None
+    exit_ip: str = ""
+    exit_hostname: str = ""
+    exit_city: str = ""
+    exit_region: str = ""
+    exit_country: str = ""
+    exit_loc: str = ""
+    exit_org: str = ""
+    exit_postal: str = ""
+    exit_timezone: str = ""
+    exit_info: dict[str, Any] = field(default_factory=dict)
     health_success_ewma: float = 1.0
     consecutive_relay_failures: int = 0
     consecutive_relay_successes: int = 0
@@ -54,6 +64,7 @@ class NodeRecord:
     updated_at: datetime | None = None
     last_health_check_at: datetime | None = None
     last_test_at: datetime | None = None
+    exit_info_fetched_at: datetime | None = None
     dead_until: datetime | None = None
 
 
@@ -145,6 +156,7 @@ class TestResult:
     ok: bool
     latency_ms: int
     download_kbps: int | None = None
+    exit_info: dict[str, Any] = field(default_factory=dict)
     error: str = ""
 
 

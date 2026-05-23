@@ -420,6 +420,9 @@ def _dashboard_body() -> str:
       <select id="status-filter">
         <option value="">All statuses</option>
       </select>
+      <select id="country-filter">
+        <option value="">All countries</option>
+      </select>
       <a href="/manual-import" class="nav-link" style="background:var(--accent);color:white;">Add Manual</a>
       <a href="/diag" class="nav-link" style="background:#ece2d2;">Diag</a>
       <button id="refresh-btn" type="button">Refresh now</button>
@@ -648,6 +651,18 @@ def _dashboard_script() -> str:
     const fleetState = { payload: null };
     let activeModalNode = null;
 
+    function countryFlag(countryCode) {
+      const code = String(countryCode || "").trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(code)) return "";
+      return String.fromCodePoint(...Array.from(code).map((char) => 127397 + char.charCodeAt(0)));
+    }
+
+    function locationLabel(node) {
+      const parts = [node.exit_city, node.exit_region].filter(Boolean);
+      if (parts.length) return parts.join(", ");
+      return node.exit_ip || node.exit_org || "";
+    }
+
     function renderFleetSummary(payload) {
       const wrap = document.getElementById("summary");
       const vipLabel = payload.vip?.enabled ? `VIP ${payload.vip.port}` : "VIP disabled";
@@ -683,6 +698,19 @@ def _dashboard_script() -> str:
       }).join("");
     }
 
+    function renderFleetCountryFilter(payload) {
+      const select = document.getElementById("country-filter");
+      const current = select.value;
+      const countries = Array.from(new Set((payload.nodes || []).map((node) => String(node.exit_country || "").trim()).filter(Boolean))).sort();
+      const options = ["", ...countries];
+      select.innerHTML = options.map((value) => {
+        const label = value || "All countries";
+        const selected = value === current ? " selected" : "";
+        const prefix = value ? `${countryFlag(value)} ` : "";
+        return `<option value="${esc(value)}"${selected}>${esc(prefix + label)}</option>`;
+      }).join("");
+    }
+
     function renderFleetRows() {
       const payload = fleetState.payload;
       const tbody = document.getElementById("rows");
@@ -690,13 +718,26 @@ def _dashboard_script() -> str:
 
       const search = document.getElementById("search").value.trim().toLowerCase();
       const statusFilter = document.getElementById("status-filter").value;
+      const countryFilter = document.getElementById("country-filter").value;
       const rows = payload.nodes.filter((node) => {
         if (statusFilter && node.status !== statusFilter) return false;
+        if (countryFilter && String(node.exit_country || "") !== countryFilter) return false;
         if (!search) return true;
         const blob = [
-          node.id, node.status, node.protocol, node.remark, node.server, node.config_hash, ...(node.source_subs || [])
+          node.id, node.status, node.protocol, node.remark, node.server, node.config_hash, node.exit_country, node.exit_city, node.exit_org, ...(node.source_subs || [])
         ].join(" ").toLowerCase();
         return blob.includes(search);
+      }).sort((left, right) => {
+        const leftVip = left.is_vip ? 0 : 1;
+        const rightVip = right.is_vip ? 0 : 1;
+        if (leftVip !== rightVip) return leftVip - rightVip;
+        const leftStatus = String(left.status || "");
+        const rightStatus = String(right.status || "");
+        if (leftStatus !== rightStatus) return leftStatus.localeCompare(rightStatus);
+        const leftDelay = Number.isFinite(left.relay_delay_ms) ? left.relay_delay_ms : Number.MAX_SAFE_INTEGER;
+        const rightDelay = Number.isFinite(right.relay_delay_ms) ? right.relay_delay_ms : Number.MAX_SAFE_INTEGER;
+        if (leftDelay !== rightDelay) return leftDelay - rightDelay;
+        return String(left.id || "").localeCompare(String(right.id || ""));
       });
 
       if (!rows.length) {
@@ -706,7 +747,7 @@ def _dashboard_script() -> str:
 
       tbody.innerHTML = rows.map((node) => `
         <tr>
-          <td class="tight"><span class="status ${esc(node.status)}">${esc(node.status)}</span>${node.is_vip ? '<br><span class="pill" style="margin-top:8px;">HOT PORT</span>' : ''}</td>
+          <td class="tight"><span class="status ${esc(node.status)}">${esc(node.status)}</span>${node.exit_country ? `<br><span class="muted" title="${esc(locationLabel(node) || node.exit_country)}">${esc(countryFlag(node.exit_country))} ${esc(node.exit_country)}</span>` : ''}${node.is_vip ? '<br><span class="pill" style="margin-top:8px;">HOT PORT</span>' : ''}</td>
           <td class="mono wrap">${esc(node.protocol)}<br>${esc(node.server)}:${esc(node.remote_port)}<br><span class="muted">${esc(node.id.slice(0, 12))}</span></td>
           <td class="wrap"><strong>${esc(node.remark || "-")}</strong><br><span class="muted mono">${esc(node.config_hash.slice(0, 18))}</span></td>
           <td class="mono">run: ${esc(node.runtime_running)}<br>main: ${esc(metric(node.main_port))}<br>rt: ${esc(metric(node.runtime_port))}</td>
@@ -735,6 +776,7 @@ def _dashboard_script() -> str:
       fleetState.payload = await response.json();
       renderFleetSummary(fleetState.payload);
       renderFleetStatusFilter(fleetState.payload);
+      renderFleetCountryFilter(fleetState.payload);
       renderFleetRows();
       const net = fleetState.payload.network;
       const netText = net?.enabled ? `network=${net.online ? "online" : "offline"}` : "network-guard=disabled";
@@ -743,6 +785,7 @@ def _dashboard_script() -> str:
 
     document.getElementById("search").addEventListener("input", renderFleetRows);
     document.getElementById("status-filter").addEventListener("change", renderFleetRows);
+    document.getElementById("country-filter").addEventListener("change", renderFleetRows);
     document.getElementById("refresh-btn").addEventListener("click", () => refreshFleet().catch(showFleetError));
 
     function showFleetError(error) {
@@ -1094,6 +1137,7 @@ def _history_script() -> str:
       const cards = [
         ["Node", node.id || "-"],
         ["Status", node.status || "-"],
+        ["Country", node.exit_country || "-"],
         ["Remark", node.remark || "-"],
         ["Proxy", node.server ? `${node.protocol} ${node.server}:${node.remote_port}` : "-"],
         ["Records", (payload.history || []).length],
@@ -1250,7 +1294,7 @@ curl 'http://127.0.0.1:8080/api/v1/logs?component=candidate&amp;level=info&amp;l
       </article>
       <article class="panel doc-card">
         <h3>POST /api/v1/nodes/&lt;node_id&gt;/test</h3>
-        <p>Run a manual full test for a specific node.</p>
+        <p>Run the fast two-stage test for a specific node: relay first, then download only if relay passes.</p>
         <pre>curl -X POST http://127.0.0.1:8080/api/v1/nodes/NODE_ID/test \
   -H 'Content-Type: application/json' \
   -d '{}'</pre>

@@ -382,12 +382,21 @@ class SubscriptionParser:
         if security and security != "none":
             stream["security"] = security
             if security == "tls":
-                stream["tlsSettings"] = {
+                tls_settings: dict[str, Any] = {
                     "serverName": query.get("sni", [host])[0],
-                    "allowInsecure": True,
-                    "fingerprint": query.get("fp", [""])[0],
-                    "alpn": self._split_csv(query.get("alpn", [""])[0]),
+                    "allowInsecure": self._query_bool(
+                        query,
+                        "allowInsecure",
+                        self._query_bool(query, "insecure", True),
+                    ),
                 }
+                fingerprint = query.get("fp", [""])[0]
+                alpn = self._split_csv(query.get("alpn", [""])[0])
+                if fingerprint:
+                    tls_settings["fingerprint"] = fingerprint
+                if alpn:
+                    tls_settings["alpn"] = alpn
+                stream["tlsSettings"] = tls_settings
             elif security == "reality":
                 stream["realitySettings"] = {
                     "serverName": query.get("sni", [host])[0],
@@ -431,3 +440,9 @@ class SubscriptionParser:
 
     def _split_csv(self, value: str) -> list[str]:
         return [item for item in (part.strip() for part in value.split(",")) if item]
+
+    def _query_bool(self, query: dict[str, list[str]], key: str, default: bool) -> bool:
+        value = query.get(key, [""])[0].strip().lower()
+        if not value:
+            return default
+        return value in {"1", "true", "yes", "on"}

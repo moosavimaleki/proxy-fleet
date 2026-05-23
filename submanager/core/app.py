@@ -11,7 +11,7 @@ from typing import Any
 from submanager.config.models import AppSettings
 from submanager.core.feedback import FeedbackEngine
 from submanager.core.network_guard import NetworkGuard
-from submanager.core.models import BestNodeDecision, FeedbackInput, NodeRecord, NodeStatus, ParsedNode, ServiceState, VipSelectionDecision
+from submanager.core.models import BestNodeDecision, FeedbackInput, NodeRecord, NodeStatus, ParsedNode, ServiceState, TestResult, VipSelectionDecision
 from submanager.core.ports import PortManager
 from submanager.core.runtime import RuntimeSupervisor
 from submanager.parser import SubscriptionParser
@@ -23,6 +23,7 @@ from submanager.utils.logging import get_logger
 
 
 logger = get_logger(__name__)
+CANDIDATE_FAILURE_THRESHOLD = 2
 PROBATION_FAILURE_THRESHOLD = 2
 PROBATION_SUCCESS_THRESHOLD = 2
 
@@ -45,6 +46,80 @@ class OrchestratorApp:
         self.transition_lock = threading.RLock()
         self.reload_lock = threading.Lock()
         self.threads: list[threading.Thread] = []
+
+    def _has_exit_info(self, node: NodeRecord) -> bool:
+        return bool(node.exit_ip or node.exit_country or node.exit_info)
+
+    def _apply_exit_info(self, node: NodeRecord, exit_info: dict[str, Any]) -> None:
+        normalized = {str(key): value for key, value in exit_info.items()}
+        node.exit_ip = str(normalized.get("ip", "") or "")
+        node.exit_hostname = str(normalized.get("hostname", "") or "")
+        node.exit_city = str(normalized.get("city", "") or "")
+        node.exit_region = str(normalized.get("region", "") or "")
+        node.exit_country = str(normalized.get("country", "") or "")
+        node.exit_loc = str(normalized.get("loc", "") or "")
+        node.exit_org = str(normalized.get("org", "") or "")
+        node.exit_postal = str(normalized.get("postal", "") or "")
+        node.exit_timezone = str(normalized.get("timezone", "") or "")
+        node.exit_info = normalized
+        node.exit_info_fetched_at = datetime.now(timezone.utc)
+
+    def _status_priority(self, status: NodeStatus) -> int:
+        priorities = {
+            NodeStatus.ACTIVE: 0,
+            NodeStatus.PROBATION: 1,
+            NodeStatus.CANDIDATE: 2,
+            NodeStatus.WAITING_FOR_PORT: 3,
+            NodeStatus.TESTING: 4,
+            NodeStatus.DEAD: 5,
+            NodeStatus.REMOVED: 6,
+        }
+        return priorities.get(status, 99)
+
+    def _duplicate_keep_key(self, node: NodeRecord) -> tuple[Any, ...]:
+        relay = node.relay_delay_ms if node.relay_delay_ms is not None else 10**9
+        download = -(node.download_kbps if node.download_kbps is not None else -1)
+        created = node.created_at or datetime.max.replace(tzinfo=timezone.utc)
+        return (self._status_priority(node.status), relay, download, created, node.id)
+
+    def _delete_node_runtime_and_record(self, node: NodeRecord) -> None:
+        with self.transition_lock:
+            if self.state.vip_node_id == node.id:
+                self.runtime_supervisor.stop_vip_runtime()
+                self.state.vip_node_id = None
+                self.state.vip_score = None
+            self.runtime_supervisor.stop_active_runtime(node.id)
+            self.port_manager.release_main(node.main_port)
+        self.store.delete_node(node.id)
+
+    def _save_and_dedupe_by_exit_ip(self, node: NodeRecord) -> NodeRecord:
+        self.store.save_node(node)
+        if not node.exit_ip:
+            return node
+        peers = [item for item in self.store.list_nodes_by_exit_ip(node.exit_ip) if item.id != node.id]
+        if not peers:
+            return node
+        group = [node, *peers]
+        canonical = min(group, key=self._duplicate_keep_key)
+        merged_sources = sorted({source for item in group for source in item.source_subs})
+        if merged_sources != canonical.source_subs:
+            canonical.source_subs = merged_sources
+            self.store.save_node(canonical)
+        removed_ids: list[str] = []
+        for item in group:
+            if item.id == canonical.id:
+                continue
+            removed_ids.append(item.id)
+            self._delete_node_runtime_and_record(item)
+        if removed_ids:
+            self._event(
+                "warning",
+                "candidate",
+                "duplicate_exit_ip_merged",
+                "Merged duplicate proxy nodes by exit IP",
+                {"exit_ip": node.exit_ip, "kept_node_id": canonical.id, "removed_node_ids": removed_ids},
+            )
+        return canonical
 
     def start(self) -> None:
         reset_count = self.store.reset_testing_nodes()
@@ -89,12 +164,13 @@ class OrchestratorApp:
         node = self.store.get_node(node_id)
         if node is None:
             raise KeyError(node_id)
+        status_before = node.status.value
         if not self._network_allows_work(force_refresh=True):
             started = datetime.now(timezone.utc)
             finished = started
             self.store.record_test_history(
                 node_id=node.id,
-                test_kind="full",
+                test_kind="fast",
                 trigger="manual",
                 started_at=started,
                 finished_at=finished,
@@ -115,7 +191,7 @@ class OrchestratorApp:
             raise RuntimeError("No free test port available")
         started = datetime.now(timezone.utc)
         try:
-            result = self.test_service.run_full_test(parsed, test_port)
+            result = self.test_service.run_fast_test(parsed, test_port, fetch_exit_info=not self._has_exit_info(node))
         finally:
             self.port_manager.release_test(test_port)
         finished = datetime.now(timezone.utc)
@@ -125,10 +201,27 @@ class OrchestratorApp:
             node.relay_delay_ms = result.latency_ms
         if result.download_kbps is not None:
             node.download_kbps = result.download_kbps
-        self.store.save_node(node)
+        exit_info_details: dict[str, Any] = {}
+        if result.exit_info:
+            self._apply_exit_info(node, result.exit_info)
+            exit_info_details = {
+                "exit_info": result.exit_info,
+                "exit_country": node.exit_country,
+                "exit_city": node.exit_city,
+                "exit_org": node.exit_org,
+                "exit_ip": node.exit_ip,
+            }
+        if result.ok and node.status in {NodeStatus.DEAD, NodeStatus.PROBATION}:
+            if node.status == NodeStatus.DEAD:
+                node.dead_until = None
+                node.status = NodeStatus.PROBATION
+                node.consecutive_relay_failures = 0
+                node.consecutive_relay_successes = 0
+            self._mark_probation_success(node, parsed)
+        kept = self._save_and_dedupe_by_exit_ip(node)
         self.store.record_test_history(
             node_id=node.id,
-            test_kind="full",
+            test_kind="fast",
             trigger="manual",
             started_at=started,
             finished_at=finished,
@@ -137,9 +230,9 @@ class OrchestratorApp:
             latency_ms=result.latency_ms if result.latency_ms >= 0 else None,
             download_kbps=result.download_kbps,
             error=result.error,
-            status_before=node.status.value,
+            status_before=status_before,
             status_after=node.status.value,
-            details={"remark": parsed.remark, "protocol": parsed.protocol},
+            details={"remark": parsed.remark, "protocol": parsed.protocol, "realping_first": True, **exit_info_details},
         )
         return {
             "ok": result.ok,
@@ -147,6 +240,9 @@ class OrchestratorApp:
             "network_online": True,
             "latency_ms": result.latency_ms if result.latency_ms >= 0 else None,
             "download_kbps": result.download_kbps,
+            "status_before": status_before,
+            "status_after": kept.status.value,
+            "exit_info": kept.exit_info,
             "finished_at": self._dt(finished),
         }
 
@@ -441,6 +537,14 @@ class OrchestratorApp:
             "main_port": node.main_port,
             "relay_delay_ms": node.relay_delay_ms,
             "download_kbps": node.download_kbps,
+            "exit_ip": node.exit_ip,
+            "exit_country": node.exit_country,
+            "exit_city": node.exit_city,
+            "exit_region": node.exit_region,
+            "exit_org": node.exit_org,
+            "exit_timezone": node.exit_timezone,
+            "exit_info": node.exit_info,
+            "exit_info_fetched_at": self._dt(node.exit_info_fetched_at),
             "health_success_ewma": round(node.health_success_ewma, 4),
             "consecutive_relay_failures": node.consecutive_relay_failures,
             "open_assignments": stats.get("open_assignments", 0),
@@ -646,22 +750,28 @@ class OrchestratorApp:
         interval = self.settings.health.active_pool_relay_check_interval_seconds
         while not self.stop_event.is_set():
             started = time.monotonic()
+            next_sleep = 0.0
             try:
                 if self._network_allows_work():
                     result = self._check_active_nodes_batch()
+                    active_nodes = int(result.get("active_nodes") or 0)
+                    next_sleep = 0.0 if active_nodes else interval
                     self._event(
                         "info" if not result.get("failures") else "warning",
                         "health",
                         "active_check_finished",
                         "Active pool health check finished",
-                        {**result, "duration_ms": int((time.monotonic() - started) * 1000), "next_run_seconds": interval},
+                        {**result, "duration_ms": int((time.monotonic() - started) * 1000), "next_run_seconds": next_sleep},
                     )
                 else:
                     self._event("warning", "health", "active_check_skipped", "Active pool health check skipped because host network is offline")
+                    next_sleep = self.settings.network_guard.check_interval_seconds if self.settings.network_guard.enabled else interval
             except Exception:
                 logger.exception("Active health checker iteration failed")
                 self._event("error", "health", "active_check_error", "Active health checker iteration failed")
-            self.stop_event.wait(interval)
+                next_sleep = min(1.0, interval)
+            if next_sleep > 0:
+                self.stop_event.wait(next_sleep)
 
     def _dead_janitor_loop(self) -> None:
         while not self.stop_event.is_set():
@@ -719,68 +829,6 @@ class OrchestratorApp:
             accepted += 1
         return accepted
 
-    def _test_and_register_candidate(self, parsed: ParsedNode) -> None:
-        if not self._network_allows_work():
-            return
-        with self.transition_lock:
-            record = self.store.create_or_merge_candidate(parsed)
-            record.status = NodeStatus.TESTING
-            self.store.save_node(record)
-
-        test_port = self.port_manager.allocate_test()
-        if test_port is None:
-            logger.warning("No free test port for candidate %s", parsed.config_hash)
-            record.status = NodeStatus.CANDIDATE
-            self.store.save_node(record)
-            return
-
-        started_at = datetime.now(timezone.utc)
-        try:
-            try:
-                result = self.test_service.run_full_test(parsed, test_port)
-            except Exception as exc:
-                result = None
-                logger.exception("Candidate test crashed for node %s", record.id)
-                record.last_test_at = datetime.now(timezone.utc)
-                record.status = NodeStatus.CANDIDATE if not self._network_allows_work(force_refresh=True) else NodeStatus.DEAD
-                if record.status == NodeStatus.DEAD:
-                    record.dead_until = datetime.now(timezone.utc) + timedelta(hours=self.settings.dead_pool.ttl_hours)
-                self.store.save_node(record)
-                self.store.record_test_history(
-                    node_id=record.id,
-                    test_kind="full",
-                    trigger="candidate",
-                    started_at=started_at,
-                    finished_at=datetime.now(timezone.utc),
-                    network_online=self._network_allows_work(),
-                    ok=False,
-                    latency_ms=None,
-                    download_kbps=None,
-                    error=str(exc),
-                    status_before=NodeStatus.TESTING.value,
-                    status_after=record.status.value,
-                    details={"protocol": parsed.protocol, "remark": parsed.remark, "crashed": True},
-                )
-                return
-        finally:
-            self.port_manager.release_test(test_port)
-
-        status_before = record.status.value
-        record.last_test_at = datetime.now(timezone.utc)
-        record.relay_delay_ms = result.latency_ms if result.latency_ms >= 0 else None
-        record.download_kbps = result.download_kbps
-        if result.ok:
-            self._activate_node(record, parsed)
-            self._record_test_result(record.id, "full", "candidate", started_at=started_at, result=result, status_before=status_before, status_after=record.status.value, details={"protocol": parsed.protocol, "remark": parsed.remark})
-        else:
-            if not self._network_allows_work(force_refresh=True):
-                record.status = NodeStatus.CANDIDATE
-                self.store.save_node(record)
-                self._record_test_result(record.id, "full", "candidate", started_at=started_at, result=result, status_before=status_before, status_after=record.status.value, details={"suppressed_by_network_guard": True, "protocol": parsed.protocol, "remark": parsed.remark})
-                return
-            self._move_to_dead(record)
-            self._record_test_result(record.id, "full", "candidate", started_at=started_at, result=result, status_before=status_before, status_after=record.status.value, details={"protocol": parsed.protocol, "remark": parsed.remark})
-
     def _activate_node(self, record: NodeRecord, parsed: ParsedNode) -> None:
         with self.transition_lock:
             main_port = self.port_manager.allocate_main()
@@ -798,24 +846,6 @@ class OrchestratorApp:
             record.health_success_ewma = self._ewma(record.health_success_ewma, 1.0)
             self.store.save_node(record)
 
-    def _check_active_node(self, node: NodeRecord) -> None:
-        if node.main_port is None:
-            self._move_to_probation(node)
-            return
-        if not self.runtime_supervisor.is_running(node.id):
-            self._move_to_probation(node)
-            return
-        try:
-            latency = self.test_service.probe_running_port(node.main_port)
-            node.relay_delay_ms = latency
-            node.last_health_check_at = datetime.now(timezone.utc)
-            node.consecutive_relay_failures = 0
-            node.health_success_ewma = self._ewma(node.health_success_ewma, 1.0)
-            self.store.save_node(node)
-        except Exception:
-            logger.exception("Active relay check failed for node %s", node.id)
-            self._move_to_probation(node)
-
     def _recheck_probation_nodes(self) -> None:
         if not self._network_allows_work():
             return
@@ -832,7 +862,7 @@ class OrchestratorApp:
                 logger.warning("No free test port for probation node %s", node.id)
                 return
             try:
-                result = self.test_service.run_full_test(parsed, test_port)
+                result = self.test_service.run_fast_test(parsed, test_port, fetch_exit_info=not self._has_exit_info(node))
             finally:
                 self.port_manager.release_test(test_port)
 
@@ -841,16 +871,29 @@ class OrchestratorApp:
             node.last_test_at = finished_at
             node.relay_delay_ms = result.latency_ms if result.latency_ms >= 0 else None
             node.download_kbps = result.download_kbps
+            exit_info_details: dict[str, Any] = {}
+            if result.exit_info:
+                self._apply_exit_info(node, result.exit_info)
+                exit_info_details = {
+                    "exit_info": result.exit_info,
+                    "exit_country": node.exit_country,
+                    "exit_city": node.exit_city,
+                    "exit_org": node.exit_org,
+                    "exit_ip": node.exit_ip,
+                }
+            kept = self._save_and_dedupe_by_exit_ip(node)
+            if kept.id != node.id:
+                continue
             if result.ok:
                 self._mark_probation_success(node, parsed)
-                self._record_test_result(node.id, "full", "probation", started_at=finished_at, result=result, status_before=status_before, status_after=node.status.value, details={"protocol": parsed.protocol, "remark": parsed.remark, "probation_successes": node.consecutive_relay_successes})
+                self._record_test_result(node.id, "fast", "probation", started_at=finished_at, result=result, status_before=status_before, status_after=node.status.value, details={"protocol": parsed.protocol, "remark": parsed.remark, "probation_successes": node.consecutive_relay_successes, "realping_first": True, **exit_info_details})
             else:
                 if not self._network_allows_work(force_refresh=True):
                     self.store.save_node(node)
-                    self._record_test_result(node.id, "full", "probation", started_at=finished_at, result=result, status_before=status_before, status_after=node.status.value, details={"suppressed_by_network_guard": True, "protocol": parsed.protocol, "remark": parsed.remark})
+                    self._record_test_result(node.id, "fast", "probation", started_at=finished_at, result=result, status_before=status_before, status_after=node.status.value, details={"suppressed_by_network_guard": True, "protocol": parsed.protocol, "remark": parsed.remark, "realping_first": True, **exit_info_details})
                     return
                 self._mark_probation_failure(node)
-                self._record_test_result(node.id, "full", "probation", started_at=finished_at, result=result, status_before=status_before, status_after=node.status.value, details={"protocol": parsed.protocol, "remark": parsed.remark, "probation_failures": node.consecutive_relay_failures})
+                self._record_test_result(node.id, "fast", "probation", started_at=finished_at, result=result, status_before=status_before, status_after=node.status.value, details={"protocol": parsed.protocol, "remark": parsed.remark, "probation_failures": node.consecutive_relay_failures, "realping_first": True, **exit_info_details})
 
     def _recheck_candidate_nodes(self) -> dict[str, Any]:
         summary: dict[str, Any] = {
@@ -933,7 +976,7 @@ class OrchestratorApp:
                     self.store.save_node(node)
                     self.store.record_test_history(
                         node_id=node.id,
-                        test_kind="realping",
+                        test_kind="fast",
                         trigger="candidate",
                         started_at=started_at,
                         finished_at=datetime.now(timezone.utc),
@@ -944,120 +987,161 @@ class OrchestratorApp:
                         error="no free test ports for candidate batch",
                         status_before=NodeStatus.CANDIDATE.value,
                         status_after=node.status.value,
-                        details={"protocol": parsed.protocol, "remark": parsed.remark, "batched": True},
+                        details={"protocol": parsed.protocol, "remark": parsed.remark, "batched": True, "realping_first": True},
                     )
                 return
             ports.append(port)
 
         try:
-            results = self.test_service.run_realping_batch(
-                parsed_nodes,
-                concurrency=self.settings.health.candidate_batch_concurrency,
-                ports=ports,
-            )
-        except Exception:
-            logger.exception("Candidate realping batch crashed")
-            network_online = self._network_allows_work(force_refresh=True)
-            for node, parsed in candidates:
-                node.status = NodeStatus.CANDIDATE if not network_online else NodeStatus.DEAD
-                node.last_test_at = datetime.now(timezone.utc)
-                if node.status == NodeStatus.DEAD:
-                    node.dead_until = datetime.now(timezone.utc) + timedelta(hours=self.settings.dead_pool.ttl_hours)
-                self.store.save_node(node)
-                self.store.record_test_history(
-                    node_id=node.id,
-                    test_kind="realping",
-                    trigger="candidate",
-                    started_at=started_at,
-                    finished_at=datetime.now(timezone.utc),
-                    network_online=self._network_allows_work(),
-                    ok=False,
-                    latency_ms=None,
-                    download_kbps=None,
-                    error="candidate realping batch crashed",
-                    status_before=NodeStatus.CANDIDATE.value,
-                    status_after=node.status.value,
-                    details={"protocol": parsed.protocol, "remark": parsed.remark, "crashed": True, "batched": True},
+            try:
+                results = self.test_service.run_fast_test_batch(
+                    parsed_nodes,
+                    concurrency=self.settings.health.candidate_batch_concurrency,
+                    ports=ports,
+                    fetch_exit_info=any(not self._has_exit_info(node) for node, _ in candidates),
                 )
-            return
+            except Exception:
+                logger.exception("Candidate fast test batch crashed")
+                for node, parsed in candidates:
+                    node.status = NodeStatus.CANDIDATE
+                    node.last_test_at = datetime.now(timezone.utc)
+                    self.store.save_node(node)
+                    self.store.record_test_history(
+                        node_id=node.id,
+                        test_kind="fast",
+                        trigger="candidate",
+                        started_at=started_at,
+                        finished_at=datetime.now(timezone.utc),
+                        network_online=self._network_allows_work(),
+                        ok=False,
+                        latency_ms=None,
+                        download_kbps=None,
+                        error="candidate fast test batch crashed",
+                        status_before=NodeStatus.CANDIDATE.value,
+                        status_after=node.status.value,
+                        details={"protocol": parsed.protocol, "remark": parsed.remark, "crashed": True, "batched": True, "realping_first": True},
+                    )
+                return
+
+            result_map = {result.parsed_node.config_hash: result for result in results}
+            has_failures = len(result_map) < len(candidates) or any(not result.ok for result in results)
+            success_count = sum(1 for result in results if result.ok)
+            failure_percent = ((len(candidates) - success_count) * 100.0 / max(1, len(candidates)))
+            threshold_percent = self.settings.network_guard.mass_failure_threshold_percent
+            suppress_mass_failure = (
+                self.settings.network_guard.enabled
+                and has_failures
+                and success_count == 0
+                and len(candidates) >= 10
+                and threshold_percent > 0
+                and failure_percent >= threshold_percent
+            )
+            if suppress_mass_failure:
+                logger.warning(
+                    "Suppressed candidate batch failures because every probe failed (%.1f%% failures in batch)",
+                    failure_percent,
+                )
+            if suppress_mass_failure:
+                network_online_after_test = False
+            elif has_failures:
+                network_online_after_test = self._network_allows_work(force_refresh=True)
+            else:
+                network_online_after_test = True
+            finished_at = datetime.now(timezone.utc)
+
+            for node, parsed in candidates:
+                entry = by_hash.get(parsed.config_hash)
+                result = result_map.get(parsed.config_hash)
+                if entry is None:
+                    logger.warning("Candidate batch bookkeeping missing for node %s", node.id)
+                    continue
+                if result is None:
+                    result = TestResult(
+                        parsed_node=parsed,
+                        ok=False,
+                        latency_ms=-1,
+                        download_kbps=0,
+                        error="candidate result missing from batch",
+                    )
+
+                _, _, status_before = entry
+                node.last_test_at = finished_at
+                if result.latency_ms >= 0:
+                    node.relay_delay_ms = result.latency_ms
+                if result.download_kbps is not None:
+                    node.download_kbps = result.download_kbps
+
+                exit_info_details: dict[str, Any] = {}
+                if result.exit_info:
+                    self._apply_exit_info(node, result.exit_info)
+                    exit_info_details = {
+                        "exit_info": result.exit_info,
+                        "exit_country": node.exit_country,
+                        "exit_city": node.exit_city,
+                        "exit_org": node.exit_org,
+                        "exit_ip": node.exit_ip,
+                    }
+                if result.ok:
+                    self._activate_node(node, parsed)
+                    kept = self._save_and_dedupe_by_exit_ip(node)
+                    if kept.id != node.id:
+                        continue
+                    self._record_test_result(
+                        node.id,
+                        "fast",
+                        "candidate",
+                        started_at=started_at,
+                        result=result,
+                        status_before=status_before,
+                        status_after=node.status.value,
+                        details={"protocol": parsed.protocol, "remark": parsed.remark, "batched": True, "realping_first": True, **exit_info_details},
+                    )
+                    continue
+
+                if not network_online_after_test:
+                    node.status = NodeStatus.CANDIDATE
+                    self.store.save_node(node)
+                    self._record_test_result(
+                        node.id,
+                        "fast",
+                        "candidate",
+                        started_at=started_at,
+                        result=result,
+                        status_before=status_before,
+                        status_after=node.status.value,
+                        details={
+                            "protocol": parsed.protocol,
+                            "remark": parsed.remark,
+                            "suppressed_by_network_guard": not suppress_mass_failure,
+                            "suppressed_by_mass_failure": suppress_mass_failure,
+                            "batched": True,
+                            "realping_first": True,
+                            **exit_info_details,
+                        },
+                    )
+                    continue
+
+                self._mark_candidate_failure(node)
+                self._record_test_result(
+                    node.id,
+                    "fast",
+                    "candidate",
+                    started_at=started_at,
+                    result=result,
+                    status_before=status_before,
+                    status_after=node.status.value,
+                    details={
+                        "protocol": parsed.protocol,
+                        "remark": parsed.remark,
+                        "candidate_failures": node.consecutive_relay_failures,
+                        "batched": True,
+                        "realping_first": True,
+                        **exit_info_details,
+                    },
+                )
         finally:
             for port in ports:
                 self.port_manager.release_test(port)
-
-        result_map = {result.parsed_node.config_hash: result for result in results}
-        has_failed_result = len(result_map) < len(candidates) or any(
-            (not result.ok) or result.latency_ms > self.settings.health.max_relay_delay_ms for result in results
-        )
-        network_online_after_batch = self._network_allows_work(force_refresh=True) if has_failed_result else True
-        finished_at = datetime.now(timezone.utc)
-        for node, parsed in candidates:
-            entry = by_hash.get(parsed.config_hash)
-            result = result_map.get(parsed.config_hash)
-            if entry is None or result is None:
-                node.status = NodeStatus.CANDIDATE
-                node.last_test_at = finished_at
-                self.store.save_node(node)
-                self.store.record_test_history(
-                    node_id=node.id,
-                    test_kind="realping",
-                    trigger="candidate",
-                    started_at=started_at,
-                    finished_at=finished_at,
-                    network_online=self._network_allows_work(),
-                    ok=False,
-                    latency_ms=None,
-                    download_kbps=None,
-                    error="candidate result missing from batch",
-                    status_before=NodeStatus.CANDIDATE.value,
-                    status_after=node.status.value,
-                    details={"protocol": parsed.protocol, "remark": parsed.remark, "batched": True},
-                )
-                continue
-            _, _, status_before = entry
-            node.last_test_at = finished_at
-            if result.latency_ms >= 0:
-                node.relay_delay_ms = result.latency_ms
-            if result.ok and result.latency_ms <= self.settings.health.max_relay_delay_ms:
-                self._activate_node(node, parsed)
-                self._record_test_result(
-                    node.id,
-                    "realping",
-                    "candidate",
-                    started_at=started_at,
-                    result=result,
-                    status_before=status_before,
-                    status_after=node.status.value,
-                    details={"protocol": parsed.protocol, "remark": parsed.remark, "batched": True},
-                )
-                continue
-            if result.ok and result.latency_ms > self.settings.health.max_relay_delay_ms:
-                result.ok = False
-                result.error = "relay delay too high"
-            if not network_online_after_batch:
-                node.status = NodeStatus.CANDIDATE
-                self.store.save_node(node)
-                self._record_test_result(
-                    node.id,
-                    "realping",
-                    "candidate",
-                    started_at=started_at,
-                    result=result,
-                    status_before=status_before,
-                    status_after=node.status.value,
-                    details={"protocol": parsed.protocol, "remark": parsed.remark, "suppressed_by_network_guard": True, "batched": True},
-                )
-                continue
-            self._move_to_dead(node)
-            self._record_test_result(
-                node.id,
-                "realping",
-                "candidate",
-                started_at=started_at,
-                result=result,
-                status_before=status_before,
-                status_after=node.status.value,
-                details={"protocol": parsed.protocol, "remark": parsed.remark, "batched": True},
-            )
 
     def _promote_waiting_nodes(self) -> None:
         if not self._network_allows_work():
@@ -1077,7 +1161,8 @@ class OrchestratorApp:
             self.port_manager.release_main(node.main_port)
             node.main_port = None
             node.status = NodeStatus.PROBATION
-            node.consecutive_relay_failures += 1
+            # The first failure moves the node into probation; retries inside probation decide death.
+            node.consecutive_relay_failures = 0
             node.consecutive_relay_successes = 0
             node.health_success_ewma = self._ewma(node.health_success_ewma, 0.0)
             self.store.save_node(node)
@@ -1093,6 +1178,18 @@ class OrchestratorApp:
             node.dead_until = datetime.now(timezone.utc) + timedelta(hours=self.settings.dead_pool.ttl_hours)
             node.consecutive_relay_successes = 0
             node.health_success_ewma = self._ewma(node.health_success_ewma, 0.0)
+            self.store.save_node(node)
+
+    def _mark_candidate_failure(self, node: NodeRecord) -> None:
+        with self.transition_lock:
+            node.consecutive_relay_failures += 1
+            node.consecutive_relay_successes = 0
+            node.health_success_ewma = self._ewma(node.health_success_ewma, 0.0)
+            if node.consecutive_relay_failures >= CANDIDATE_FAILURE_THRESHOLD:
+                self._move_to_dead(node)
+                return
+            node.status = NodeStatus.CANDIDATE
+            node.dead_until = None
             self.store.save_node(node)
 
     def _mark_probation_failure(self, node: NodeRecord) -> None:
@@ -1182,11 +1279,13 @@ class OrchestratorApp:
             "failures": 0,
             "suppressed": 0,
             "moved_to_probation": 0,
+            "skipped_no_ports": 0,
+            "vip_checked": 0,
+            "vip_failures": 0,
         }
         active_nodes = self.store.list_nodes_by_status(NodeStatus.ACTIVE)
         summary["active_nodes"] = len(active_nodes)
-        probe_failures: list[NodeRecord] = []
-        checked = 0
+        test_items: list[tuple[NodeRecord, ParsedNode, str]] = []
         for node in active_nodes:
             if node.main_port is None:
                 self._move_to_probation(node)
@@ -1196,40 +1295,181 @@ class OrchestratorApp:
                 self._move_to_probation(node)
                 summary["moved_to_probation"] = int(summary["moved_to_probation"]) + 1
                 continue
-            checked += 1
-            summary["checked"] = checked
-            started = datetime.now(timezone.utc)
             try:
-                latency = self.test_service.probe_running_port(node.main_port)
-                node.relay_delay_ms = latency
-                finished = datetime.now(timezone.utc)
-                node.last_health_check_at = finished
-                node.consecutive_relay_failures = 0
-                node.health_success_ewma = self._ewma(node.health_success_ewma, 1.0)
-                self.store.save_node(node)
-                self.store.record_test_history(
-                    node_id=node.id,
-                    test_kind="realping",
-                    trigger="health",
-                    started_at=started,
-                    finished_at=finished,
-                    network_online=True,
-                    ok=True,
-                    latency_ms=latency,
-                    download_kbps=None,
-                    error="",
+                parsed = self.parser.parse_share_url(node.raw_config, node.source_subs[0] if node.source_subs else "health")
+            except Exception:
+                logger.exception("Failed to parse active node %s", node.id)
+                result = TestResult(
+                    parsed_node=ParsedNode("", node.raw_config, node.raw_config, "", "", 0, "", {}, {}, node.config_hash),
+                    ok=False,
+                    latency_ms=-1,
+                    download_kbps=0,
+                    error="failed to parse active node",
+                )
+                self._record_test_result(
+                    node.id,
+                    "fast",
+                    "health",
+                    started_at=datetime.now(timezone.utc),
+                    result=result,
                     status_before=node.status.value,
-                    status_after=node.status.value,
-                    details={"main_port": node.main_port},
+                    status_after=NodeStatus.PROBATION.value,
+                    details={"main_port": node.main_port, "parse_failed": True},
+                )
+                self._move_to_probation(node)
+                summary["moved_to_probation"] = int(summary["moved_to_probation"]) + 1
+                continue
+            test_items.append((node, parsed, node.status.value))
+
+        summary["checked"] = len(test_items)
+        if not test_items:
+            return summary
+
+        probe_failures: list[tuple[NodeRecord, ParsedNode, str, TestResult, datetime]] = []
+        batch_size = max(1, self.settings.health.candidate_batch_size)
+        batches = [test_items[start : start + batch_size] for start in range(0, len(test_items), batch_size)]
+
+        for batch in batches:
+            started = datetime.now(timezone.utc)
+            port_items = [(parsed, int(node.main_port or 0)) for node, parsed, _ in batch]
+            vip_index: int | None = None
+            vip_probe: tuple[NodeRecord, ParsedNode, str] | None = None
+            if self.settings.vip_port.enabled and self.state.vip_node_id and self.runtime_supervisor.is_vip_running():
+                for node, parsed, status_before in batch:
+                    if node.id == self.state.vip_node_id:
+                        vip_index = len(port_items)
+                        vip_probe = (node, parsed, status_before)
+                        port_items.append((parsed, self.settings.vip_port.port))
+                        break
+            try:
+                results = self.test_service.run_fast_test_existing_ports(
+                    port_items,
+                    concurrency=self.settings.health.candidate_batch_concurrency,
+                    fetch_exit_info=any(not self._has_exit_info(node) for node, _, _ in batch),
+                    include_download=False,
                 )
             except Exception:
-                probe_failures.append(node)
+                logger.exception("Active fast test batch crashed")
+                results = [
+                    TestResult(
+                        parsed_node=parsed,
+                        ok=False,
+                        latency_ms=-1,
+                        download_kbps=0,
+                        error="active fast test batch crashed",
+                    )
+                    for _, parsed, _ in batch
+                ]
+                if vip_probe is not None:
+                    _, parsed, _ = vip_probe
+                    results.append(
+                        TestResult(
+                            parsed_node=parsed,
+                            ok=False,
+                            latency_ms=-1,
+                            download_kbps=0,
+                            error="active fast test batch crashed",
+                        )
+                    )
+
+            while len(results) < len(port_items):
+                parsed, _ = port_items[len(results)]
+                results.append(
+                    TestResult(
+                        parsed_node=parsed,
+                        ok=False,
+                        latency_ms=-1,
+                        download_kbps=0,
+                        error="active health result missing from batch",
+                    )
+                )
+
+            for idx, (node, parsed, status_before) in enumerate(batch):
+                if self.store.get_node(node.id) is None:
+                    continue
+                result = results[idx]
+
+                if not result.ok:
+                    probe_failures.append((node, parsed, status_before, result, started))
+                    continue
+
+                if result.latency_ms >= 0:
+                    node.relay_delay_ms = result.latency_ms
+                if result.download_kbps is not None:
+                    node.download_kbps = result.download_kbps
+                finished = datetime.now(timezone.utc)
+                node.last_health_check_at = finished
+                node.last_test_at = finished
+                node.consecutive_relay_failures = 0
+                node.health_success_ewma = self._ewma(node.health_success_ewma, 1.0)
+                exit_info_details: dict[str, Any] = {}
+                if result.exit_info:
+                    self._apply_exit_info(node, result.exit_info)
+                    exit_info_details = {
+                        "exit_info": result.exit_info,
+                        "exit_country": node.exit_country,
+                        "exit_city": node.exit_city,
+                        "exit_org": node.exit_org,
+                        "exit_ip": node.exit_ip,
+                    }
+                kept = self._save_and_dedupe_by_exit_ip(node)
+                if kept.id != node.id:
+                    continue
+                self._record_test_result(
+                    node.id,
+                    "fast",
+                    "health",
+                    started_at=started,
+                    result=result,
+                    status_before=status_before,
+                    status_after=node.status.value,
+                    details={"main_port": node.main_port, "batched": True, "realping_first": True, **exit_info_details},
+                )
+
+            if vip_index is not None and vip_probe is not None:
+                node, parsed, status_before = vip_probe
+                if self.store.get_node(node.id) is None:
+                    continue
+                vip_result = results[vip_index]
+                summary["vip_checked"] = int(summary["vip_checked"]) + 1
+                self._record_test_result(
+                    node.id,
+                    "fast",
+                    "vip-health",
+                    started_at=started,
+                    result=vip_result,
+                    status_before=status_before,
+                    status_after=node.status.value,
+                    details={"vip_port": self.settings.vip_port.port, "protocol": parsed.protocol, "remark": parsed.remark, "batched": True, "realping_first": True},
+                )
+                if vip_result.ok:
+                    continue
+                summary["vip_failures"] = int(summary["vip_failures"]) + 1
+                logger.warning("VIP hot port check failed for node %s: %s", node.id, vip_result.error)
+                with self.transition_lock:
+                    self.runtime_supervisor.stop_vip_runtime()
+                    if self.state.vip_node_id == node.id:
+                        self.state.vip_node_id = None
+                        self.state.vip_score = None
+                self._event(
+                    "warning",
+                    "vip",
+                    "vip_port_failed",
+                    "VIP hot port failed active health check and was stopped",
+                    {
+                        "node_id": node.id,
+                        "vip_port": self.settings.vip_port.port,
+                        "latency_ms": vip_result.latency_ms if vip_result.latency_ms >= 0 else None,
+                        "download_kbps": vip_result.download_kbps,
+                        "error": vip_result.error,
+                    },
+                )
 
         if not probe_failures:
             return summary
 
         threshold_percent = self.settings.network_guard.mass_failure_threshold_percent
-        failure_percent = (len(probe_failures) * 100.0 / max(1, checked))
+        failure_percent = (len(probe_failures) * 100.0 / max(1, len(test_items)))
         summary["failures"] = len(probe_failures)
         if self.settings.network_guard.enabled and failure_percent >= threshold_percent:
             if not self._network_allows_work(force_refresh=True):
@@ -1239,25 +1479,41 @@ class OrchestratorApp:
                     failure_percent,
                 )
                 summary["suppressed"] = len(probe_failures)
+                for node, parsed, status_before, result, started in probe_failures:
+                    if self.store.get_node(node.id) is None:
+                        continue
+                    self._record_test_result(
+                        node.id,
+                        "fast",
+                        "health",
+                        started_at=started,
+                        result=result,
+                        status_before=status_before,
+                        status_after=node.status.value,
+                        details={"main_port": node.main_port, "protocol": parsed.protocol, "remark": parsed.remark, "suppressed_by_network_guard": True, "batched": True, "realping_first": True},
+                    )
                 return summary
 
-        for node in probe_failures:
+        for node, parsed, status_before, result, started in probe_failures:
+            if self.store.get_node(node.id) is None:
+                continue
             logger.warning("Active relay check failed for node %s", node.id)
-            finished = datetime.now(timezone.utc)
-            self.store.record_test_history(
-                node_id=node.id,
-                test_kind="realping",
-                trigger="health",
-                started_at=finished,
-                finished_at=finished,
-                network_online=self._network_allows_work(),
-                ok=False,
-                latency_ms=None,
-                download_kbps=None,
-                error="health probe failed",
-                status_before=node.status.value,
+            if result.latency_ms >= 0:
+                node.relay_delay_ms = result.latency_ms
+            if result.download_kbps is not None:
+                node.download_kbps = result.download_kbps
+            node.last_health_check_at = datetime.now(timezone.utc)
+            node.last_test_at = node.last_health_check_at
+            self.store.save_node(node)
+            self._record_test_result(
+                node.id,
+                "fast",
+                "health",
+                started_at=started,
+                result=result,
+                status_before=status_before,
                 status_after=NodeStatus.PROBATION.value,
-                details={"main_port": node.main_port},
+                details={"main_port": node.main_port, "protocol": parsed.protocol, "remark": parsed.remark, "batched": True, "realping_first": True},
             )
             self._move_to_probation(node)
             summary["moved_to_probation"] = int(summary["moved_to_probation"]) + 1

@@ -114,6 +114,10 @@ class ConfigLoader:
             raise ValueError("candidate batch timeout must be greater than zero")
         if settings.dead_pool.ttl_hours <= 0:
             raise ValueError("dead pool TTL must be greater than zero")
+        if settings.download_test.timeout_seconds <= 0:
+            raise ValueError("download_test.timeout_seconds must be greater than zero")
+        if settings.download_test.per_url_timeout_seconds <= 0:
+            raise ValueError("download_test.per_url_timeout_seconds must be greater than zero")
         if settings.selection.sample_size < 2:
             raise ValueError("selection sample size must be at least 2")
         if settings.vip_port.enabled and settings.vip_port.port <= 0:

@@ -56,6 +56,16 @@ class SqliteStore:
                   main_port INTEGER NULL,
                   relay_delay_ms INTEGER NULL,
                   download_kbps INTEGER NULL,
+                  exit_ip TEXT NOT NULL DEFAULT '',
+                  exit_hostname TEXT NOT NULL DEFAULT '',
+                  exit_city TEXT NOT NULL DEFAULT '',
+                  exit_region TEXT NOT NULL DEFAULT '',
+                  exit_country TEXT NOT NULL DEFAULT '',
+                  exit_loc TEXT NOT NULL DEFAULT '',
+                  exit_org TEXT NOT NULL DEFAULT '',
+                  exit_postal TEXT NOT NULL DEFAULT '',
+                  exit_timezone TEXT NOT NULL DEFAULT '',
+                  exit_info_json TEXT NOT NULL DEFAULT '{}',
                   health_success_ewma REAL DEFAULT 1.0,
                   consecutive_relay_failures INTEGER DEFAULT 0,
                   consecutive_relay_successes INTEGER DEFAULT 0,
@@ -63,6 +73,7 @@ class SqliteStore:
                   updated_at TEXT NOT NULL,
                   last_health_check_at TEXT NULL,
                   last_test_at TEXT NULL,
+                  exit_info_fetched_at TEXT NULL,
                   dead_until TEXT NULL
                 );
 
@@ -140,6 +151,28 @@ class SqliteStore:
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(nodes)").fetchall()}
             if "consecutive_relay_successes" not in columns:
                 conn.execute("ALTER TABLE nodes ADD COLUMN consecutive_relay_successes INTEGER DEFAULT 0")
+            if "exit_ip" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_ip TEXT NOT NULL DEFAULT ''")
+            if "exit_hostname" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_hostname TEXT NOT NULL DEFAULT ''")
+            if "exit_city" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_city TEXT NOT NULL DEFAULT ''")
+            if "exit_region" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_region TEXT NOT NULL DEFAULT ''")
+            if "exit_country" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_country TEXT NOT NULL DEFAULT ''")
+            if "exit_loc" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_loc TEXT NOT NULL DEFAULT ''")
+            if "exit_org" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_org TEXT NOT NULL DEFAULT ''")
+            if "exit_postal" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_postal TEXT NOT NULL DEFAULT ''")
+            if "exit_timezone" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_timezone TEXT NOT NULL DEFAULT ''")
+            if "exit_info_json" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_info_json TEXT NOT NULL DEFAULT '{}'")
+            if "exit_info_fetched_at" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN exit_info_fetched_at TEXT NULL")
 
     def get_node_by_hash(self, config_hash: str) -> NodeRecord | None:
         with self.lock, self._connect() as conn:
@@ -186,10 +219,11 @@ class SqliteStore:
                 """
                 INSERT INTO nodes (
                     id, config_hash, raw_config, normalized_config, source_subs, status,
-                    main_port, relay_delay_ms, download_kbps, health_success_ewma,
+                    main_port, relay_delay_ms, download_kbps, exit_ip, exit_hostname, exit_city,
+                    exit_region, exit_country, exit_loc, exit_org, exit_postal, exit_timezone, exit_info_json, health_success_ewma,
                     consecutive_relay_failures, consecutive_relay_successes, created_at, updated_at,
-                    last_health_check_at, last_test_at, dead_until
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    last_health_check_at, last_test_at, exit_info_fetched_at, dead_until
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     config_hash=excluded.config_hash,
                     raw_config=excluded.raw_config,
@@ -199,12 +233,23 @@ class SqliteStore:
                     main_port=excluded.main_port,
                     relay_delay_ms=excluded.relay_delay_ms,
                     download_kbps=excluded.download_kbps,
+                    exit_ip=excluded.exit_ip,
+                    exit_hostname=excluded.exit_hostname,
+                    exit_city=excluded.exit_city,
+                    exit_region=excluded.exit_region,
+                    exit_country=excluded.exit_country,
+                    exit_loc=excluded.exit_loc,
+                    exit_org=excluded.exit_org,
+                    exit_postal=excluded.exit_postal,
+                    exit_timezone=excluded.exit_timezone,
+                    exit_info_json=excluded.exit_info_json,
                     health_success_ewma=excluded.health_success_ewma,
                     consecutive_relay_failures=excluded.consecutive_relay_failures,
                     consecutive_relay_successes=excluded.consecutive_relay_successes,
                     updated_at=excluded.updated_at,
                     last_health_check_at=excluded.last_health_check_at,
                     last_test_at=excluded.last_test_at,
+                    exit_info_fetched_at=excluded.exit_info_fetched_at,
                     dead_until=excluded.dead_until
                 """,
                 (
@@ -217,6 +262,16 @@ class SqliteStore:
                     node.main_port,
                     node.relay_delay_ms,
                     node.download_kbps,
+                    node.exit_ip,
+                    node.exit_hostname,
+                    node.exit_city,
+                    node.exit_region,
+                    node.exit_country,
+                    node.exit_loc,
+                    node.exit_org,
+                    node.exit_postal,
+                    node.exit_timezone,
+                    json.dumps(node.exit_info, ensure_ascii=False),
                     node.health_success_ewma,
                     node.consecutive_relay_failures,
                     node.consecutive_relay_successes,
@@ -224,6 +279,7 @@ class SqliteStore:
                     dt_to_str(node.updated_at),
                     dt_to_str(node.last_health_check_at),
                     dt_to_str(node.last_test_at),
+                    dt_to_str(node.exit_info_fetched_at),
                     dt_to_str(node.dead_until),
                 ),
             )
@@ -231,6 +287,13 @@ class SqliteStore:
     def list_nodes_by_status(self, status: NodeStatus) -> list[NodeRecord]:
         with self.lock, self._connect() as conn:
             rows = conn.execute("SELECT * FROM nodes WHERE status = ?", (status.value,)).fetchall()
+            return [self._row_to_node(row) for row in rows]
+
+    def list_nodes_by_exit_ip(self, exit_ip: str) -> list[NodeRecord]:
+        if not exit_ip:
+            return []
+        with self.lock, self._connect() as conn:
+            rows = conn.execute("SELECT * FROM nodes WHERE exit_ip = ?", (exit_ip,)).fetchall()
             return [self._row_to_node(row) for row in rows]
 
     def reset_testing_nodes(self) -> int:
@@ -757,6 +820,16 @@ class SqliteStore:
             main_port=row["main_port"],
             relay_delay_ms=row["relay_delay_ms"],
             download_kbps=row["download_kbps"],
+            exit_ip=row["exit_ip"] or "",
+            exit_hostname=row["exit_hostname"] or "",
+            exit_city=row["exit_city"] or "",
+            exit_region=row["exit_region"] or "",
+            exit_country=row["exit_country"] or "",
+            exit_loc=row["exit_loc"] or "",
+            exit_org=row["exit_org"] or "",
+            exit_postal=row["exit_postal"] or "",
+            exit_timezone=row["exit_timezone"] or "",
+            exit_info=json.loads(row["exit_info_json"] or "{}"),
             health_success_ewma=row["health_success_ewma"],
             consecutive_relay_failures=row["consecutive_relay_failures"],
             consecutive_relay_successes=row["consecutive_relay_successes"] or 0,
@@ -764,6 +837,7 @@ class SqliteStore:
             updated_at=str_to_dt(row["updated_at"]),
             last_health_check_at=str_to_dt(row["last_health_check_at"]),
             last_test_at=str_to_dt(row["last_test_at"]),
+            exit_info_fetched_at=str_to_dt(row["exit_info_fetched_at"]),
             dead_until=str_to_dt(row["dead_until"]),
         )
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import socket
 import ssl
 import time
+import json
 import urllib.parse
 from dataclasses import dataclass
 
@@ -11,6 +12,22 @@ from dataclasses import dataclass
 class OpenedHttpStream:
     sock: socket.socket
     remainder: bytes
+
+
+class UnexpectedHttpStatusError(OSError):
+    def __init__(self, status_line: str) -> None:
+        super().__init__(f"unexpected HTTP status: {status_line}")
+        self.status_line = status_line
+        self.status_code = self._parse_status_code(status_line)
+
+    def _parse_status_code(self, status_line: str) -> int | None:
+        parts = status_line.split()
+        if len(parts) < 2:
+            return None
+        try:
+            return int(parts[1])
+        except ValueError:
+            return None
 
 
 class Socks5Client:
@@ -55,7 +72,14 @@ class HttpProxyProbe:
     def __init__(self) -> None:
         self.socks5 = Socks5Client()
 
-    def measure_latency(self, proxy_port: int, test_url: str, timeout: float, attempts: int = 2) -> int:
+    def measure_latency(
+        self,
+        proxy_port: int,
+        test_url: str,
+        timeout: float,
+        attempts: int = 2,
+        accept_any_status: bool = False,
+    ) -> int:
         parsed = urllib.parse.urlsplit(test_url)
         host = parsed.hostname
         if parsed.scheme not in ("http", "https") or not host:
@@ -87,8 +111,11 @@ class HttpProxyProbe:
                         raise OSError("unexpected EOF before HTTP status")
                     status_line += chunk
                 status_text = status_line.decode("iso-8859-1", errors="replace").strip()
-                if not any(code in status_text for code in (" 200 ", " 204 ", " 301 ", " 302 ")):
-                    raise OSError(f"unexpected HTTP status: {status_text}")
+                status_code = UnexpectedHttpStatusError(status_text).status_code
+                if accept_any_status and status_code is not None:
+                    pass
+                elif status_code not in {200, 204, 301, 302}:
+                    raise UnexpectedHttpStatusError(status_text)
             one_shot.append(int((time.perf_counter() - start) * 1000))
             time.sleep(0.1)
         return min(one_shot)
@@ -129,54 +156,58 @@ class HttpProxyProbe:
         raw_headers, remainder = bytes(header_bytes).split(b"\r\n\r\n", 1)
         status_line = raw_headers.split(b"\r\n", 1)[0].decode("iso-8859-1", errors="replace").strip()
         if not any(code in status_line for code in (" 200 ", " 204 ", " 206 ", " 301 ", " 302 ")):
-            raise OSError(f"unexpected HTTP status: {status_line}")
+            raise UnexpectedHttpStatusError(status_line)
         return OpenedHttpStream(sock=sock, remainder=remainder)
+
+    def fetch_json(self, proxy_port: int, url: str, timeout: float, max_bytes: int = 65536) -> dict[str, object]:
+        opened = self.open_stream(proxy_port, url, timeout)
+        body = bytearray()
+        with opened.sock as sock:
+            if opened.remainder:
+                body.extend(opened.remainder[:max_bytes])
+            while len(body) < max_bytes:
+                chunk = sock.recv(min(4096, max_bytes - len(body)))
+                if not chunk:
+                    break
+                body.extend(chunk)
+        payload = json.loads(body.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("expected JSON object from metadata endpoint")
+        return payload
 
 
 class DownloadSpeedProbe:
     def __init__(self) -> None:
         self.http_probe = HttpProxyProbe()
 
-    def measure_speed_kbps(self, proxy_port: int, speed_url: str, timeout: float) -> int:
+    def measure_speed_kbps(
+        self,
+        proxy_port: int,
+        speed_url: str,
+        timeout: float,
+        stop_after_bytes: int = 256 * 1024,
+        min_sample_seconds: float = 0.15,
+    ) -> int:
         start = time.perf_counter()
-        max_speed = 0.0
-        last_tick = start
-        bytes_since_tick = 0
         total_bytes = 0
-        has_value = False
 
         opened = self.http_probe.open_stream(proxy_port, speed_url, timeout)
         with opened.sock as sock:
             if opened.remainder:
                 total_bytes += len(opened.remainder)
-                bytes_since_tick += len(opened.remainder)
-                has_value = True
 
             while True:
-                if time.perf_counter() - start >= timeout:
+                elapsed = time.perf_counter() - start
+                if elapsed >= timeout:
+                    break
+                if total_bytes >= stop_after_bytes and elapsed >= min_sample_seconds:
                     break
                 chunk = sock.recv(65536)
                 if not chunk:
                     break
-                has_value = True
                 total_bytes += len(chunk)
-                bytes_since_tick += len(chunk)
-                now = time.perf_counter()
-                elapsed = now - last_tick
-                if elapsed >= 1.0:
-                    speed = bytes_since_tick / elapsed
-                    if speed > max_speed:
-                        max_speed = speed
-                    last_tick = now
-                    bytes_since_tick = 0
 
-        total_elapsed = max(time.perf_counter() - start, 0.001)
-        if bytes_since_tick > 0:
-            tail_speed = bytes_since_tick / max(time.perf_counter() - last_tick, 0.001)
-            if tail_speed > max_speed:
-                max_speed = tail_speed
-        if not has_value:
+        if total_bytes <= 0:
             return 0
-        if max_speed <= 0:
-            max_speed = total_bytes / total_elapsed
-        return int((max_speed * 8) / 1000)
+        total_elapsed = max(time.perf_counter() - start, 0.001)
+        return int(((total_bytes / total_elapsed) * 8) / 1000)
