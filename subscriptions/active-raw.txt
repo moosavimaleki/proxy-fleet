@@ -41,6 +41,7 @@ vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?&type=tcp&head
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&&type=tcp&headerType=none&path=/#@GozargahAzad|🇵🇹
 vless://97ea73b6-2043-4238-903c-a1e3d4a43c96@104.18.1.1:2087?path=/download.php&security=tls&encryption=none&insecure=0&host=Amphetamine.aDaspoloandco.com&type=ws&allowInsecure=0&sni=Amphetamine.aDaspoloandco.com#@tootffarangi🍓-9
 ss://YWVzLTI1Ni1nY206ZDFmYTJmNGI5OGEzOGJjOA==@it2.levikogjgfdd.ir:10901#🇮🇹 direct
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.42:8080#@hex_proxy ¹
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.141.83:443?encryption=none&security=tls&sni=support.zoom.us.yxls.eu.cc&fp=chrome&insecure=0&allowInsecure=0&type=ws&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi#🇨🇦CA_719_@Surfboardv2ray
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.26.2.173:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#🇨🇦CA_739_@Surfboardv2ray
 vless://49e76398-5127-4005-90cb-c2a971f745f1@172.64.34.119:443?&security=tls&fp=chrome&sni=uhnjk.greenlionport-fla.sbs&type=ws&headerType=none&host=uhnjk.greenlionport-fla.sbs&path=/carbon#🇩🇪 Join+Telegram:@Farah_VPN 🇩🇪
@@ -62,7 +63,6 @@ vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.17.147.118:443?path=/sg-melbi&s
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.16.239.120:443?encryption=none&security=tls&sni=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi#𝐂𝐡𝐚𝐧𝐧𝐞𝐥: @ISVvpn
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.21.2.192:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@icv2ray
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@108.162.198.201:443?encryption=none&security=tls&sni=support.zoom.us.yxls.eu.cc&fp=chrome&insecure=0&allowInsecure=0&type=ws&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi#🇺🇸US_717_@Surfboardv2ray
-ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.42:8080#@hex_proxy ¹
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.20.39.109:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@hex_proxy ³
 vless://b2f6aa3a-2550-4a1c-b2c0-1c94b1207217@one-for-all.levikogjgfdd.ir:443?path=/hdgrbws&security=tls&encryption=none&insecure=0&host=terazhediii.info&fp=chrome&type=ws&allowInsecure=0&sni=terazhediii.info#🚀@VPNine1
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.38.105:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&fp=chrome&insecure=0&allowInsecure=0#@meliproxyy
