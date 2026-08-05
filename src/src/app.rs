@@ -289,7 +289,8 @@ impl AppState {
                         }
                         let successes = results.iter().filter(|value| **value).count();
                         let mut runtime = state.runtime.write().await;
-                        if successes == results.len() && pressure < 0.65 {
+                        let recovered = successes == results.len() && pressure < 0.65;
+                        if recovered {
                             runtime.xray_concurrency = (runtime.xray_concurrency + 1).min(config.health.candidate_batch_concurrency.max(4));
                             runtime.download_concurrency = (runtime.download_concurrency + 1).min(8);
                         }
@@ -304,10 +305,11 @@ impl AppState {
                             "download_concurrency": runtime.download_concurrency,
                             "last_scheduler_jobs": runtime.last_scheduler_jobs,
                             "network_incident": runtime.network_incident,
+                            "last_recovery_at": recovered.then(chrono::Utc::now),
                         });
                         drop(runtime);
-                        if let Err(error) = store.set_service_state("scheduler_runtime", scheduler_state).await {
-                            warn!(%error, "could not persist scheduler service state");
+                        if let Err(error) = store.set_scheduler_state("runtime", scheduler_state).await {
+                            warn!(%error, "could not persist scheduler runtime state");
                         }
                     }
                 }

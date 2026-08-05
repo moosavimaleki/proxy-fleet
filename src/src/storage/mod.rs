@@ -155,6 +155,30 @@ impl Store {
             .map(|value| serde_json::from_str(&value).unwrap_or(serde_json::json!({"raw":value}))))
     }
 
+    pub async fn set_scheduler_state(
+        &self,
+        key: &str,
+        value: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        sqlx::query("INSERT INTO scheduler_state(key, value_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at")
+            .bind(key)
+            .bind(value.to_string())
+            .bind(Utc::now().to_rfc3339())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn scheduler_state(&self, key: &str) -> anyhow::Result<Option<serde_json::Value>> {
+        let value =
+            sqlx::query_scalar::<_, String>("SELECT value_json FROM scheduler_state WHERE key = ?")
+                .bind(key)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(value
+            .map(|value| serde_json::from_str(&value).unwrap_or(serde_json::json!({"raw":value}))))
+    }
+
     /// Makes one side-by-side pre-migration snapshot.  It is intentionally
     /// skipped after the Rust schema marker exists, so normal restarts do not
     /// copy a large production database repeatedly.
@@ -1313,6 +1337,27 @@ mod tests {
                 .await
                 .expect("read state"),
             Some(serde_json::json!({"version":"two"}))
+        );
+    }
+
+    #[tokio::test]
+    async fn scheduler_state_is_persistent_and_idempotent() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        store
+            .set_scheduler_state("quota_debt", serde_json::json!({"candidate": 0.4}))
+            .await
+            .expect("first write");
+        store
+            .set_scheduler_state("quota_debt", serde_json::json!({"candidate": 0.8}))
+            .await
+            .expect("replacement write");
+        assert_eq!(
+            store.scheduler_state("quota_debt").await.expect("read"),
+            Some(serde_json::json!({"candidate": 0.8}))
         );
     }
 

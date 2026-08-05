@@ -456,7 +456,7 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 
 ### 8.5 جدول‌های runtime/scheduler
 
-- [ ] `scheduler_state`: quota debt، concurrency جاری، آخرین pressure و recovery timestamps.
+- [x] `scheduler_state`: quota debt، concurrency جاری، آخرین pressure و recovery timestamps.
 - [x] `service_state`: آخرین publisher commit، آخرین refresh، incident و schema metadata.
 - [ ] process/port ownership persistent فقط در حد لازم ثبت شود؛ process واقعی پس از restart دوباره reconcile شود.
 
@@ -552,8 +552,8 @@ leaseهای پیش‌فرض:
 - [x] ۳۰٪ ظرفیت: `PROBATION` دارای سابقهٔ موفق.
 - [x] ۲۰٪ ظرفیت: `DORMANT` قابل‌بازیابی.
 - [x] ۱۰٪ ظرفیت: exploration و نمونه‌برداری از موارد کم‌اطمینان.
-- [ ] quota debt نگه‌داری شود تا خالی‌بودن یک queue سهم بقیه را متوقف نکند.
-- [ ] starvation هیچ queue ممکن نباشد.
+- [x] quota debt نگه‌داری شود تا خالی‌بودن یک queue سهم بقیه را متوقف نکند.
+- [x] starvation هیچ queue ممکن نباشد.
 
 ### 12.2 priority score
 
@@ -750,7 +750,7 @@ fieldهای جدید node:
 - [ ] response حجیم history به‌صورت محدود و newest-first باشد.
 - [ ] command endpointها idempotent یا دارای operation id باشند.
 - [ ] timeout HTTP مستقل از timeout worker باشد.
-- [ ] خطاها JSON استاندارد با code/message/details داشته باشند.
+- [x] خطاها JSON استاندارد با code/message/details داشته باشند.
 - [ ] endpoint health بدون query سنگین پاسخ دهد.
 
 ## 21. پنل وب

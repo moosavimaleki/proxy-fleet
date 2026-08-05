@@ -347,18 +347,37 @@ async fn cleanup_database(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 fn api_error(error: anyhow::Error) -> axum::response::Response {
-    (
+    error_response(
         StatusCode::INTERNAL_SERVER_ERROR,
-        Json(json!({"error":{"code":"internal_error","message":error.to_string()}})),
+        "internal_error",
+        error.to_string(),
+        json!({}),
     )
-        .into_response()
 }
 
 fn bad_request(code: &str) -> axum::response::Response {
-    (StatusCode::BAD_REQUEST, Json(json!({"error":code}))).into_response()
+    error_response(
+        StatusCode::BAD_REQUEST,
+        code,
+        "request validation failed",
+        json!({}),
+    )
 }
 fn not_found(code: &str) -> axum::response::Response {
-    (StatusCode::NOT_FOUND, Json(json!({"error":code}))).into_response()
+    error_response(StatusCode::NOT_FOUND, code, "resource not found", json!({}))
+}
+
+fn error_response(
+    status: StatusCode,
+    code: &str,
+    message: impl Into<String>,
+    details: serde_json::Value,
+) -> axum::response::Response {
+    (
+        status,
+        Json(json!({"error":{"code":code,"message":message.into(),"details":details}})),
+    )
+        .into_response()
 }
 
 #[cfg(test)]
@@ -369,6 +388,7 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
+    use http_body_util::BodyExt;
     use tower::ServiceExt;
 
     use crate::{app::AppState, config::AppConfig, storage::Store};
@@ -457,5 +477,32 @@ mod tests {
             .unwrap();
         let response = app.oneshot(request).await.expect("import response");
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn errors_use_a_consistent_json_contract() {
+        let (_temp, app) = test_router().await;
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/best")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"client":""}"#))
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = response
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).expect("JSON error body");
+        assert_eq!(body["error"]["code"], "INVALID_CLIENT");
+        assert!(body["error"]["message"].is_string());
+        assert!(body["error"].get("details").is_some());
     }
 }

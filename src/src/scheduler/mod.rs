@@ -1,6 +1,7 @@
 //! Cost-aware, multi-queue test scheduling with expiring leases first.
 
 use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
 use crate::storage::Store;
@@ -20,6 +21,80 @@ pub struct QueueQuota {
     pub successful_probation: usize,
     pub recoverable_dormant: usize,
     pub exploration: usize,
+}
+
+const QUEUE_ORDER: [(&str, &str); 4] = [
+    ("CANDIDATE", "new"),
+    ("PROBATION", "successful_probation"),
+    ("DORMANT", "recoverable_dormant"),
+    ("ACTIVE", "active_revalidation"),
+];
+
+/// Persistent, fractional scheduler credits. Each tick contributes the
+/// configured 40/30/20/10 share. A successful claim consumes one credit;
+/// unused credit is retained (with a bounded cap), so a smaller queue cannot
+/// be starved forever by a permanently full candidate queue.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+struct QueueDebt {
+    #[serde(default)]
+    candidate: f64,
+    #[serde(default)]
+    probation: f64,
+    #[serde(default)]
+    dormant: f64,
+    #[serde(default)]
+    active: f64,
+}
+
+impl QueueDebt {
+    fn from_value(value: Option<serde_json::Value>) -> Self {
+        value
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default()
+    }
+
+    fn accrue(&mut self, capacity: usize) {
+        let capacity = capacity.max(1) as f64;
+        let cap = capacity * 4.0;
+        self.candidate = (self.candidate + capacity * 0.40).clamp(-1.0, cap);
+        self.probation = (self.probation + capacity * 0.30).clamp(-1.0, cap);
+        self.dormant = (self.dormant + capacity * 0.20).clamp(-1.0, cap);
+        self.active = (self.active + capacity * 0.10).clamp(-1.0, cap);
+    }
+
+    fn credit(self, state: &str) -> f64 {
+        match state {
+            "CANDIDATE" => self.candidate,
+            "PROBATION" => self.probation,
+            "DORMANT" => self.dormant,
+            "ACTIVE" => self.active,
+            _ => f64::NEG_INFINITY,
+        }
+    }
+
+    fn consume(&mut self, state: &str) {
+        match state {
+            "CANDIDATE" => self.candidate -= 1.0,
+            "PROBATION" => self.probation -= 1.0,
+            "DORMANT" => self.dormant -= 1.0,
+            "ACTIVE" => self.active -= 1.0,
+            _ => {}
+        }
+    }
+
+    fn next_untried(self, tried: &[&str]) -> Option<(&'static str, &'static str)> {
+        QUEUE_ORDER
+            .iter()
+            .copied()
+            .filter(|(state, _)| !tried.contains(state))
+            .max_by(|(left, _), (right, _)| {
+                self.credit(left)
+                    .partial_cmp(&self.credit(right))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    // Stable queue order makes equal credits deterministic.
+                    .then_with(|| right.cmp(left))
+            })
+    }
 }
 
 /// Detects a correlated failure before the evidence writer sees the batch.
@@ -76,75 +151,47 @@ pub async fn claim_due(
     capacity: usize,
     lease: Duration,
 ) -> anyhow::Result<Vec<TestJob>> {
-    let quota = QueueQuota::for_capacity(capacity.max(1));
+    let capacity = capacity.max(1);
     let now = Utc::now();
+    let mut debt = QueueDebt::from_value(store.scheduler_state("quota_debt").await?);
+    debt.accrue(capacity);
     let mut jobs = Vec::with_capacity(capacity);
-    for (state, limit, reason) in [
-        ("CANDIDATE", quota.new, "new"),
-        (
-            "PROBATION",
-            quota.successful_probation,
-            "successful_probation",
-        ),
-        ("DORMANT", quota.recoverable_dormant, "recoverable_dormant"),
-    ] {
-        append_claims(
-            store,
-            &mut jobs,
-            capacity,
-            ClaimParams {
-                state,
-                queue_limit: limit,
-                reason,
-                now,
-                lease,
-            },
-        )
-        .await?;
-    }
-    // Quotas reserve an initial share for every lifecycle queue.  If a
-    // reserved queue is empty, borrow its unused capacity in the same
-    // recovery-first order before touching ACTIVE exploration.  This avoids
-    // wasting a tick while candidates are waiting, yet still lets a real
-    // ACTIVE pool consume its explicitly allocated exploration share.
-    for (state, reason) in [
-        ("CANDIDATE", "borrowed_new"),
-        ("PROBATION", "borrowed_probation"),
-        ("DORMANT", "borrowed_dormant"),
-    ] {
-        if jobs.len() >= capacity {
+    while jobs.len() < capacity {
+        let mut tried = Vec::with_capacity(QUEUE_ORDER.len());
+        let mut claimed = false;
+        while let Some((state, reason)) = debt.next_untried(&tried) {
+            tried.push(state);
+            let before = jobs.len();
+            append_claims(
+                store,
+                &mut jobs,
+                capacity,
+                ClaimParams {
+                    state,
+                    queue_limit: 1,
+                    reason,
+                    now,
+                    lease,
+                },
+            )
+            .await?;
+            if jobs.len() > before {
+                debt.consume(state);
+                claimed = true;
+                break;
+            }
+        }
+        if !claimed {
             break;
         }
-        let remaining = capacity - jobs.len();
-        append_claims(
-            store,
-            &mut jobs,
-            capacity,
-            ClaimParams {
-                state,
-                queue_limit: remaining,
-                reason,
-                now,
-                lease,
-            },
-        )
-        .await?;
     }
-    if jobs.len() < capacity {
-        let exploration_limit = quota.exploration.max(capacity - jobs.len());
-        append_claims(
-            store,
-            &mut jobs,
-            capacity,
-            ClaimParams {
-                state: "ACTIVE",
-                queue_limit: exploration_limit,
-                reason: "active_revalidation",
-                now,
-                lease,
-            },
-        )
-        .await?;
+    if !jobs.is_empty() {
+        store
+            .set_scheduler_state(
+                "quota_debt",
+                serde_json::to_value(debt).expect("queue debt is serializable"),
+            )
+            .await?;
     }
     Ok(jobs)
 }
@@ -250,7 +297,7 @@ mod tests {
         probe::{ProbeEvent, ProbeReport},
     };
 
-    use super::{QueueQuota, is_mass_failure};
+    use super::{QueueDebt, QueueQuota, is_mass_failure};
 
     fn report(class: FailureClass) -> ProbeReport {
         ProbeReport {
@@ -298,6 +345,24 @@ mod tests {
                 exploration: 0,
             }
         );
+    }
+
+    #[test]
+    fn persistent_quota_debt_prevents_active_starvation() {
+        let mut debt = QueueDebt::default();
+        let mut selected = Vec::new();
+        for _ in 0..10 {
+            debt.accrue(2);
+            for _ in 0..2 {
+                let (state, _) = debt.next_untried(&[]).expect("queue");
+                selected.push(state);
+                debt.consume(state);
+            }
+        }
+        assert!(selected.contains(&"CANDIDATE"));
+        assert!(selected.contains(&"PROBATION"));
+        assert!(selected.contains(&"DORMANT"));
+        assert!(selected.contains(&"ACTIVE"));
     }
 
     #[test]
