@@ -96,6 +96,10 @@ impl AppState {
         (started, failed)
     }
 
+    pub async fn shutdown_runtimes(&self) {
+        self.xray_runtimes.shutdown(&self.store).await;
+    }
+
     fn spawn_network_guard(&self) -> JoinHandle<()> {
         let state = self.clone();
         tokio::spawn(async move {

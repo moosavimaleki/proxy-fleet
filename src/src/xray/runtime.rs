@@ -82,6 +82,26 @@ impl RuntimeManager {
         let _ = store.clear_main_port(node_id).await;
     }
 
+    /// Explicitly tear down every process owned by this service.  This is
+    /// called from the application shutdown path rather than relying on Drop,
+    /// so each child receives the graceful termination/reap sequence.
+    pub async fn shutdown(&self, store: &Store) {
+        let runtimes = {
+            let mut inner = self.inner.lock().await;
+            std::mem::take(&mut *inner)
+        };
+        for (node_id, mut runtime) in runtimes {
+            runtime.session.stop().await;
+            if let Err(error) = store.clear_main_port(&node_id).await {
+                tracing::warn!(node = %node_id, %error, "could not clear runtime port during shutdown");
+            }
+        }
+        let vip = self.vip.lock().await.take();
+        if let Some(mut vip) = vip {
+            vip.session.stop().await;
+        }
+    }
+
     pub async fn active_count(&self) -> usize {
         self.inner.lock().await.len()
     }

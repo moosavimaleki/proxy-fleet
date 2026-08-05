@@ -52,11 +52,11 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("binding API on {address}"))?;
 
     info!(service = %config.service.name, version = proxy_fleet::SERVICE_VERSION, address = %address, "proxy fleet started");
-    axum::serve(listener, app)
+    let result = axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_shutdown(shutdown))
-        .await
-        .context("HTTP server failed")?;
-    Ok(())
+        .await;
+    state.shutdown_runtimes().await;
+    result.context("HTTP server failed")
 }
 
 fn parse_config_path() -> anyhow::Result<PathBuf> {
@@ -79,12 +79,30 @@ fn parse_config_path() -> anyhow::Result<PathBuf> {
 }
 
 async fn wait_for_shutdown(shutdown: CancellationToken) {
-    let signal = async {
-        if let Err(error) = tokio::signal::ctrl_c().await {
-            warn!(%error, "could not listen for Ctrl-C");
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        match signal(SignalKind::terminate()) {
+            Ok(mut terminate) => {
+                tokio::select! {
+                    result = tokio::signal::ctrl_c() => {
+                        if let Err(error) = result { warn!(%error, "could not listen for Ctrl-C"); }
+                    }
+                    _ = terminate.recv() => info!("SIGTERM received"),
+                }
+            }
+            Err(error) => {
+                warn!(%error, "could not listen for SIGTERM; falling back to Ctrl-C");
+                if let Err(error) = tokio::signal::ctrl_c().await {
+                    warn!(%error, "could not listen for Ctrl-C");
+                }
+            }
         }
-    };
-    signal.await;
+    }
+    #[cfg(not(unix))]
+    if let Err(error) = tokio::signal::ctrl_c().await {
+        warn!(%error, "could not listen for Ctrl-C");
+    }
     shutdown.cancel();
     info!("shutdown requested");
 }

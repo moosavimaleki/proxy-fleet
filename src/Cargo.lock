@@ -1361,6 +1361,7 @@ dependencies = [
  "chrono",
  "futures-util",
  "http-body-util",
+ "libc",
  "proptest",
  "rand 0.9.5",
  "reqwest",

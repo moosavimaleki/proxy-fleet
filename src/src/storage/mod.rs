@@ -1325,4 +1325,81 @@ mod tests {
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].id, id);
     }
+
+    #[tokio::test]
+    async fn partial_refresh_never_counts_missing_and_leased_active_survives_complete_misses() {
+        let (_temp, store, id) = test_store().await;
+        store
+            .apply_test_event(
+                event(&id, "download", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(300),
+            )
+            .await
+            .expect("activate");
+        // Make the fixture eligible for retirement except for its publication
+        // lease.  A partial refresh must not touch its missing counter.
+        sqlx::query("UPDATE nodes SET created_at = ? WHERE id = ?")
+            .bind((Utc::now() - chrono::Duration::days(2)).to_rfc3339())
+            .bind(&id)
+            .execute(store.pool())
+            .await
+            .expect("age fixture");
+
+        let (partial_id, partial_generation) = store.begin_refresh(1).await.expect("partial run");
+        assert!(
+            !store
+                .finish_refresh(&partial_id, partial_generation, 1, 0, 0, 3)
+                .await
+                .expect("finish partial")
+        );
+        let missing = sqlx::query_scalar::<_, i64>(
+            "SELECT upstream_missing_generations FROM nodes WHERE id = ?",
+        )
+        .bind(&id)
+        .fetch_one(store.pool())
+        .await
+        .expect("missing after partial");
+        assert_eq!(missing, 0);
+
+        // Three successful-but-empty source generations are enough to mark a
+        // config stale, but never enough to remove a currently leased ACTIVE
+        // proxy from the public subscription.
+        for _ in 0..3 {
+            let (run_id, generation) = store.begin_refresh(1).await.expect("complete run");
+            assert!(
+                store
+                    .finish_refresh(&run_id, generation, 1, 1, 0, 3)
+                    .await
+                    .expect("finish complete")
+            );
+        }
+        let state =
+            sqlx::query_scalar::<_, String>("SELECT lifecycle_state FROM nodes WHERE id = ?")
+                .bind(&id)
+                .fetch_one(store.pool())
+                .await
+                .expect("state with lease");
+        assert_eq!(state, "ACTIVE");
+
+        // Retirement becomes possible only after lease expiry and another
+        // complete generation; it is never caused by a single missed fetch.
+        sqlx::query("UPDATE nodes SET publication_lease_until = ? WHERE id = ?")
+            .bind((Utc::now() - chrono::Duration::seconds(1)).to_rfc3339())
+            .bind(&id)
+            .execute(store.pool())
+            .await
+            .expect("expire lease");
+        let (run_id, generation) = store.begin_refresh(1).await.expect("expiry run");
+        store
+            .finish_refresh(&run_id, generation, 1, 1, 0, 3)
+            .await
+            .expect("finish expiry run");
+        let retired =
+            sqlx::query_scalar::<_, String>("SELECT lifecycle_state FROM nodes WHERE id = ?")
+                .bind(&id)
+                .fetch_one(store.pool())
+                .await
+                .expect("retired state");
+        assert_eq!(retired, "RETIRED");
+    }
 }

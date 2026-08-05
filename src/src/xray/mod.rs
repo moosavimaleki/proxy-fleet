@@ -88,11 +88,7 @@ impl XraySession {
     }
 
     pub async fn stop(&mut self) {
-        if self.child.try_wait().ok().flatten().is_none() {
-            if let Err(error) = self.child.kill().await {
-                warn!(%error, "could not stop Xray child");
-            }
-        }
+        terminate_and_reap(&mut self.child, "Xray child").await;
         let _ = tokio::fs::remove_file(&self.config_path).await;
     }
 }
@@ -174,12 +170,47 @@ impl XrayBatchSession {
     }
 
     pub async fn stop(&mut self) {
-        if self.child.try_wait().ok().flatten().is_none() {
-            if let Err(error) = self.child.kill().await {
-                warn!(%error, "could not stop Xray batch child");
-            }
-        }
+        terminate_and_reap(&mut self.child, "Xray batch child").await;
         let _ = tokio::fs::remove_file(&self.config_path).await;
+    }
+}
+
+/// Stop a child without leaking a zombie. Xray receives SIGTERM first so it
+/// can close sockets cleanly; only a process that ignores the grace period is
+/// force-killed. `wait` is always called after either path.
+async fn terminate_and_reap(child: &mut Child, label: &str) {
+    match child.try_wait() {
+        Ok(Some(_)) => return,
+        Err(error) => {
+            warn!(%error, %label, "could not inspect Xray child state");
+        }
+        Ok(None) => {}
+    }
+
+    #[cfg(unix)]
+    if let Some(pid) = child.id() {
+        // SAFETY: `pid` is supplied by Tokio for this exact child process;
+        // sending SIGTERM does not dereference memory or widen process scope.
+        let result = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+        if result != 0 {
+            warn!(error = %std::io::Error::last_os_error(), %label, "could not send SIGTERM to Xray child");
+        }
+    }
+
+    match tokio::time::timeout(Duration::from_secs(2), child.wait()).await {
+        Ok(Ok(_)) => return,
+        Ok(Err(error)) => {
+            warn!(%error, %label, "could not reap Xray child after SIGTERM");
+            return;
+        }
+        Err(_) => {}
+    }
+    if let Err(error) = child.start_kill() {
+        warn!(%error, %label, "could not force-stop Xray child");
+        return;
+    }
+    if let Err(error) = child.wait().await {
+        warn!(%error, %label, "could not reap Xray child after force stop");
     }
 }
 
