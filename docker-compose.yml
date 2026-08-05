@@ -12,7 +12,7 @@ services:
         soft: 65535
         hard: 65535
     environment:
-      GIT_SSH_COMMAND: "ssh -i /run/secrets/github_ssh_key -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10"
+      GIT_SSH_COMMAND: "ssh -i /run/secrets/github_ssh_key -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o Hostname=ssh.github.com -p 443"
     volumes:
       - ./data:/app/data
       - ./config/config.yml:/app/config/config.yml:ro
