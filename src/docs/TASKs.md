@@ -732,21 +732,21 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 fieldهای جدید node:
 
-- [ ] `lifecycle_state`
-- [ ] `health_alpha`
-- [ ] `health_beta`
-- [ ] `health_score`
-- [ ] `next_test_at`
-- [ ] `publication_lease_until`
-- [ ] `publication_lease_kind`
-- [ ] `last_failure_class`
-- [ ] `last_seen_generation`
-- [ ] `upstream_missing_generations`
-- [ ] `evidence_summary`
+- [x] `lifecycle_state`
+- [x] `health_alpha`
+- [x] `health_beta`
+- [x] `health_score`
+- [x] `next_test_at`
+- [x] `publication_lease_until`
+- [x] `publication_lease_kind`
+- [x] `last_failure_class`
+- [x] `last_seen_generation`
+- [x] `upstream_missing_generations`
+- [x] `evidence_summary`
 
 ### 20.1 اصول API
 
-- [ ] queryهای list همیشه pagination و سقف page size داشته باشند.
+- [x] queryهای list همیشه pagination و سقف page size داشته باشند.
 - [ ] response حجیم history به‌صورت محدود و newest-first باشد.
 - [ ] command endpointها idempotent یا دارای operation id باشند.
 - [ ] timeout HTTP مستقل از timeout worker باشد.

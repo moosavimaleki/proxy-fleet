@@ -71,7 +71,19 @@ pub struct NodeSummary {
     pub health_score: f64,
     pub next_test_at: Option<DateTime<Utc>>,
     pub publication_lease_until: Option<DateTime<Utc>>,
+    pub publication_lease_kind: Option<String>,
     pub last_failure_class: Option<String>,
+    pub last_seen_generation: Option<i64>,
+    pub upstream_missing_generations: i64,
+    pub evidence_summary: EvidenceSummary,
     pub created_at: Option<DateTime<Utc>>,
     pub last_test_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EvidenceSummary {
+    pub alpha: f64,
+    pub beta: f64,
+    pub score: f64,
+    pub last_failure_class: Option<String>,
 }

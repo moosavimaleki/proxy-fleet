@@ -314,7 +314,7 @@ impl Store {
         }
         let total = count_query.fetch_one(&self.pool).await?;
         let list_sql = format!(
-            "SELECT id, config_hash, raw_config, source_subs, lifecycle_state, status, main_port, relay_delay_ms, download_kbps, exit_country, health_success_ewma, health_alpha, health_beta, health_score, next_test_at, publication_lease_until, last_failure_class, created_at, last_test_at FROM nodes{where_sql} ORDER BY CASE lifecycle_state WHEN 'ACTIVE' THEN 0 WHEN 'PROBATION' THEN 1 WHEN 'CANDIDATE' THEN 2 ELSE 3 END, health_score DESC, last_test_at DESC LIMIT ? OFFSET ?"
+            "SELECT id, config_hash, raw_config, source_subs, lifecycle_state, status, main_port, relay_delay_ms, download_kbps, exit_country, health_success_ewma, health_alpha, health_beta, health_score, next_test_at, publication_lease_until, publication_lease_kind, last_failure_class, last_seen_generation, upstream_missing_generations, created_at, last_test_at FROM nodes{where_sql} ORDER BY CASE lifecycle_state WHEN 'ACTIVE' THEN 0 WHEN 'PROBATION' THEN 1 WHEN 'CANDIDATE' THEN 2 ELSE 3 END, health_score DESC, last_test_at DESC LIMIT ? OFFSET ?"
         );
         let mut query = sqlx::query(&list_sql);
         for value in &values {
@@ -1130,6 +1130,10 @@ fn row_to_summary(row: sqlx::sqlite::SqliteRow) -> NodeSummary {
     let remark = parsed
         .and_then(|url| url.fragment().map(str::to_owned))
         .unwrap_or_default();
+    let health_alpha = row.get::<Option<f64>, _>("health_alpha").unwrap_or(1.0);
+    let health_beta = row.get::<Option<f64>, _>("health_beta").unwrap_or(1.0);
+    let health_score = row.get::<Option<f64>, _>("health_score").unwrap_or(0.5);
+    let last_failure_class = row.get::<Option<String>, _>("last_failure_class");
     NodeSummary {
         id: row.get("id"),
         config_hash: row.get("config_hash"),
@@ -1148,12 +1152,23 @@ fn row_to_summary(row: sqlx::sqlite::SqliteRow) -> NodeSummary {
         health_success_ewma: row
             .get::<Option<f64>, _>("health_success_ewma")
             .unwrap_or(0.5),
-        health_alpha: row.get::<Option<f64>, _>("health_alpha").unwrap_or(1.0),
-        health_beta: row.get::<Option<f64>, _>("health_beta").unwrap_or(1.0),
-        health_score: row.get::<Option<f64>, _>("health_score").unwrap_or(0.5),
+        health_alpha,
+        health_beta,
+        health_score,
         next_test_at: parse_time(row.get("next_test_at")),
         publication_lease_until: parse_time(row.get("publication_lease_until")),
-        last_failure_class: row.get("last_failure_class"),
+        publication_lease_kind: row.get("publication_lease_kind"),
+        last_failure_class: last_failure_class.clone(),
+        last_seen_generation: row.get("last_seen_generation"),
+        upstream_missing_generations: row
+            .get::<Option<i64>, _>("upstream_missing_generations")
+            .unwrap_or_default(),
+        evidence_summary: crate::domain::proxy::EvidenceSummary {
+            alpha: health_alpha,
+            beta: health_beta,
+            score: health_score,
+            last_failure_class,
+        },
         created_at: parse_time(row.get("created_at")),
         last_test_at: parse_time(row.get("last_test_at")),
     }
@@ -1486,5 +1501,21 @@ mod tests {
         assert_eq!(upstream["latest"]["generation"], generation);
         assert_eq!(upstream["sources"][0]["name"], "test");
         assert_eq!(upstream["sources"][0]["etag"], "tag");
+    }
+
+    #[tokio::test]
+    async fn node_page_exposes_evidence_and_generation_fields_with_a_hard_page_cap() {
+        let (_temp, store, _id) = test_store().await;
+        let page = store
+            .list_nodes(0, 10_000, None, None, None)
+            .await
+            .expect("node page");
+        assert_eq!(page.page, 1);
+        assert_eq!(page.page_size, 200);
+        let node = page.nodes.first().expect("node");
+        assert_eq!(node.last_seen_generation, Some(1));
+        assert_eq!(node.upstream_missing_generations, 0);
+        assert_eq!(node.evidence_summary.score, node.health_score);
+        assert_eq!(node.evidence_summary.alpha, node.health_alpha);
     }
 }
