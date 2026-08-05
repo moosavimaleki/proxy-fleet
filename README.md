@@ -43,12 +43,12 @@ Runtime data is stored under `data/` and ignored by git except for `data/.gitkee
 
 ## Public tested subscription
 
-The running local Docker service publishes the ACTIVE set only when its content changes:
+The running local Docker service publishes a rolling, de-duplicated union of the current ACTIVE snapshot and the two immediately previous ACTIVE snapshots. This gives clients recently healthy fallbacks while they run their own real-delay tests:
 
 - v2rayN/base64 subscription: `https://raw.githubusercontent.com/moosavimaleki/proxy-fleet/main/subscriptions/active.txt`
 - Plain share URLs: `https://raw.githubusercontent.com/moosavimaleki/proxy-fleet/main/subscriptions/active-raw.txt`
 
-Publication uses the host SSH agent mounted into the container. No GitHub token or private key is stored in the image or repository. A 60-second reconciliation pass retries failed pushes but creates no commit when the ACTIVE content is unchanged.
+Publication uses a read-only SSH key mounted into the container. No GitHub token or private key is stored in the image or repository. A 60-second reconciliation pass retries failed pushes but creates no commit when the three-snapshot union is unchanged.
 
 ## How health is decided
 

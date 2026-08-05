@@ -159,6 +159,7 @@ class PublishingSettings:
     git_branch: str = "main"
     debounce_seconds: float = 2.0
     reconcile_interval_seconds: int = 60
+    retained_snapshots: int = 3
     author_name: str = "Proxy Fleet"
     author_email: str = "proxy-fleet@users.noreply.github.com"
 

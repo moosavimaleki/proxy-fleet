@@ -163,3 +163,5 @@ class ConfigLoader:
                 raise ValueError("publishing.debounce_seconds must be non-negative")
             if settings.publishing.reconcile_interval_seconds <= 0:
                 raise ValueError("publishing.reconcile_interval_seconds must be greater than zero")
+            if settings.publishing.retained_snapshots < 1:
+                raise ValueError("publishing.retained_snapshots must be at least one")

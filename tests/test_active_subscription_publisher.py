@@ -43,12 +43,7 @@ def test_publisher_commits_only_when_active_content_changes(tmp_path: Path) -> N
     _git(seed, "push", "-u", "origin", "main")
     _git(remote, "symbolic-ref", "HEAD", "refs/heads/main")
 
-    store = FakeStore(
-        [
-            FakeNode("b", "vless://second"),
-            FakeNode("a", "vmess://first"),
-        ]
-    )
+    store = FakeStore([FakeNode("a", "vmess://a")])
     publisher = ActiveSubscriptionPublisher(
         store,  # type: ignore[arg-type]
         data_dir=tmp_path / "data",
@@ -63,15 +58,38 @@ def test_publisher_commits_only_when_active_content_changes(tmp_path: Path) -> N
     assert first.pushed is True
     raw = _git(remote, "show", "main:subscriptions/active-raw.txt") + "\n"
     encoded = _git(remote, "show", "main:subscriptions/active.txt")
-    assert raw == "vmess://first\nvless://second\n"
+    assert raw == "vmess://a\n"
     assert base64.b64decode(encoded).decode() == raw
 
     second = publisher.publish()
     assert second.pushed is False
     assert _git(remote, "rev-parse", "main") == first_head
 
-    store.nodes = [FakeNode("c", "trojan://third")]
+    store.nodes = [FakeNode("b", "vless://b")]
     third = publisher.publish()
     assert third.pushed is True
     assert _git(remote, "rev-parse", "main") != first_head
-    assert _git(remote, "show", "main:subscriptions/active-raw.txt") == "trojan://third"
+    assert _git(remote, "show", "main:subscriptions/active-raw.txt") == "vless://b\nvmess://a"
+
+    store.nodes = [FakeNode("c", "trojan://c"), FakeNode("b-copy", "vless://b")]
+    fourth = publisher.publish()
+    assert fourth.published_count == 3
+    assert fourth.retained_snapshots == 3
+    assert _git(remote, "show", "main:subscriptions/active-raw.txt") == "vless://b\ntrojan://c\nvmess://a"
+
+    store.nodes = [FakeNode("d", "ss://d")]
+    fifth = publisher.publish()
+    assert fifth.published_count == 3
+    assert _git(remote, "show", "main:subscriptions/active-raw.txt") == "ss://d\nvless://b\ntrojan://c"
+
+    reloaded = ActiveSubscriptionPublisher(
+        store,  # type: ignore[arg-type]
+        data_dir=tmp_path / "data",
+        remote=str(remote),
+        branch="main",
+        author_name="Proxy Fleet Test",
+        author_email="proxy-fleet@example.invalid",
+    )
+    after_restart = reloaded.publish()
+    assert after_restart.pushed is False
+    assert after_restart.published_count == 3

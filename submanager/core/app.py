@@ -55,6 +55,7 @@ class OrchestratorApp:
             branch=settings.publishing.git_branch,
             author_name=settings.publishing.author_name,
             author_email=settings.publishing.author_email,
+            retained_snapshots=settings.publishing.retained_snapshots,
         )
         self.active_subscription_dirty = threading.Event()
         self.threads: list[threading.Thread] = []
@@ -540,7 +541,12 @@ class OrchestratorApp:
                         "publisher",
                         "active_subscription_pushed",
                         "Published changed ACTIVE proxy subscription",
-                        {"active_count": result.active_count, "commit": result.commit},
+                        {
+                            "active_count": result.active_count,
+                            "published_count": result.published_count,
+                            "retained_snapshots": result.retained_snapshots,
+                            "commit": result.commit,
+                        },
                     )
             except Exception as exc:
                 logger.exception("Failed to publish ACTIVE proxy subscription")

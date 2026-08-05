@@ -8,6 +8,7 @@ publishing:
   git_branch: main
   debounce_seconds: 2
   reconcile_interval_seconds: 60
+  retained_snapshots: 3
   author_name: "Proxy Fleet"
   author_email: "proxy-fleet@users.noreply.github.com"
 

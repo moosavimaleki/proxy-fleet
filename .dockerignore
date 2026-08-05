@@ -1,4 +1,5 @@
 __pycache__/
 *.pyc
 .cache/
-data/*.db
+data/*
+!data/.gitkeep
