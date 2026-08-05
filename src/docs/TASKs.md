@@ -21,7 +21,7 @@
 - [x] migration افزایشی روی `app.db` واقعی پس از backup سازگار، سپس startup reconciliation برای runtimeهای ACTIVE و smoke واقعی `/best`.
 - [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، incident aggregation بین منبع/protocol/windowهای مستقل، contract snapshot کامل و soak test؛ این‌ها هنوز شرط انتشار نیستند.
 
-آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۲۶
+آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۲۹
 تست) و `cargo clippy --all-targets -- -D warnings` موفق بوده‌اند. Docker
 build و compose startup روی همین میزبان موفق بوده و `/health`، publisher و
 `POST /api/v1/best` نیز روی دادهٔ واقعی smoke شده‌اند. برای محدودیت mirror
@@ -384,7 +384,7 @@ src/
 - [ ] pool نوشتن کوچک و bounded باشد تا writer contention ایجاد نشود.
 - [ ] تاریخچهٔ فعلی حدود ۷۰۰ مگابایت کپی یا rewrite نشود.
 - [ ] هیچ node id، config hash، feedback، assignment یا usage حذف نشود.
-- [ ] schema version و binary version ثبت شود.
+- [x] schema version و binary version ثبت شود.
 
 ### 8.2 تغییرات جدول `nodes`
 
@@ -457,7 +457,7 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 ### 8.5 جدول‌های runtime/scheduler
 
 - [ ] `scheduler_state`: quota debt، concurrency جاری، آخرین pressure و recovery timestamps.
-- [ ] `service_state`: آخرین publisher commit، آخرین refresh، incident و schema metadata.
+- [x] `service_state`: آخرین publisher commit، آخرین refresh، incident و schema metadata.
 - [ ] process/port ownership persistent فقط در حد لازم ثبت شود؛ process واقعی پس از restart دوباره reconcile شود.
 
 ### 8.6 تبدیل دادهٔ قدیمی

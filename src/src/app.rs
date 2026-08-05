@@ -140,7 +140,15 @@ impl AppState {
                             }
                         };
                         if let Some((level, kind, message, detail)) = event {
+                            let state_value = serde_json::json!({
+                                "at": chrono::Utc::now(),
+                                "level": level,
+                                "kind": kind,
+                                "message": message,
+                                "details": detail,
+                            });
                             if let Err(error) = state.store.record_system_event(level, "incident", kind, &message, detail).await { warn!(%error, "could not record incident transition"); }
+                            if let Err(error) = state.store.set_service_state("last_incident", state_value).await { warn!(%error, "could not persist incident service state"); }
                         }
                     }
                 }
@@ -177,8 +185,20 @@ impl AppState {
                 tokio::select! {
                     _ = state.shutdown.cancelled() => return,
                     _ = interval.tick() => {
-                        if let Err(error) = crate::upstream::refresh(&state.store, state.config.clone()).await {
-                            warn!(%error, "upstream refresh loop failed");
+                        match crate::upstream::refresh(&state.store, state.config.clone()).await {
+                            Ok(report) => {
+                                let value = serde_json::json!({"at": chrono::Utc::now(), "status": "ok", "report": report});
+                                if let Err(error) = state.store.set_service_state("last_refresh", value).await {
+                                    warn!(%error, "could not persist refresh service state");
+                                }
+                            }
+                            Err(error) => {
+                                let value = serde_json::json!({"at": chrono::Utc::now(), "status": "error", "error": error.to_string()});
+                                if let Err(state_error) = state.store.set_service_state("last_refresh", value).await {
+                                    warn!(%state_error, "could not persist failed refresh service state");
+                                }
+                                warn!(%error, "upstream refresh loop failed");
+                            }
                         }
                     }
                 }
@@ -236,6 +256,15 @@ impl AppState {
                             ).await {
                                 warn!(%error, "could not record correlated scheduler failure");
                             }
+                            if let Err(error) = store.set_service_state("last_incident", serde_json::json!({
+                                "at": chrono::Utc::now(),
+                                "level": "WARN",
+                                "kind": "MASS_FAILURE",
+                                "message": message,
+                                "details": {"jobs": reports.len(), "threshold_percent": config.network_guard.mass_failure_threshold_percent},
+                            })).await {
+                                warn!(%error, "could not persist mass-failure service state");
+                            }
                         }
                         let mut results = Vec::with_capacity(reports.len());
                         for (node_id, report) in reports {
@@ -267,6 +296,18 @@ impl AppState {
                         if successes < results.len() || pressure >= 0.75 {
                             runtime.xray_concurrency = ((runtime.xray_concurrency as f64 * 0.7).floor() as usize).max(1);
                             runtime.download_concurrency = ((runtime.download_concurrency as f64 * 0.7).floor() as usize).max(1);
+                        }
+                        let scheduler_state = serde_json::json!({
+                            "at": chrono::Utc::now(),
+                            "pressure": pressure,
+                            "xray_concurrency": runtime.xray_concurrency,
+                            "download_concurrency": runtime.download_concurrency,
+                            "last_scheduler_jobs": runtime.last_scheduler_jobs,
+                            "network_incident": runtime.network_incident,
+                        });
+                        drop(runtime);
+                        if let Err(error) = store.set_service_state("scheduler_runtime", scheduler_state).await {
+                            warn!(%error, "could not persist scheduler service state");
                         }
                     }
                 }
@@ -311,8 +352,20 @@ impl AppState {
                     _ = state.shutdown.cancelled() => return,
                     _ = interval.tick() => {
                         match crate::publisher::publish(&state.store, &state.config.database.path, &state.config.publishing).await {
-                            Ok(result) => info!(active = result.active_count, changed = result.changed, pushed = result.pushed, commit = %result.commit, "lease publication reconciled"),
-                            Err(error) => warn!(%error, "subscription publisher failed"),
+                            Ok(result) => {
+                                let value = serde_json::json!({"at": chrono::Utc::now(), "status": "ok", "result": result});
+                                if let Err(error) = state.store.set_service_state("last_publisher", value).await {
+                                    warn!(%error, "could not persist publisher service state");
+                                }
+                                info!(active = result.active_count, changed = result.changed, pushed = result.pushed, commit = %result.commit, "lease publication reconciled");
+                            }
+                            Err(error) => {
+                                let value = serde_json::json!({"at": chrono::Utc::now(), "status": "error", "error": error.to_string()});
+                                if let Err(state_error) = state.store.set_service_state("last_publisher", value).await {
+                                    warn!(%state_error, "could not persist failed publisher service state");
+                                }
+                                warn!(%error, "subscription publisher failed");
+                            }
                         }
                     }
                 }

@@ -25,6 +25,20 @@ async fn main() -> anyhow::Result<()> {
         info!(backup = %backup.display(), "created pre-migration database snapshot");
     }
     store.migrate().await.context("migrating SQLite database")?;
+    store
+        .set_service_state(
+            "binary_version",
+            serde_json::json!({"version": proxy_fleet::SERVICE_VERSION}),
+        )
+        .await
+        .context("recording binary version")?;
+    store
+        .set_service_state(
+            "schema_version",
+            serde_json::json!({"version": "rust-evidence-v1"}),
+        )
+        .await
+        .context("recording schema version")?;
     let stale_ports = store.clear_stale_runtime_ports().await?;
     if stale_ports > 0 {
         info!(

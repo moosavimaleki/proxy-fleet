@@ -102,6 +102,34 @@ pub async fn claim_due(
         )
         .await?;
     }
+    // Quotas reserve an initial share for every lifecycle queue.  If a
+    // reserved queue is empty, borrow its unused capacity in the same
+    // recovery-first order before touching ACTIVE exploration.  This avoids
+    // wasting a tick while candidates are waiting, yet still lets a real
+    // ACTIVE pool consume its explicitly allocated exploration share.
+    for (state, reason) in [
+        ("CANDIDATE", "borrowed_new"),
+        ("PROBATION", "borrowed_probation"),
+        ("DORMANT", "borrowed_dormant"),
+    ] {
+        if jobs.len() >= capacity {
+            break;
+        }
+        let remaining = capacity - jobs.len();
+        append_claims(
+            store,
+            &mut jobs,
+            capacity,
+            ClaimParams {
+                state,
+                queue_limit: remaining,
+                reason,
+                now,
+                lease,
+            },
+        )
+        .await?;
+    }
     if jobs.len() < capacity {
         let exploration_limit = quota.exploration.max(capacity - jobs.len());
         append_claims(
