@@ -5,6 +5,7 @@ import json
 import re
 import urllib.parse
 import urllib.request
+import uuid
 from typing import Any
 
 from submanager.core.models import ParsedNode
@@ -12,6 +13,32 @@ from submanager.utils.hashing import stable_json_hash
 
 
 SUPPORTED_SCHEMES = ("vmess", "vless", "trojan", "ss", "socks")
+SUPPORTED_NETWORKS = {
+    "tcp",
+    "raw",
+    "ws",
+    "websocket",
+    "grpc",
+    "httpupgrade",
+    "splithttp",
+    "xhttp",
+    "kcp",
+    "mkcp",
+    "quic",
+}
+SUPPORTED_SECURITY = {"", "none", "tls", "reality"}
+SUPPORTED_SHADOWSOCKS_METHODS = {
+    "2022-blake3-aes-128-gcm",
+    "2022-blake3-aes-256-gcm",
+    "2022-blake3-chacha20-poly1305",
+    "aes-128-gcm",
+    "aes-256-gcm",
+    "chacha20-poly1305",
+    "chacha20-ietf-poly1305",
+    "xchacha20-poly1305",
+    "xchacha20-ietf-poly1305",
+}
+REALITY_NETWORKS = {"tcp", "raw", "xhttp", "splithttp", "grpc"}
 
 
 class SubscriptionParser:
@@ -100,10 +127,10 @@ class SubscriptionParser:
             "protocol": "vmess",
             "server": data["add"],
             "port": int(data["port"]),
-            "id": data["id"],
+            "id": self._normalize_user_id(data["id"]),
             "aid": int(data.get("aid", 0) or 0),
-            "network": data.get("net", "tcp"),
-            "tls": data.get("tls", ""),
+            "network": self._normalize_network(data.get("net", "tcp")),
+            "tls": self._normalize_security(data.get("tls", "")),
             "sni": data.get("sni", ""),
             "host": data.get("host", ""),
             "path": data.get("path", ""),
@@ -153,15 +180,16 @@ class SubscriptionParser:
             "protocol": "vless",
             "server": parsed.hostname,
             "port": parsed.port,
-            "id": urllib.parse.unquote(parsed.username),
-            "network": query.get("type", ["tcp"])[0],
-            "security": query.get("security", ["none"])[0],
+            "id": self._normalize_user_id(urllib.parse.unquote(parsed.username)),
+            "network": self._normalize_network(query.get("type", ["tcp"])[0]),
+            "security": self._normalize_security(query.get("security", ["none"])[0]),
             "sni": query.get("sni", [""])[0],
             "path": query.get("path", [""])[0],
             "host": query.get("host", [""])[0],
             "flow": query.get("flow", [""])[0],
-            "encryption": query.get("encryption", ["none"])[0],
+            "encryption": self._normalize_vless_encryption(query.get("encryption", ["none"])[0]),
         }
+        self._validate_transport_security(normalized["network"], normalized["security"], query)
         outbound = {
             "protocol": "vless",
             "settings": {
@@ -213,8 +241,8 @@ class SubscriptionParser:
             "server": parsed.hostname,
             "port": parsed.port,
             "password": urllib.parse.unquote(password),
-            "network": query.get("type", ["tcp"])[0],
-            "security": query.get("security", ["tls"])[0],
+            "network": self._normalize_network(query.get("type", ["tcp"])[0]),
+            "security": self._normalize_security(query.get("security", ["tls"])[0]),
             "sni": query.get("sni", [""])[0],
             "path": query.get("path", [""])[0],
             "host": query.get("host", [""])[0],
@@ -258,10 +286,14 @@ class SubscriptionParser:
         if parsed.hostname and parsed.port and parsed.username:
             server_host = parsed.hostname
             server_port = parsed.port
-            userinfo = self._try_decode_base64_text(urllib.parse.unquote(parsed.username))
-            if not userinfo or ":" not in userinfo:
-                raise ValueError("invalid ss user info")
-            method, password = userinfo.split(":", 1)
+            if parsed.password is not None:
+                method = urllib.parse.unquote(parsed.username)
+                password = urllib.parse.unquote(parsed.password)
+            else:
+                userinfo = self._try_decode_base64_text(urllib.parse.unquote(parsed.username))
+                if not userinfo or ":" not in userinfo:
+                    raise ValueError("invalid ss user info")
+                method, password = userinfo.split(":", 1)
         else:
             payload = url.split("://", 1)[1]
             before_hash = payload.split("#", 1)[0]
@@ -272,6 +304,11 @@ class SubscriptionParser:
             userinfo, server = decoded.rsplit("@", 1)
             method, password = userinfo.split(":", 1)
             server_host, server_port = server.rsplit(":", 1)
+        method = method.strip().lower()
+        if method not in SUPPORTED_SHADOWSOCKS_METHODS:
+            raise ValueError(f"unsupported shadowsocks method: {method or '<empty>'}")
+        if not password:
+            raise ValueError("empty shadowsocks password")
         normalized = {
             "protocol": "ss",
             "server": server_host,
@@ -349,19 +386,23 @@ class SubscriptionParser:
         )
 
     def _build_stream_settings_from_vmess(self, data: dict[str, Any]) -> dict[str, Any]:
-        stream: dict[str, Any] = {"network": data.get("net", "tcp")}
+        stream: dict[str, Any] = {"network": self._normalize_network(data.get("net", "tcp"))}
         host = data.get("host", "")
         path = data.get("path", "")
-        tls_mode = data.get("tls", "")
+        tls_mode = self._normalize_security(data.get("tls", ""))
         network = stream["network"]
         if tls_mode in ("tls", "reality"):
             stream["security"] = tls_mode
-            stream["tlsSettings"] = {
-                "serverName": data.get("sni") or host or data.get("add", ""),
-                "allowInsecure": True,
-            }
+            tls_settings = {"serverName": data.get("sni") or host or data.get("add", "")}
+            pinned_cert = data.get("pcs") or data.get("pinnedPeerCertSha256") or ""
+            verify_name = data.get("vcn") or data.get("verifyPeerCertByName") or ""
+            if pinned_cert:
+                tls_settings["pinnedPeerCertSha256"] = pinned_cert
+            if verify_name:
+                tls_settings["verifyPeerCertByName"] = verify_name
+            stream["tlsSettings"] = tls_settings
         if network == "ws":
-            stream["wsSettings"] = {"path": path or "/", "headers": {"Host": host} if host else {}}
+            stream["wsSettings"] = {"path": path or "/", **({"host": host} if host else {})}
         elif network == "grpc":
             stream["grpcSettings"] = {"serviceName": path or data.get("serviceName", "")}
         elif network == "httpupgrade":
@@ -378,18 +419,27 @@ class SubscriptionParser:
         query: dict[str, list[str]],
         host: str,
     ) -> dict[str, Any]:
+        network = self._normalize_network(network)
+        security = self._normalize_security(security)
         stream: dict[str, Any] = {"network": network}
         if security and security != "none":
             stream["security"] = security
             if security == "tls":
                 tls_settings: dict[str, Any] = {
                     "serverName": query.get("sni", [host])[0],
-                    "allowInsecure": self._query_bool(
-                        query,
-                        "allowInsecure",
-                        self._query_bool(query, "insecure", True),
-                    ),
                 }
+                pinned_cert = (
+                    query.get("pcs", [""])[0]
+                    or query.get("pinnedPeerCertSha256", [""])[0]
+                )
+                verify_name = (
+                    query.get("vcn", [""])[0]
+                    or query.get("verifyPeerCertByName", [""])[0]
+                )
+                if pinned_cert:
+                    tls_settings["pinnedPeerCertSha256"] = pinned_cert
+                if verify_name:
+                    tls_settings["verifyPeerCertByName"] = verify_name
                 fingerprint = query.get("fp", [""])[0]
                 alpn = self._split_csv(query.get("alpn", [""])[0])
                 if fingerprint:
@@ -408,7 +458,7 @@ class SubscriptionParser:
         path = query.get("path", ["/"])[0] or "/"
         header_host = query.get("host", [host])[0]
         if network == "ws":
-            stream["wsSettings"] = {"path": path, "headers": {"Host": header_host} if header_host else {}}
+            stream["wsSettings"] = {"path": path, **({"host": header_host} if header_host else {})}
         elif network == "grpc":
             stream["grpcSettings"] = {"serviceName": query.get("serviceName", [""])[0]}
         elif network == "httpupgrade":
@@ -418,6 +468,62 @@ class SubscriptionParser:
         elif network == "kcp":
             stream["kcpSettings"] = {"header": {"type": query.get("headerType", ["none"])[0]}}
         return stream
+
+    def _normalize_network(self, value: object) -> str:
+        network = str(value or "tcp").strip().lower()
+        if network not in SUPPORTED_NETWORKS:
+            raise ValueError(f"unsupported transport network: {network}")
+        return network
+
+    def _normalize_security(self, value: object) -> str:
+        security = str(value or "").strip().lower()
+        if security not in SUPPORTED_SECURITY:
+            raise ValueError(f"unsupported transport security: {security}")
+        return security
+
+    def _normalize_uuid(self, value: object) -> str:
+        raw_value = str(value or "").strip()
+        try:
+            return str(uuid.UUID(raw_value))
+        except (AttributeError, ValueError) as exc:
+            raise ValueError("invalid proxy UUID") from exc
+
+    def _normalize_user_id(self, value: object) -> str:
+        raw_value = str(value or "").strip()
+        if not raw_value:
+            raise ValueError("empty proxy user id")
+        try:
+            return str(uuid.UUID(raw_value))
+        except (AttributeError, ValueError):
+            pass
+        if len(raw_value.encode("utf-8")) >= 30:
+            raise ValueError("proxy user id must be a UUID or a custom string shorter than 30 bytes")
+        return raw_value
+
+    def _normalize_vless_encryption(self, value: object) -> str:
+        encryption = str(value or "").strip()
+        if not encryption:
+            raise ValueError("VLESS encryption must not be empty")
+        if len(encryption) > 1024 or not re.fullmatch(r"[A-Za-z0-9._-]+", encryption):
+            raise ValueError("malformed VLESS encryption")
+        return encryption
+
+    def _validate_transport_security(
+        self,
+        network: str,
+        security: str,
+        query: dict[str, list[str]],
+    ) -> None:
+        if security != "reality":
+            return
+        if network not in REALITY_NETWORKS:
+            raise ValueError(f"REALITY is incompatible with transport network: {network}")
+        public_key = query.get("pbk", [""])[0] or query.get("password", [""])[0]
+        if not public_key:
+            raise ValueError("REALITY public key/password is required")
+        short_id = query.get("sid", [""])[0]
+        if len(short_id) > 16 or len(short_id) % 2 or not re.fullmatch(r"[0-9a-fA-F]*", short_id):
+            raise ValueError("invalid REALITY short id")
 
     def _try_decode_base64_text(self, value: str) -> str | None:
         compact = re.sub(r"\s+", "", value)

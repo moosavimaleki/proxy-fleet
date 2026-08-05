@@ -64,6 +64,8 @@ class NodeRecord:
     updated_at: datetime | None = None
     last_health_check_at: datetime | None = None
     last_test_at: datetime | None = None
+    last_download_test_at: datetime | None = None
+    next_test_at: datetime | None = None
     exit_info_fetched_at: datetime | None = None
     dead_until: datetime | None = None
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import threading
 import time
-from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -14,7 +13,9 @@ from submanager.core.network_guard import NetworkGuard
 from submanager.core.models import BestNodeDecision, FeedbackInput, NodeRecord, NodeStatus, ParsedNode, ServiceState, TestResult, VipSelectionDecision
 from submanager.core.ports import PortManager
 from submanager.core.runtime import RuntimeSupervisor
+from submanager.core.scheduling import candidate_retry_at, download_revalidation_due, should_suppress_candidate_failures
 from submanager.parser import SubscriptionParser
+from submanager.publishing.active_subscription import ActiveSubscriptionPublisher
 from submanager.selection.engine import SelectionEngine
 from submanager.storage.sqlite_store import SqliteStore
 from submanager.testing.service import TestService
@@ -23,7 +24,6 @@ from submanager.utils.logging import get_logger
 
 
 logger = get_logger(__name__)
-CANDIDATE_FAILURE_THRESHOLD = 2
 PROBATION_FAILURE_THRESHOLD = 2
 PROBATION_SUCCESS_THRESHOLD = 2
 
@@ -45,6 +45,18 @@ class OrchestratorApp:
         self.network_guard = NetworkGuard(settings.network_guard, self.state)
         self.transition_lock = threading.RLock()
         self.reload_lock = threading.Lock()
+        data_dir = Path(settings.database.path).parent
+        if not data_dir.is_absolute():
+            data_dir = work_dir / data_dir
+        self.active_subscription_publisher = ActiveSubscriptionPublisher(
+            self.store,
+            data_dir=data_dir,
+            remote=settings.publishing.git_remote,
+            branch=settings.publishing.git_branch,
+            author_name=settings.publishing.author_name,
+            author_email=settings.publishing.author_email,
+        )
+        self.active_subscription_dirty = threading.Event()
         self.threads: list[threading.Thread] = []
 
     def _has_exit_info(self, node: NodeRecord) -> bool:
@@ -83,6 +95,7 @@ class OrchestratorApp:
         return (self._status_priority(node.status), relay, download, created, node.id)
 
     def _delete_node_runtime_and_record(self, node: NodeRecord) -> None:
+        was_active = node.status == NodeStatus.ACTIVE
         with self.transition_lock:
             if self.state.vip_node_id == node.id:
                 self.runtime_supervisor.stop_vip_runtime()
@@ -91,6 +104,8 @@ class OrchestratorApp:
             self.runtime_supervisor.stop_active_runtime(node.id)
             self.port_manager.release_main(node.main_port)
         self.store.delete_node(node.id)
+        if was_active:
+            self._mark_active_subscription_dirty()
 
     def _save_and_dedupe_by_exit_ip(self, node: NodeRecord) -> NodeRecord:
         self.store.save_node(node)
@@ -128,6 +143,9 @@ class OrchestratorApp:
         active_nodes = self.store.list_nodes_by_status(NodeStatus.ACTIVE)
         self.port_manager.reserve_existing_main([node.main_port for node in active_nodes if node.main_port])
         self._restore_active_runtimes(active_nodes)
+        if self.settings.publishing.enabled:
+            self.active_subscription_dirty.set()
+            self._spawn_thread("active-subscription-publisher", self._active_subscription_publisher_loop)
         if self.settings.network_guard.enabled:
             self._spawn_thread("network-guard", self._network_guard_loop)
         self._spawn_thread("subscription-worker", self._subscription_loop)
@@ -139,6 +157,7 @@ class OrchestratorApp:
 
     def stop(self) -> None:
         self.stop_event.set()
+        self.active_subscription_dirty.set()
         for thread in self.threads:
             thread.join(timeout=2)
         for node_id in list(self.state.active_runtimes.keys()):
@@ -201,6 +220,8 @@ class OrchestratorApp:
             node.relay_delay_ms = result.latency_ms
         if result.download_kbps is not None:
             node.download_kbps = result.download_kbps
+        if result.ok and result.download_kbps is not None:
+            node.last_download_test_at = finished
         exit_info_details: dict[str, Any] = {}
         if result.exit_info:
             self._apply_exit_info(node, result.exit_info)
@@ -363,35 +384,79 @@ class OrchestratorApp:
             ],
         }
 
-    def get_dashboard_payload(self) -> dict[str, Any]:
-        nodes = self.store.list_nodes()
+    def get_dashboard_payload(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+        status: str = "",
+        country: str = "",
+        search: str = "",
+    ) -> dict[str, Any]:
+        effective_page = max(1, page)
+        effective_page_size = max(1, min(page_size, 200))
+        nodes, filtered_total = self.store.list_nodes_page(
+            limit=effective_page_size,
+            offset=(effective_page - 1) * effective_page_size,
+            status=status,
+            country=country,
+            search=search,
+        )
         stats_by_node = self.store.list_dashboard_stats(self.settings.assignment_ttl_seconds)
-        status_counts = Counter(node.status.value for node in nodes)
+        status_counts = self.store.count_nodes_by_status()
         payload_nodes = [self._serialize_dashboard_node(node, stats_by_node.get(node.id, {})) for node in nodes]
+        total_nodes = sum(status_counts.values())
+        total_pages = max(1, (filtered_total + effective_page_size - 1) // effective_page_size)
         return {
             "service": self.settings.service.name,
             "environment": self.settings.service.environment,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "total_nodes": len(payload_nodes),
-            "status_counts": dict(status_counts),
+            "total_nodes": total_nodes,
+            "filtered_total": filtered_total,
+            "page": effective_page,
+            "page_size": effective_page_size,
+            "total_pages": total_pages,
+            "status_counts": status_counts,
+            "countries": self.store.list_exit_countries(),
             "network": self.get_network_status_payload(),
             "vip": self.get_vip_status_payload(),
             "nodes": payload_nodes,
         }
 
-    def get_client_dashboard_payload(self, client_id: str | None = None) -> dict[str, Any]:
-        nodes = self.store.list_nodes()
+    def get_node_config_payload(self, node_id: str) -> dict[str, Any]:
+        node = self.store.get_node(node_id)
+        if node is None:
+            raise KeyError(node_id)
+        return {"id": node.id, "raw_config": node.raw_config}
+
+    def get_client_dashboard_payload(
+        self,
+        client_id: str | None = None,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> dict[str, Any]:
+        effective_page = max(1, page)
+        effective_page_size = max(1, min(page_size, 200))
+        nodes, total_nodes = self.store.list_nodes_page(
+            limit=effective_page_size,
+            offset=(effective_page - 1) * effective_page_size,
+        )
         known_clients = self.store.list_client_ids()
         selected_client = (client_id or "").strip() or (known_clients[0] if known_clients else "")
         client_stats_by_node = self.store.list_client_dashboard_stats(selected_client) if selected_client else {}
         payload_nodes = [self._serialize_client_dashboard_node(node, client_stats_by_node.get(node.id, {})) for node in nodes]
+        total_pages = max(1, (total_nodes + effective_page_size - 1) // effective_page_size)
         return {
             "service": self.settings.service.name,
             "environment": self.settings.service.environment,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "selected_client": selected_client,
             "known_clients": known_clients,
-            "total_nodes": len(payload_nodes),
+            "total_nodes": total_nodes,
+            "page": effective_page,
+            "page_size": effective_page_size,
+            "total_pages": total_pages,
             "network": self.get_network_status_payload(),
             "vip": self.get_vip_status_payload(),
             "nodes": payload_nodes,
@@ -451,6 +516,41 @@ class OrchestratorApp:
         thread = threading.Thread(name=name, target=target, daemon=True)
         thread.start()
         self.threads.append(thread)
+
+    def _mark_active_subscription_dirty(self) -> None:
+        if self.settings.publishing.enabled:
+            self.active_subscription_dirty.set()
+
+    def _active_subscription_publisher_loop(self) -> None:
+        interval = self.settings.publishing.reconcile_interval_seconds
+        debounce = self.settings.publishing.debounce_seconds
+        while not self.stop_event.is_set():
+            signaled = self.active_subscription_dirty.wait(timeout=interval)
+            if self.stop_event.is_set():
+                return
+            if signaled:
+                self.active_subscription_dirty.clear()
+                if debounce > 0 and self.stop_event.wait(debounce):
+                    return
+            try:
+                result = self.active_subscription_publisher.publish()
+                if result.pushed:
+                    self._event(
+                        "info",
+                        "publisher",
+                        "active_subscription_pushed",
+                        "Published changed ACTIVE proxy subscription",
+                        {"active_count": result.active_count, "commit": result.commit},
+                    )
+            except Exception as exc:
+                logger.exception("Failed to publish ACTIVE proxy subscription")
+                self._event(
+                    "error",
+                    "publisher",
+                    "active_subscription_push_failed",
+                    "Failed to publish ACTIVE proxy subscription",
+                    {"error": str(exc)[:500], "retry_seconds": interval},
+                )
 
     def _event(self, level: str, component: str, event: str, message: str, details: dict[str, object] | None = None) -> None:
         try:
@@ -561,13 +661,13 @@ class OrchestratorApp:
             "updated_at": self._dt(node.updated_at),
             "last_health_check_at": self._dt(node.last_health_check_at),
             "last_test_at": self._dt(node.last_test_at),
+            "last_download_test_at": self._dt(node.last_download_test_at),
+            "next_test_at": self._dt(node.next_test_at),
             "dead_until": self._dt(node.dead_until),
             "last_assigned_at": stats.get("last_assigned_at"),
             "last_feedback_at": stats.get("last_feedback_at"),
             "last_client_assigned_at": stats.get("last_client_assigned_at"),
             "last_client_feedback_at": stats.get("last_client_feedback_at"),
-            "normalized_config": normalized,
-            "raw_config": node.raw_config,
         }
 
     def _serialize_client_dashboard_node(self, node: NodeRecord, stats: dict[str, Any]) -> dict[str, Any]:
@@ -645,13 +745,6 @@ class OrchestratorApp:
                     )
                     self._event(transition_level, "network", transition_event, transition_message, details)
                     last_online = snapshot.online
-                self._event(
-                    "info" if snapshot.online else "warning",
-                    "network",
-                    "sentinel_check",
-                    f"Network sentinel check: {snapshot.status}",
-                    details,
-                )
             except Exception:
                 logger.exception("Network guard check failed unexpectedly")
                 self._event("error", "network", "sentinel_error", "Network guard check failed unexpectedly")
@@ -673,8 +766,14 @@ class OrchestratorApp:
             for source in self.settings.subscriptions.urls:
                 try:
                     parsed_nodes, warnings = self.parser.load_nodes(source.url)
-                    for warning in warnings:
+                    for warning in warnings[:10]:
                         logger.warning(warning)
+                    if len(warnings) > 10:
+                        logger.warning(
+                            "%s: %s additional invalid entries suppressed from logs",
+                            source.url,
+                            len(warnings) - 10,
+                        )
                     accepted_from_source = self._ingest_subscription_nodes(parsed_nodes)
                     accepted_total += accepted_from_source
                     reloaded_sources += 1
@@ -750,26 +849,24 @@ class OrchestratorApp:
         interval = self.settings.health.active_pool_relay_check_interval_seconds
         while not self.stop_event.is_set():
             started = time.monotonic()
-            next_sleep = 0.0
+            next_sleep = interval
             try:
                 if self._network_allows_work():
                     result = self._check_active_nodes_batch()
-                    active_nodes = int(result.get("active_nodes") or 0)
-                    next_sleep = 0.0 if active_nodes else interval
-                    self._event(
-                        "info" if not result.get("failures") else "warning",
-                        "health",
-                        "active_check_finished",
-                        "Active pool health check finished",
-                        {**result, "duration_ms": int((time.monotonic() - started) * 1000), "next_run_seconds": next_sleep},
-                    )
+                    if result.get("failures") or result.get("moved_to_probation"):
+                        self._event(
+                            "warning",
+                            "health",
+                            "active_check_finished",
+                            "Active pool health check finished with failures",
+                            {**result, "duration_ms": int((time.monotonic() - started) * 1000), "next_run_seconds": next_sleep},
+                        )
                 else:
-                    self._event("warning", "health", "active_check_skipped", "Active pool health check skipped because host network is offline")
                     next_sleep = self.settings.network_guard.check_interval_seconds if self.settings.network_guard.enabled else interval
             except Exception:
                 logger.exception("Active health checker iteration failed")
                 self._event("error", "health", "active_check_error", "Active health checker iteration failed")
-                next_sleep = min(1.0, interval)
+                next_sleep = interval
             if next_sleep > 0:
                 self.stop_event.wait(next_sleep)
 
@@ -778,31 +875,16 @@ class OrchestratorApp:
             removed = self.store.delete_expired_dead_nodes()
             if removed:
                 logger.info("Removed %s expired dead nodes", removed)
-            self._event("info", "dead-janitor", "cycle_finished", "Dead pool janitor cycle finished", {"removed": removed, "next_run_seconds": 300})
+            if removed:
+                self._event("info", "dead-janitor", "cycle_finished", "Dead pool janitor removed expired nodes", {"removed": removed, "next_run_seconds": 300})
             self.stop_event.wait(300)
 
     def _vip_loop(self) -> None:
         interval = self.settings.vip_port.check_interval_seconds
         while not self.stop_event.is_set():
-            started = time.monotonic()
             try:
                 if self._network_allows_work():
                     self._maintain_vip_runtime()
-                    self._event(
-                        "info",
-                        "vip",
-                        "cycle_finished",
-                        "VIP manager cycle finished",
-                        {
-                            "node_id": self.state.vip_node_id,
-                            "score": self.state.vip_score,
-                            "running": self.runtime_supervisor.is_vip_running(),
-                            "duration_ms": int((time.monotonic() - started) * 1000),
-                            "next_run_seconds": interval,
-                        },
-                    )
-                else:
-                    self._event("warning", "vip", "cycle_skipped", "VIP manager skipped because host network is offline")
             except Exception:
                 logger.exception("VIP manager iteration failed")
                 self._event("error", "vip", "cycle_error", "VIP manager iteration failed")
@@ -823,6 +905,7 @@ class OrchestratorApp:
             record = self.store.create_or_merge_candidate(parsed)
             record.status = NodeStatus.CANDIDATE
             record.dead_until = None
+            record.next_test_at = None
             record.consecutive_relay_failures = 0
             record.consecutive_relay_successes = 0
             self.store.save_node(record)
@@ -841,10 +924,12 @@ class OrchestratorApp:
             self.runtime_supervisor.start_active_runtime(record.id, parsed, main_port)
             record.status = NodeStatus.ACTIVE
             record.main_port = main_port
+            record.next_test_at = None
             record.consecutive_relay_failures = 0
             record.consecutive_relay_successes = 0
             record.health_success_ewma = self._ewma(record.health_success_ewma, 1.0)
             self.store.save_node(record)
+            self._mark_active_subscription_dirty()
 
     def _recheck_probation_nodes(self) -> None:
         if not self._network_allows_work():
@@ -871,6 +956,8 @@ class OrchestratorApp:
             node.last_test_at = finished_at
             node.relay_delay_ms = result.latency_ms if result.latency_ms >= 0 else None
             node.download_kbps = result.download_kbps
+            if result.ok and result.download_kbps is not None:
+                node.last_download_test_at = finished_at
             exit_info_details: dict[str, Any] = {}
             if result.exit_info:
                 self._apply_exit_info(node, result.exit_info)
@@ -900,11 +987,13 @@ class OrchestratorApp:
             "skipped": False,
             "stale_testing_reset": 0,
             "candidates": 0,
+            "queued_candidates": 0,
             "batches": 0,
             "batch_size": self.settings.health.candidate_batch_size,
             "parallel_batches": self.settings.health.candidate_parallel_batches,
             "probe_concurrency": self.settings.health.candidate_batch_concurrency,
             "batch_failures": 0,
+            "invalid_configs": 0,
         }
         if not self._network_allows_work():
             summary.update({"skipped": True, "reason": "network_offline"})
@@ -913,14 +1002,17 @@ class OrchestratorApp:
         summary["stale_testing_reset"] = stale_testing
         if stale_testing:
             logger.warning("Recovered %s stale TESTING nodes before candidate batch", stale_testing)
+        status_counts = self.store.count_nodes_by_status()
+        summary["queued_candidates"] = status_counts.get(NodeStatus.CANDIDATE.value, 0)
         candidates: list[tuple[NodeRecord, ParsedNode]] = []
-        for node in self.store.list_nodes_by_status(NodeStatus.CANDIDATE):
+        for node in self.store.list_candidate_nodes_for_testing(self.settings.health.candidate_cycle_limit):
             try:
                 parsed = self.parser.parse_share_url(node.raw_config, node.source_subs[0] if node.source_subs else "candidate")
                 candidates.append((node, parsed))
-            except Exception:
-                logger.exception("Failed to parse candidate node %s", node.id)
-                self._move_to_dead(node)
+            except Exception as exc:
+                logger.warning("Quarantining invalid candidate node %s: %s", node.id, exc)
+                self._move_to_dead(node, ttl_hours=self.settings.dead_pool.invalid_ttl_hours)
+                summary["invalid_configs"] = int(summary["invalid_configs"]) + 1
         summary["candidates"] = len(candidates)
         if not candidates:
             return summary
@@ -1026,27 +1118,21 @@ class OrchestratorApp:
             result_map = {result.parsed_node.config_hash: result for result in results}
             has_failures = len(result_map) < len(candidates) or any(not result.ok for result in results)
             success_count = sum(1 for result in results if result.ok)
-            failure_percent = ((len(candidates) - success_count) * 100.0 / max(1, len(candidates)))
             threshold_percent = self.settings.network_guard.mass_failure_threshold_percent
-            suppress_mass_failure = (
-                self.settings.network_guard.enabled
-                and has_failures
-                and success_count == 0
-                and len(candidates) >= 10
-                and threshold_percent > 0
-                and failure_percent >= threshold_percent
+            network_online_after_test = self._network_allows_work(force_refresh=True) if has_failures else True
+            suppress_mass_failure = should_suppress_candidate_failures(
+                guard_enabled=self.settings.network_guard.enabled,
+                network_online=network_online_after_test,
+                candidate_count=len(candidates),
+                success_count=success_count,
+                threshold_percent=threshold_percent,
             )
             if suppress_mass_failure:
+                failure_percent = ((len(candidates) - success_count) * 100.0 / max(1, len(candidates)))
                 logger.warning(
                     "Suppressed candidate batch failures because every probe failed (%.1f%% failures in batch)",
                     failure_percent,
                 )
-            if suppress_mass_failure:
-                network_online_after_test = False
-            elif has_failures:
-                network_online_after_test = self._network_allows_work(force_refresh=True)
-            else:
-                network_online_after_test = True
             finished_at = datetime.now(timezone.utc)
 
             for node, parsed in candidates:
@@ -1082,6 +1168,8 @@ class OrchestratorApp:
                         "exit_ip": node.exit_ip,
                     }
                 if result.ok:
+                    if result.download_kbps is not None:
+                        node.last_download_test_at = finished_at
                     self._activate_node(node, parsed)
                     kept = self._save_and_dedupe_by_exit_ip(node)
                     if kept.id != node.id:
@@ -1166,8 +1254,9 @@ class OrchestratorApp:
             node.consecutive_relay_successes = 0
             node.health_success_ewma = self._ewma(node.health_success_ewma, 0.0)
             self.store.save_node(node)
+            self._mark_active_subscription_dirty()
 
-    def _move_to_dead(self, node: NodeRecord) -> None:
+    def _move_to_dead(self, node: NodeRecord, ttl_hours: int | None = None) -> None:
         with self.transition_lock:
             if self.state.vip_node_id == node.id:
                 self.runtime_supervisor.stop_vip_runtime()
@@ -1175,21 +1264,29 @@ class OrchestratorApp:
             self.port_manager.release_main(node.main_port)
             node.main_port = None
             node.status = NodeStatus.DEAD
-            node.dead_until = datetime.now(timezone.utc) + timedelta(hours=self.settings.dead_pool.ttl_hours)
+            node.next_test_at = None
+            effective_ttl = ttl_hours if ttl_hours is not None else self.settings.dead_pool.ttl_hours
+            node.dead_until = datetime.now(timezone.utc) + timedelta(hours=effective_ttl)
             node.consecutive_relay_successes = 0
             node.health_success_ewma = self._ewma(node.health_success_ewma, 0.0)
             self.store.save_node(node)
+            self._mark_active_subscription_dirty()
 
     def _mark_candidate_failure(self, node: NodeRecord) -> None:
         with self.transition_lock:
             node.consecutive_relay_failures += 1
             node.consecutive_relay_successes = 0
             node.health_success_ewma = self._ewma(node.health_success_ewma, 0.0)
-            if node.consecutive_relay_failures >= CANDIDATE_FAILURE_THRESHOLD:
+            if node.consecutive_relay_failures >= self.settings.health.candidate_max_failures:
                 self._move_to_dead(node)
                 return
             node.status = NodeStatus.CANDIDATE
             node.dead_until = None
+            node.next_test_at = candidate_retry_at(
+                failure_count=node.consecutive_relay_failures,
+                backoff_seconds=self.settings.health.candidate_retry_backoff_seconds,
+                now=datetime.now(timezone.utc),
+            )
             self.store.save_node(node)
 
     def _mark_probation_failure(self, node: NodeRecord) -> None:
@@ -1282,6 +1379,8 @@ class OrchestratorApp:
             "skipped_no_ports": 0,
             "vip_checked": 0,
             "vip_failures": 0,
+            "download_checked": 0,
+            "download_failures": 0,
         }
         active_nodes = self.store.list_nodes_by_status(NodeStatus.ACTIVE)
         summary["active_nodes"] = len(active_nodes)
@@ -1325,7 +1424,7 @@ class OrchestratorApp:
         if not test_items:
             return summary
 
-        probe_failures: list[tuple[NodeRecord, ParsedNode, str, TestResult, datetime]] = []
+        probe_failures: list[tuple[NodeRecord, ParsedNode, str, TestResult, datetime, bool]] = []
         batch_size = max(1, self.settings.health.candidate_batch_size)
         batches = [test_items[start : start + batch_size] for start in range(0, len(test_items), batch_size)]
 
@@ -1384,13 +1483,52 @@ class OrchestratorApp:
                     )
                 )
 
+            download_due_indices: list[int] = []
+            if self.settings.download_test.enabled:
+                download_now = datetime.now(timezone.utc)
+                download_due_indices = [
+                    idx
+                    for idx, (node, _, _) in enumerate(batch)
+                    if results[idx].ok
+                    and download_revalidation_due(
+                        last_download_test_at=node.last_download_test_at,
+                        interval_seconds=self.settings.health.active_pool_download_check_interval_seconds,
+                        now=download_now,
+                    )
+                ]
+            if download_due_indices:
+                download_items = [
+                    (batch[idx][1], int(batch[idx][0].main_port or 0))
+                    for idx in download_due_indices
+                ]
+                try:
+                    download_results = self.test_service.run_fast_test_existing_ports(
+                        download_items,
+                        concurrency=self.settings.health.candidate_batch_concurrency,
+                        fetch_exit_info=False,
+                        include_download=True,
+                    )
+                except Exception:
+                    # Keep the successful relay result when the revalidation worker
+                    # itself crashes; an infrastructure error must not evict nodes.
+                    logger.exception("Active download revalidation batch crashed")
+                    download_results = []
+                for position, result_index in enumerate(download_due_indices):
+                    if position >= len(download_results):
+                        break
+                    results[result_index] = download_results[position]
+                    summary["download_checked"] = int(summary["download_checked"]) + 1
+                    if not download_results[position].ok:
+                        summary["download_failures"] = int(summary["download_failures"]) + 1
+
             for idx, (node, parsed, status_before) in enumerate(batch):
                 if self.store.get_node(node.id) is None:
                     continue
                 result = results[idx]
+                download_revalidation = idx in download_due_indices
 
                 if not result.ok:
-                    probe_failures.append((node, parsed, status_before, result, started))
+                    probe_failures.append((node, parsed, status_before, result, started, download_revalidation))
                     continue
 
                 if result.latency_ms >= 0:
@@ -1398,6 +1536,8 @@ class OrchestratorApp:
                 if result.download_kbps is not None:
                     node.download_kbps = result.download_kbps
                 finished = datetime.now(timezone.utc)
+                if result.download_kbps is not None:
+                    node.last_download_test_at = finished
                 node.last_health_check_at = finished
                 node.last_test_at = finished
                 node.consecutive_relay_failures = 0
@@ -1423,7 +1563,13 @@ class OrchestratorApp:
                     result=result,
                     status_before=status_before,
                     status_after=node.status.value,
-                    details={"main_port": node.main_port, "batched": True, "realping_first": True, **exit_info_details},
+                    details={
+                        "main_port": node.main_port,
+                        "batched": True,
+                        "realping_first": True,
+                        "download_revalidation": download_revalidation,
+                        **exit_info_details,
+                    },
                 )
 
             if vip_index is not None and vip_probe is not None:
@@ -1479,7 +1625,7 @@ class OrchestratorApp:
                     failure_percent,
                 )
                 summary["suppressed"] = len(probe_failures)
-                for node, parsed, status_before, result, started in probe_failures:
+                for node, parsed, status_before, result, started, download_revalidation in probe_failures:
                     if self.store.get_node(node.id) is None:
                         continue
                     self._record_test_result(
@@ -1490,14 +1636,14 @@ class OrchestratorApp:
                         result=result,
                         status_before=status_before,
                         status_after=node.status.value,
-                        details={"main_port": node.main_port, "protocol": parsed.protocol, "remark": parsed.remark, "suppressed_by_network_guard": True, "batched": True, "realping_first": True},
+                        details={"main_port": node.main_port, "protocol": parsed.protocol, "remark": parsed.remark, "suppressed_by_network_guard": True, "batched": True, "realping_first": True, "download_revalidation": download_revalidation},
                     )
                 return summary
 
-        for node, parsed, status_before, result, started in probe_failures:
+        for node, parsed, status_before, result, started, download_revalidation in probe_failures:
             if self.store.get_node(node.id) is None:
                 continue
-            logger.warning("Active relay check failed for node %s", node.id)
+            logger.warning("Active health check failed for node %s: %s", node.id, result.error)
             if result.latency_ms >= 0:
                 node.relay_delay_ms = result.latency_ms
             if result.download_kbps is not None:
@@ -1513,7 +1659,14 @@ class OrchestratorApp:
                 result=result,
                 status_before=status_before,
                 status_after=NodeStatus.PROBATION.value,
-                details={"main_port": node.main_port, "protocol": parsed.protocol, "remark": parsed.remark, "batched": True, "realping_first": True},
+                details={
+                    "main_port": node.main_port,
+                    "protocol": parsed.protocol,
+                    "remark": parsed.remark,
+                    "batched": True,
+                    "realping_first": True,
+                    "download_revalidation": download_revalidation,
+                },
             )
             self._move_to_probation(node)
             summary["moved_to_probation"] = int(summary["moved_to_probation"]) + 1

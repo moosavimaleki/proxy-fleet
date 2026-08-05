@@ -15,6 +15,7 @@ from submanager.config.models import (
     PenaltyRule,
     PortRange,
     PortSettings,
+    PublishingSettings,
     SentinelTarget,
     SelectionSettings,
     SelectionWeights,
@@ -48,6 +49,7 @@ class ConfigLoader:
             api=ApiSettings(**payload.get("api", {})),
             vip_port=VipPortSettings(**payload.get("vip_port", {})),
             network_guard=self._load_network_guard(payload.get("network_guard", {})),
+            publishing=PublishingSettings(**payload.get("publishing", {})),
             assignment_ttl_seconds=int(payload.get("assignment_ttl_seconds", 60)),
             xray_bin=payload.get("xray_bin", ""),
         )
@@ -102,18 +104,30 @@ class ConfigLoader:
             raise ValueError("refresh interval must be greater than zero")
         if settings.health.active_pool_relay_check_interval_seconds <= 0:
             raise ValueError("active pool relay check interval must be greater than zero")
+        if settings.health.active_pool_download_check_interval_seconds <= 0:
+            raise ValueError("active pool download check interval must be greater than zero")
         if settings.health.candidate_recheck_interval_seconds <= 0:
             raise ValueError("candidate recheck interval must be greater than zero")
         if settings.health.candidate_batch_size <= 0:
             raise ValueError("candidate batch size must be greater than zero")
+        if settings.health.candidate_cycle_limit <= 0:
+            raise ValueError("candidate cycle limit must be greater than zero")
         if settings.health.candidate_batch_concurrency <= 0:
             raise ValueError("candidate batch concurrency must be greater than zero")
         if settings.health.candidate_parallel_batches <= 0:
             raise ValueError("candidate parallel batches must be greater than zero")
         if settings.health.candidate_batch_timeout_seconds <= 0:
             raise ValueError("candidate batch timeout must be greater than zero")
+        if settings.health.candidate_max_failures <= 1:
+            raise ValueError("candidate max failures must be greater than one")
+        if not settings.health.candidate_retry_backoff_seconds:
+            raise ValueError("candidate retry backoff must not be empty")
+        if any(value <= 0 for value in settings.health.candidate_retry_backoff_seconds):
+            raise ValueError("candidate retry backoff values must be greater than zero")
         if settings.dead_pool.ttl_hours <= 0:
             raise ValueError("dead pool TTL must be greater than zero")
+        if settings.dead_pool.invalid_ttl_hours <= 0:
+            raise ValueError("invalid node TTL must be greater than zero")
         if settings.download_test.timeout_seconds <= 0:
             raise ValueError("download_test.timeout_seconds must be greater than zero")
         if settings.download_test.per_url_timeout_seconds <= 0:
@@ -140,3 +154,12 @@ class ConfigLoader:
             raise ValueError("network_guard.mass_failure_threshold_percent must be between 0 and 100")
         if settings.database.type.lower() != "sqlite":
             raise ValueError("only sqlite database.type is supported in v1")
+        if settings.publishing.enabled:
+            if not settings.publishing.git_remote:
+                raise ValueError("publishing.git_remote must not be empty when publishing is enabled")
+            if not settings.publishing.git_branch:
+                raise ValueError("publishing.git_branch must not be empty")
+            if settings.publishing.debounce_seconds < 0:
+                raise ValueError("publishing.debounce_seconds must be non-negative")
+            if settings.publishing.reconcile_interval_seconds <= 0:
+                raise ValueError("publishing.reconcile_interval_seconds must be greater than zero")

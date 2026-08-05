@@ -11,9 +11,13 @@ services:
       nofile:
         soft: 65535
         hard: 65535
+    environment:
+      SSH_AUTH_SOCK: /run/host-ssh-agent
     volumes:
       - ./data:/app/data
       - ./config/config.yml:/app/config/config.yml:ro
+      - /run/user/1000/gcr/ssh:/run/host-ssh-agent
+      - /home/h-mousavi/.ssh/known_hosts:/root/.ssh/known_hosts:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 30s

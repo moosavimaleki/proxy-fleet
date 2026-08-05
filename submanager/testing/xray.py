@@ -101,6 +101,7 @@ class XrayConfigBuilder:
             raise
 
     def build_single(self, parsed_node: ParsedNode, local_port: int, listen: str = "127.0.0.1") -> dict:
+        outbound = self._prepare_outbound(parsed_node.outbound)
         return {
             "log": {"loglevel": "warning"},
             "inbounds": [
@@ -113,7 +114,7 @@ class XrayConfigBuilder:
                 }
             ],
             "outbounds": [
-                parsed_node.outbound,
+                outbound,
                 {"tag": "direct", "protocol": "freedom"},
                 {"tag": "block", "protocol": "blackhole"},
             ],
@@ -149,7 +150,7 @@ class XrayConfigBuilder:
                     "settings": {"auth": "noauth", "udp": True},
                 }
             )
-            outbound = copy.deepcopy(item.node.outbound)
+            outbound = self._prepare_outbound(item.node.outbound)
             outbound["tag"] = item.outbound_tag
             config["outbounds"].append(outbound)
             config["routing"]["rules"].append(
@@ -160,6 +161,33 @@ class XrayConfigBuilder:
                 }
             )
         return config
+
+    def _prepare_outbound(self, source: dict) -> dict:
+        """Normalize fields removed or migrated by current Xray releases."""
+        outbound = copy.deepcopy(source)
+        stream = outbound.get("streamSettings")
+        if not isinstance(stream, dict):
+            return outbound
+
+        tls_settings = stream.get("tlsSettings")
+        if isinstance(tls_settings, dict):
+            # Xray rejects this former boolean switch after 2026-06-01. A
+            # subscription must provide pinnedPeerCertSha256/verifyPeerCertByName
+            # when it relies on a non-public certificate.
+            tls_settings.pop("allowInsecure", None)
+
+        ws_settings = stream.get("wsSettings")
+        if isinstance(ws_settings, dict):
+            headers = ws_settings.get("headers")
+            if isinstance(headers, dict):
+                host_keys = [key for key in headers if str(key).lower() == "host"]
+                if host_keys and not ws_settings.get("host"):
+                    ws_settings["host"] = headers[host_keys[0]]
+                for key in host_keys:
+                    headers.pop(key, None)
+                if not headers:
+                    ws_settings.pop("headers", None)
+        return outbound
 
 
 class XrayRunner:

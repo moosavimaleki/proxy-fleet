@@ -426,6 +426,14 @@ def _dashboard_body() -> str:
       <a href="/manual-import" class="nav-link" style="background:var(--accent);color:white;">Add Manual</a>
       <a href="/diag" class="nav-link" style="background:#ece2d2;">Diag</a>
       <button id="refresh-btn" type="button">Refresh now</button>
+      <select id="page-size" aria-label="Rows per page">
+        <option value="50">50 rows</option>
+        <option value="100" selected>100 rows</option>
+        <option value="200">200 rows</option>
+      </select>
+      <button id="page-prev" class="ghost" type="button">Previous</button>
+      <span id="page-info" class="muted">Page 1</span>
+      <button id="page-next" class="ghost" type="button">Next</button>
       <span id="last-refresh" class="muted"></span>
     </section>
     <section class="table-wrap">
@@ -648,7 +656,7 @@ def _logs_script() -> str:
 
 def _dashboard_script() -> str:
     return """
-    const fleetState = { payload: null };
+    const fleetState = { payload: null, page: 1, searchTimer: null };
     let activeModalNode = null;
 
     function countryFlag(countryCode) {
@@ -701,7 +709,7 @@ def _dashboard_script() -> str:
     function renderFleetCountryFilter(payload) {
       const select = document.getElementById("country-filter");
       const current = select.value;
-      const countries = Array.from(new Set((payload.nodes || []).map((node) => String(node.exit_country || "").trim()).filter(Boolean))).sort();
+      const countries = payload.countries || [];
       const options = ["", ...countries];
       select.innerHTML = options.map((value) => {
         const label = value || "All countries";
@@ -716,29 +724,7 @@ def _dashboard_script() -> str:
       const tbody = document.getElementById("rows");
       if (!payload) return;
 
-      const search = document.getElementById("search").value.trim().toLowerCase();
-      const statusFilter = document.getElementById("status-filter").value;
-      const countryFilter = document.getElementById("country-filter").value;
-      const rows = payload.nodes.filter((node) => {
-        if (statusFilter && node.status !== statusFilter) return false;
-        if (countryFilter && String(node.exit_country || "") !== countryFilter) return false;
-        if (!search) return true;
-        const blob = [
-          node.id, node.status, node.protocol, node.remark, node.server, node.config_hash, node.exit_country, node.exit_city, node.exit_org, ...(node.source_subs || [])
-        ].join(" ").toLowerCase();
-        return blob.includes(search);
-      }).sort((left, right) => {
-        const leftVip = left.is_vip ? 0 : 1;
-        const rightVip = right.is_vip ? 0 : 1;
-        if (leftVip !== rightVip) return leftVip - rightVip;
-        const leftStatus = String(left.status || "");
-        const rightStatus = String(right.status || "");
-        if (leftStatus !== rightStatus) return leftStatus.localeCompare(rightStatus);
-        const leftDelay = Number.isFinite(left.relay_delay_ms) ? left.relay_delay_ms : Number.MAX_SAFE_INTEGER;
-        const rightDelay = Number.isFinite(right.relay_delay_ms) ? right.relay_delay_ms : Number.MAX_SAFE_INTEGER;
-        if (leftDelay !== rightDelay) return leftDelay - rightDelay;
-        return String(left.id || "").localeCompare(String(right.id || ""));
-      });
+      const rows = payload.nodes || [];
 
       if (!rows.length) {
         tbody.innerHTML = '<tr><td class="empty" colspan="10">No rows match the current filter.</td></tr>';
@@ -770,22 +756,66 @@ def _dashboard_script() -> str:
       `).join("");
     }
 
+    function renderFleetPager(payload) {
+      const page = Number(payload.page || 1);
+      const totalPages = Number(payload.total_pages || 1);
+      const filteredTotal = Number(payload.filtered_total || 0);
+      document.getElementById("page-info").textContent = `Page ${page} of ${totalPages} · ${filteredTotal} matches`;
+      document.getElementById("page-prev").disabled = page <= 1;
+      document.getElementById("page-next").disabled = page >= totalPages;
+    }
+
     async function refreshFleet() {
-      const response = await fetch("/api/v1/nodes", { headers: { "Accept": "application/json" } });
+      const params = new URLSearchParams();
+      params.set("page", String(fleetState.page));
+      params.set("page_size", document.getElementById("page-size").value || "100");
+      const search = document.getElementById("search").value.trim();
+      const status = document.getElementById("status-filter").value;
+      const country = document.getElementById("country-filter").value;
+      if (search) params.set("search", search);
+      if (status) params.set("status", status);
+      if (country) params.set("country", country);
+      const response = await fetch(`/api/v1/nodes?${params.toString()}`, { headers: { "Accept": "application/json" } });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       fleetState.payload = await response.json();
+      fleetState.page = Number(fleetState.payload.page || fleetState.page);
       renderFleetSummary(fleetState.payload);
       renderFleetStatusFilter(fleetState.payload);
       renderFleetCountryFilter(fleetState.payload);
       renderFleetRows();
+      renderFleetPager(fleetState.payload);
       const net = fleetState.payload.network;
       const netText = net?.enabled ? `network=${net.online ? "online" : "offline"}` : "network-guard=disabled";
       document.getElementById("last-refresh").textContent = `Last refresh: ${new Date().toLocaleTimeString()} | ${netText}`;
     }
 
-    document.getElementById("search").addEventListener("input", renderFleetRows);
-    document.getElementById("status-filter").addEventListener("change", renderFleetRows);
-    document.getElementById("country-filter").addEventListener("change", renderFleetRows);
+    document.getElementById("search").addEventListener("input", () => {
+      clearTimeout(fleetState.searchTimer);
+      fleetState.searchTimer = setTimeout(() => {
+        fleetState.page = 1;
+        refreshFleet().catch(showFleetError);
+      }, 250);
+    });
+    document.getElementById("status-filter").addEventListener("change", () => {
+      fleetState.page = 1;
+      refreshFleet().catch(showFleetError);
+    });
+    document.getElementById("country-filter").addEventListener("change", () => {
+      fleetState.page = 1;
+      refreshFleet().catch(showFleetError);
+    });
+    document.getElementById("page-size").addEventListener("change", () => {
+      fleetState.page = 1;
+      refreshFleet().catch(showFleetError);
+    });
+    document.getElementById("page-prev").addEventListener("click", () => {
+      fleetState.page = Math.max(1, fleetState.page - 1);
+      refreshFleet().catch(showFleetError);
+    });
+    document.getElementById("page-next").addEventListener("click", () => {
+      fleetState.page += 1;
+      refreshFleet().catch(showFleetError);
+    });
     document.getElementById("refresh-btn").addEventListener("click", () => refreshFleet().catch(showFleetError));
 
     function showFleetError(error) {
@@ -845,7 +875,12 @@ def _dashboard_script() -> str:
 
       if (action === "copy-config") {
         try {
-          await navigator.clipboard.writeText(node.raw_config || "");
+          const response = await fetch(`/api/v1/nodes/${encodeURIComponent(nodeId)}/config`, {
+            headers: { "Accept": "application/json" },
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+          await navigator.clipboard.writeText(payload.raw_config || "");
         } catch (error) {
           openModal(node.remark || node.id, "Copy Config", `<p class="muted">Copy failed: ${esc(error.message)}</p>`, nodeId);
         }
@@ -980,6 +1015,15 @@ def _client_body() -> str:
       <input id="client-input" type="search" placeholder="Enter a client id">
       <button id="client-load-btn" type="button">Load client view</button>
       <button id="client-copy-btn" class="ghost" type="button">Copy direct link</button>
+      <label class="muted" for="client-page-size">Rows</label>
+      <select id="client-page-size">
+        <option value="50">50</option>
+        <option value="100" selected>100</option>
+        <option value="200">200</option>
+      </select>
+      <button id="client-page-prev" class="ghost" type="button">Previous</button>
+      <button id="client-page-next" class="ghost" type="button">Next</button>
+      <span id="client-page-info" class="muted"></span>
       <span id="client-last-refresh" class="muted"></span>
     </section>
     <section class="table-wrap">
@@ -1006,7 +1050,7 @@ def _client_body() -> str:
 
 def _client_script() -> str:
     return """
-    const clientState = { payload: null };
+    const clientState = { payload: null, page: 1 };
 
     function selectedClientValue() {
       const manual = document.getElementById("client-input").value.trim();
@@ -1024,8 +1068,9 @@ def _client_script() -> str:
       const cards = [
         ["Selected Client", payload.selected_client || "-"],
         ["Known Clients", payload.known_clients.length],
-        ["Tracked Nodes", rows.length],
-        ["Seen By Client", engaged.length],
+        ["Tracked Nodes", payload.total_nodes || 0],
+        ["Page Nodes", rows.length],
+        ["Seen On Page", engaged.length],
         ["Open Circuits", open],
         ["Half Open", half],
         ["Closed", closed],
@@ -1070,25 +1115,33 @@ def _client_script() -> str:
           <td class="mono">node status: <span class="status ${esc(node.status)}">${esc(node.status)}</span><br>running: ${esc(node.runtime_running)}<br>local: ${esc(metric(node.main_port))}</td>
           <td class="mono">latency: ${esc(metric(node.relay_delay_ms, " ms"))}<br>speed: ${esc(metric(node.download_kbps, " kbps"))}<br>health ewma: ${esc(node.health_success_ewma)}</td>
           <td class="mono">assigned: ${esc(prettyDate(node.last_assigned_at))}<br>feedback: ${esc(prettyDate(node.last_feedback_at))}<br>success: ${esc(prettyDate(node.last_success_at))}<br>failure: ${esc(prettyDate(node.last_failure_at))}</td>
-          <td>
-            <details>
-              <summary>View config</summary>
-              <pre>${esc(JSON.stringify({ node_id: node.id, config_hash: node.config_hash, normalized_config: node.normalized_config, raw_config: node.raw_config }, null, 2))}</pre>
-            </details>
-          </td>
+          <td><button class="mini-btn" type="button" data-client-action="copy-config" data-node-id="${esc(node.id)}">Copy config</button></td>
         </tr>
       `).join("");
     }
 
+    function renderClientPager(payload) {
+      const page = Number(payload.page || 1);
+      const totalPages = Number(payload.total_pages || 1);
+      clientState.page = page;
+      document.getElementById("client-page-info").textContent = `Page ${page} of ${totalPages}`;
+      document.getElementById("client-page-prev").disabled = page <= 1;
+      document.getElementById("client-page-next").disabled = page >= totalPages;
+    }
+
     async function refreshClient(forceClient) {
       const chosen = forceClient ?? selectedClientValue();
-      const query = chosen ? `?client=${encodeURIComponent(chosen)}` : "";
-      const response = await fetch(`/api/v1/client-status${query}`, { headers: { "Accept": "application/json" } });
+      const params = new URLSearchParams();
+      params.set("page", String(clientState.page));
+      params.set("page_size", document.getElementById("client-page-size").value || "100");
+      if (chosen) params.set("client", chosen);
+      const response = await fetch(`/api/v1/client-status?${params.toString()}`, { headers: { "Accept": "application/json" } });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       clientState.payload = await response.json();
       renderClientSummary(clientState.payload);
       renderClientSelector(clientState.payload);
       renderClientRows();
+      renderClientPager(clientState.payload);
       document.getElementById("client-last-refresh").textContent = `Last refresh: ${new Date().toLocaleTimeString()}`;
       const url = new URL(window.location.href);
       if (clientState.payload.selected_client) {
@@ -1106,9 +1159,39 @@ def _client_script() -> str:
     document.getElementById("client-select").addEventListener("change", () => {
       const value = document.getElementById("client-select").value;
       document.getElementById("client-input").value = value;
+      clientState.page = 1;
       refreshClient(value).catch(showClientError);
     });
-    document.getElementById("client-load-btn").addEventListener("click", () => refreshClient().catch(showClientError));
+    document.getElementById("client-load-btn").addEventListener("click", () => {
+      clientState.page = 1;
+      refreshClient().catch(showClientError);
+    });
+    document.getElementById("client-page-size").addEventListener("change", () => {
+      clientState.page = 1;
+      refreshClient().catch(showClientError);
+    });
+    document.getElementById("client-page-prev").addEventListener("click", () => {
+      clientState.page = Math.max(1, clientState.page - 1);
+      refreshClient().catch(showClientError);
+    });
+    document.getElementById("client-page-next").addEventListener("click", () => {
+      clientState.page += 1;
+      refreshClient().catch(showClientError);
+    });
+    document.getElementById("client-rows").addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-client-action='copy-config']");
+      if (!button) return;
+      try {
+        const response = await fetch(`/api/v1/nodes/${encodeURIComponent(button.dataset.nodeId)}/config`, {
+          headers: { "Accept": "application/json" },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        await navigator.clipboard.writeText(payload.raw_config || "");
+      } catch (error) {
+        button.textContent = `Copy failed: ${error.message}`;
+      }
+    });
     document.getElementById("client-copy-btn").addEventListener("click", async () => {
       const url = new URL(window.location.href);
       const client = selectedClientValue();

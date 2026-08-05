@@ -2,8 +2,17 @@ service:
   name: config-orchestrator
   environment: production
 
+publishing:
+  enabled: true
+  git_remote: "git@github.com:moosavimaleki/proxy-fleet.git"
+  git_branch: main
+  debounce_seconds: 2
+  reconcile_interval_seconds: 60
+  author_name: "Proxy Fleet"
+  author_email: "proxy-fleet@users.noreply.github.com"
+
 subscriptions:
-  refresh_interval_seconds: 60
+  refresh_interval_seconds: 300
   urls:
     - name: sub_1
       url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub1.txt"
@@ -35,14 +44,20 @@ database:
 
 health:
   active_pool_relay_check_interval_seconds: 10
+  # A node stays ACTIVE only if real downloads still work from this host/network.
+  active_pool_download_check_interval_seconds: 300
   probation_recheck_interval_seconds: 120
   candidate_recheck_interval_seconds: 10
-  candidate_batch_size: 64
-  candidate_batch_concurrency: 32
-  candidate_parallel_batches: 1
-  candidate_batch_timeout_seconds: 45
-  relay_timeout_ms: 8000
-  max_relay_delay_ms: 5000
+  # Transient failures get increasingly sparse retries; chronic failures leave the hot queue.
+  candidate_max_failures: 5
+  candidate_retry_backoff_seconds: [300, 1800, 7200, 21600]
+  candidate_batch_size: 32
+  candidate_cycle_limit: 256
+  candidate_batch_concurrency: 16
+  candidate_parallel_batches: 4
+  candidate_batch_timeout_seconds: 20
+  relay_timeout_ms: 3000
+  max_relay_delay_ms: 3000
   test_url: "https://www.cloudflare.com/cdn-cgi/trace"
   fallback_urls:
     - "https://www.gstatic.com/generate_204"
@@ -76,6 +91,8 @@ download_test:
 
 dead_pool:
   ttl_hours: 24
+  # Syntactically invalid/incompatible configs should not poison Xray batches repeatedly.
+  invalid_ttl_hours: 720
 
 client_penalty:
   broken:

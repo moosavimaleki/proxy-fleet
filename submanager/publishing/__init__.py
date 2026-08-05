@@ -1,0 +1,1 @@
+"""Publish tested proxy subscriptions."""

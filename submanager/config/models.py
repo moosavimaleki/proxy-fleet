@@ -40,9 +40,15 @@ class PortSettings:
 @dataclass
 class HealthSettings:
     active_pool_relay_check_interval_seconds: int = 10
+    active_pool_download_check_interval_seconds: int = 300
     probation_recheck_interval_seconds: int = 120
     candidate_recheck_interval_seconds: int = 60
+    candidate_max_failures: int = 5
+    candidate_retry_backoff_seconds: list[int] = field(
+        default_factory=lambda: [300, 1800, 7200, 21600]
+    )
     candidate_batch_size: int = 256
+    candidate_cycle_limit: int = 512
     candidate_batch_concurrency: int = 128
     candidate_parallel_batches: int = 4
     candidate_batch_timeout_seconds: int = 12
@@ -66,6 +72,7 @@ class DownloadTestSettings:
 @dataclass
 class DeadPoolSettings:
     ttl_hours: int = 8
+    invalid_ttl_hours: int = 720
 
 
 @dataclass
@@ -146,6 +153,17 @@ class ServiceSettings:
 
 
 @dataclass
+class PublishingSettings:
+    enabled: bool = False
+    git_remote: str = ""
+    git_branch: str = "main"
+    debounce_seconds: float = 2.0
+    reconcile_interval_seconds: int = 60
+    author_name: str = "Proxy Fleet"
+    author_email: str = "proxy-fleet@users.noreply.github.com"
+
+
+@dataclass
 class AppSettings:
     service: ServiceSettings
     subscriptions: SubscriptionSettings
@@ -159,5 +177,6 @@ class AppSettings:
     api: ApiSettings
     vip_port: VipPortSettings = field(default_factory=VipPortSettings)
     network_guard: NetworkGuardSettings = field(default_factory=NetworkGuardSettings)
+    publishing: PublishingSettings = field(default_factory=PublishingSettings)
     assignment_ttl_seconds: int = 60
     xray_bin: str = ""

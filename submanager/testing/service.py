@@ -230,7 +230,9 @@ class TestService:
             results: list[TestResult] = []
             pool = ThreadPoolExecutor(max_workers=max_workers)
             futures = {pool.submit(self._probe_batch_node, item, fetch_exit_info): item for item in batch_nodes}
-            done, pending = wait(futures, timeout=self.settings.health.candidate_batch_timeout_seconds)
+            waves = (len(batch_nodes) + max_workers - 1) // max_workers
+            timeout = self.settings.health.candidate_batch_timeout_seconds * max(1, waves)
+            done, pending = wait(futures, timeout=timeout)
             for future in done:
                 results.append(future.result())
             for future in pending:
@@ -371,9 +373,11 @@ class TestService:
         if inconclusive_errors:
             return TestResult(
                 parsed_node=parsed_node,
-                ok=True,
+                # A relay-only success is not enough for this fleet: ACTIVE means
+                # that a real download was measured successfully on this host.
+                ok=False,
                 latency_ms=latency_ms,
-                download_kbps=None,
+                download_kbps=0,
                 exit_info=exit_info,
                 error=self._summarize_download_errors("download mirrors inconclusive", inconclusive_errors),
             )
@@ -387,19 +391,25 @@ class TestService:
         )
 
     def _probe_relay_latency(self, proxy_port: int) -> int:
-        timeout = self.settings.health.relay_timeout_ms / 1000
+        total_timeout = max(0.05, self.settings.health.relay_timeout_ms / 1000)
+        deadline = time.perf_counter() + total_timeout
         errors: list[str] = []
         for url in self._health_test_urls():
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                break
             try:
                 return self.http_probe.measure_latency(
                     proxy_port,
                     url,
-                    timeout,
+                    remaining,
                     attempts=1,
                     accept_any_status=True,
                 )
             except Exception as exc:
                 errors.append(self._format_download_mirror_error(url, exc))
+        if not errors:
+            errors.append(f"relay probe exhausted its {total_timeout:.2f}s budget")
         raise RuntimeError(self._summarize_download_errors("relay probe failed", errors))
 
     def _health_test_urls(self) -> list[str]:

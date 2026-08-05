@@ -29,11 +29,12 @@ class ApiServer:
         app = self.app
         node_history_re = re.compile(r"^/api/v1/nodes/([a-f0-9]+)/history$")
         node_test_re = re.compile(r"^/api/v1/nodes/([a-f0-9]+)/test$")
+        node_config_re = re.compile(r"^/api/v1/nodes/([a-f0-9]+)/config$")
 
         class Handler(BaseHTTPRequestHandler):
             def do_HEAD(self) -> None:
                 parsed = urlsplit(self.path)
-                if parsed.path in {"/", "/clients", "/diag", "/docs", "/logs", "/history", "/manual-import", "/health", "/api/v1/nodes", "/api/v1/clients", "/api/v1/client-status", "/api/v1/network", "/api/v1/vip", "/api/v1/logs"} or node_history_re.match(parsed.path):
+                if parsed.path in {"/", "/clients", "/diag", "/docs", "/logs", "/history", "/manual-import", "/health", "/api/v1/nodes", "/api/v1/clients", "/api/v1/client-status", "/api/v1/network", "/api/v1/vip", "/api/v1/logs"} or node_history_re.match(parsed.path) or node_config_re.match(parsed.path):
                     self.send_response(HTTPStatus.OK)
                     self.send_header("Content-Length", "0")
                     self.end_headers()
@@ -63,7 +64,21 @@ class ApiServer:
                 elif path == "/health":
                     self._json(HTTPStatus.OK, {"ok": True})
                 elif path == "/api/v1/nodes":
-                    self._json(HTTPStatus.OK, app.get_dashboard_payload())
+                    page = self._query_int(query, "page", default=1, minimum=1, maximum=1_000_000)
+                    page_size = self._query_int(query, "page_size", default=100, minimum=1, maximum=200)
+                    status = (query.get("status", [""])[0] or "").strip().upper()
+                    country = (query.get("country", [""])[0] or "").strip().upper()
+                    search = (query.get("search", [""])[0] or "").strip()[:200]
+                    self._json(
+                        HTTPStatus.OK,
+                        app.get_dashboard_payload(
+                            page=page,
+                            page_size=page_size,
+                            status=status,
+                            country=country,
+                            search=search,
+                        ),
+                    )
                 elif path == "/api/v1/network":
                     self._json(HTTPStatus.OK, app.get_network_status_payload())
                 elif path == "/api/v1/vip":
@@ -72,12 +87,23 @@ class ApiServer:
                     self._json(HTTPStatus.OK, {"clients": app.store.list_client_ids()})
                 elif path == "/api/v1/client-status":
                     client = (query.get("client", [""])[0] or "").strip()
-                    self._json(HTTPStatus.OK, app.get_client_dashboard_payload(client))
+                    page = self._query_int(query, "page", default=1, minimum=1, maximum=1_000_000)
+                    page_size = self._query_int(query, "page_size", default=100, minimum=1, maximum=200)
+                    self._json(
+                        HTTPStatus.OK,
+                        app.get_client_dashboard_payload(client, page=page, page_size=page_size),
+                    )
                 elif path == "/api/v1/logs":
                     limit = int((query.get("limit", ["200"])[0] or "200"))
                     component = (query.get("component", [""])[0] or "").strip()
                     level = (query.get("level", [""])[0] or "").strip()
                     self._json(HTTPStatus.OK, app.get_system_logs_payload(limit=max(1, min(limit, 1000)), component=component, level=level))
+                elif node_config_re.match(path):
+                    node_id = node_config_re.match(path).group(1)  # type: ignore[union-attr]
+                    try:
+                        self._json(HTTPStatus.OK, app.get_node_config_payload(node_id))
+                    except KeyError:
+                        self._json(HTTPStatus.NOT_FOUND, {"error": "NODE_NOT_FOUND"})
                 elif node_history_re.match(path):
                     node_id = node_history_re.match(path).group(1)  # type: ignore[union-attr]
                     limit = int((query.get("limit", ["50"])[0] or "50"))
@@ -87,6 +113,21 @@ class ApiServer:
                         self._json(HTTPStatus.NOT_FOUND, {"error": "NODE_NOT_FOUND"})
                 else:
                     self._json(HTTPStatus.NOT_FOUND, {"error": "NOT_FOUND"})
+
+            def _query_int(
+                self,
+                query: dict[str, list[str]],
+                name: str,
+                *,
+                default: int,
+                minimum: int,
+                maximum: int,
+            ) -> int:
+                try:
+                    value = int((query.get(name, [str(default)])[0] or str(default)))
+                except (TypeError, ValueError):
+                    value = default
+                return max(minimum, min(maximum, value))
 
             def do_POST(self) -> None:
                 if self.path == "/api/v1/best":

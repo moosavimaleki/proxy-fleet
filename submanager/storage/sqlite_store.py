@@ -31,6 +31,16 @@ def str_to_dt(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
 
 
+class ClosingConnection(sqlite3.Connection):
+    """Commit/rollback like sqlite3's context manager, then release the handle."""
+
+    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
+
+
 class SqliteStore:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = str(db_path)
@@ -38,7 +48,11 @@ class SqliteStore:
         self._init_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        conn = sqlite3.connect(
+            self.db_path,
+            check_same_thread=False,
+            factory=ClosingConnection,
+        )
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -73,6 +87,8 @@ class SqliteStore:
                   updated_at TEXT NOT NULL,
                   last_health_check_at TEXT NULL,
                   last_test_at TEXT NULL,
+                  last_download_test_at TEXT NULL,
+                  next_test_at TEXT NULL,
                   exit_info_fetched_at TEXT NULL,
                   dead_until TEXT NULL
                 );
@@ -146,6 +162,12 @@ class SqliteStore:
                   ON system_events(created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_system_events_component_level_created_at
                   ON system_events(component, level, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_nodes_status_test_order
+                  ON nodes(status, last_test_at, created_at);
+                CREATE INDEX IF NOT EXISTS idx_nodes_exit_country
+                  ON nodes(exit_country);
+                CREATE INDEX IF NOT EXISTS idx_test_history_node_finished
+                  ON test_history(node_id, finished_at DESC);
                 """
             )
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(nodes)").fetchall()}
@@ -173,6 +195,16 @@ class SqliteStore:
                 conn.execute("ALTER TABLE nodes ADD COLUMN exit_info_json TEXT NOT NULL DEFAULT '{}'")
             if "exit_info_fetched_at" not in columns:
                 conn.execute("ALTER TABLE nodes ADD COLUMN exit_info_fetched_at TEXT NULL")
+            if "last_download_test_at" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN last_download_test_at TEXT NULL")
+            if "next_test_at" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN next_test_at TEXT NULL")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_nodes_status_next_test ON nodes(status, next_test_at, last_test_at, created_at)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_nodes_status_download_test ON nodes(status, last_download_test_at)"
+            )
 
     def get_node_by_hash(self, config_hash: str) -> NodeRecord | None:
         with self.lock, self._connect() as conn:
@@ -222,8 +254,9 @@ class SqliteStore:
                     main_port, relay_delay_ms, download_kbps, exit_ip, exit_hostname, exit_city,
                     exit_region, exit_country, exit_loc, exit_org, exit_postal, exit_timezone, exit_info_json, health_success_ewma,
                     consecutive_relay_failures, consecutive_relay_successes, created_at, updated_at,
-                    last_health_check_at, last_test_at, exit_info_fetched_at, dead_until
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    last_health_check_at, last_test_at, last_download_test_at, next_test_at,
+                    exit_info_fetched_at, dead_until
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     config_hash=excluded.config_hash,
                     raw_config=excluded.raw_config,
@@ -249,6 +282,8 @@ class SqliteStore:
                     updated_at=excluded.updated_at,
                     last_health_check_at=excluded.last_health_check_at,
                     last_test_at=excluded.last_test_at,
+                    last_download_test_at=excluded.last_download_test_at,
+                    next_test_at=excluded.next_test_at,
                     exit_info_fetched_at=excluded.exit_info_fetched_at,
                     dead_until=excluded.dead_until
                 """,
@@ -279,6 +314,8 @@ class SqliteStore:
                     dt_to_str(node.updated_at),
                     dt_to_str(node.last_health_check_at),
                     dt_to_str(node.last_test_at),
+                    dt_to_str(node.last_download_test_at),
+                    dt_to_str(node.next_test_at),
                     dt_to_str(node.exit_info_fetched_at),
                     dt_to_str(node.dead_until),
                 ),
@@ -288,6 +325,95 @@ class SqliteStore:
         with self.lock, self._connect() as conn:
             rows = conn.execute("SELECT * FROM nodes WHERE status = ?", (status.value,)).fetchall()
             return [self._row_to_node(row) for row in rows]
+
+    def list_candidate_nodes_for_testing(self, limit: int) -> list[NodeRecord]:
+        effective_limit = max(1, int(limit))
+        now = dt_to_str(utcnow())
+        with self.lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM nodes
+                WHERE status = ?
+                  AND (next_test_at IS NULL OR next_test_at <= ?)
+                ORDER BY
+                  CASE WHEN last_test_at IS NULL THEN 0 ELSE 1 END,
+                  COALESCE(next_test_at, created_at) ASC,
+                  COALESCE(last_test_at, created_at) ASC,
+                  created_at ASC,
+                  id ASC
+                LIMIT ?
+                """,
+                (NodeStatus.CANDIDATE.value, now, effective_limit),
+            ).fetchall()
+            return [self._row_to_node(row) for row in rows]
+
+    def count_nodes_by_status(self) -> dict[str, int]:
+        with self.lock, self._connect() as conn:
+            rows = conn.execute("SELECT status, COUNT(*) AS count FROM nodes GROUP BY status").fetchall()
+            return {str(row["status"]): int(row["count"] or 0) for row in rows}
+
+    def list_exit_countries(self) -> list[str]:
+        with self.lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT exit_country FROM nodes WHERE exit_country != '' ORDER BY exit_country ASC"
+            ).fetchall()
+            return [str(row["exit_country"]) for row in rows]
+
+    def list_nodes_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        status: str = "",
+        country: str = "",
+        search: str = "",
+    ) -> tuple[list[NodeRecord], int]:
+        clauses: list[str] = []
+        params: list[object] = []
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if country:
+            clauses.append("exit_country = ?")
+            params.append(country)
+        normalized_search = search.strip().lower()
+        if normalized_search:
+            pattern = f"%{normalized_search}%"
+            clauses.append(
+                "(" 
+                "LOWER(id) LIKE ? OR LOWER(config_hash) LIKE ? OR LOWER(status) LIKE ? OR LOWER(normalized_config) LIKE ? OR "
+                "LOWER(source_subs) LIKE ? OR LOWER(exit_ip) LIKE ? OR LOWER(exit_country) LIKE ? OR "
+                "LOWER(exit_city) LIKE ? OR LOWER(exit_org) LIKE ?"
+                ")"
+            )
+            params.extend([pattern] * 9)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        effective_limit = max(1, int(limit))
+        effective_offset = max(0, int(offset))
+        with self.lock, self._connect() as conn:
+            total = int(conn.execute(f"SELECT COUNT(*) AS count FROM nodes {where}", params).fetchone()["count"])
+            rows = conn.execute(
+                f"""
+                SELECT * FROM nodes
+                {where}
+                ORDER BY
+                  CASE status
+                    WHEN 'ACTIVE' THEN 0
+                    WHEN 'PROBATION' THEN 1
+                    WHEN 'TESTING' THEN 2
+                    WHEN 'CANDIDATE' THEN 3
+                    WHEN 'WAITING_FOR_PORT' THEN 4
+                    WHEN 'DEAD' THEN 5
+                    ELSE 6
+                  END,
+                  COALESCE(relay_delay_ms, 999999) ASC,
+                  updated_at DESC,
+                  id ASC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, effective_limit, effective_offset],
+            ).fetchall()
+            return [self._row_to_node(row) for row in rows], total
 
     def list_nodes_by_exit_ip(self, exit_ip: str) -> list[NodeRecord]:
         if not exit_ip:
@@ -837,6 +963,8 @@ class SqliteStore:
             updated_at=str_to_dt(row["updated_at"]),
             last_health_check_at=str_to_dt(row["last_health_check_at"]),
             last_test_at=str_to_dt(row["last_test_at"]),
+            last_download_test_at=str_to_dt(row["last_download_test_at"]),
+            next_test_at=str_to_dt(row["next_test_at"]),
             exit_info_fetched_at=str_to_dt(row["exit_info_fetched_at"]),
             dead_until=str_to_dt(row["dead_until"]),
         )
