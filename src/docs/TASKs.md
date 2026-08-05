@@ -633,12 +633,12 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 - [ ] path و version Xray در startup تشخیص و log شود.
 - [ ] process با process group/child ownership مشخص اجرا شود.
-- [ ] shutdown ابتدا SIGTERM و سپس بعد از deadline kill انجام دهد.
-- [ ] بعد از kill حتماً `wait` انجام شود تا zombie نماند.
+- [x] shutdown ابتدا SIGTERM و سپس بعد از deadline kill انجام دهد.
+- [x] بعد از kill حتماً `wait` انجام شود تا zombie نماند.
 - [ ] stdout/stderr bounded و structured capture شود.
-- [ ] Xray test batch و persistent runtime lifecycle جدا داشته باشند.
-- [ ] main/test port pool از config خوانده شود.
-- [ ] bind واقعی port پیش از تخصیص verify شود.
+- [x] Xray test batch و persistent runtime lifecycle جدا داشته باشند.
+- [x] main/test port pool از config خوانده شود.
+- [x] bind واقعی port پیش از تخصیص verify شود.
 - [ ] port allocation اتمیک باشد.
 - [ ] ظرفیت ناکافی state را به `WAITING_FOR_PORT` ببرد و health را خراب نکند.
 - [ ] runtimeهای یتیم در startup شناسایی و فقط در scope پروژه پاک شوند.
