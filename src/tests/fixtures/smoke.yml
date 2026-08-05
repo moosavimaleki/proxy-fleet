@@ -1,0 +1,25 @@
+service:
+  name: proxy-fleet-smoke
+  environment: test
+database:
+  type: sqlite
+  path: ./target/smoke-fleet.db
+subscriptions:
+  refresh_interval_seconds: 3600
+  urls:
+    - name: unreachable-fixture
+      url: https://example.invalid/subscription.txt
+ports:
+  main: { start: 41000, end: 41010 }
+  test: { start: 41100, end: 41110 }
+api:
+  host: 127.0.0.1
+  port: 18080
+publishing:
+  enabled: false
+network_guard:
+  enabled: false
+vip_port:
+  enabled: false
+download_test:
+  enabled: false

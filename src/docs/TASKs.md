@@ -1,0 +1,1095 @@
+# برنامهٔ جامع بازنویسی Proxy Fleet با Rust
+
+وضعیت سند: برنامهٔ اجرایی، پیش از شروع بازنویسی  
+سند مرجع الگوریتم: [`ALGORITHM.md`](./ALGORITHM.md)  
+دامنه: کل ingestion، parser، storage، health model، scheduler، Xray، API، پنل، publisher و Docker
+
+## وضعیت اجرای فعلی — ۲۰۲۶-۰۸-۰۵
+
+این بخش وضعیت واقعی کد Rust را ثبت می‌کند؛ checkboxهای فازها تنها پس از
+آزمون shadow روی کپی دیتابیس production تیک نهایی می‌خورند.
+
+- [x] crate Rust، config سازگار YAML، shutdown، logging JSON، Axum و health endpoint.
+- [x] migration افزایشی SQLite، backup پیش از اولین migration، WAL/busy timeout و نگاشت `DEAD → DORMANT` / `REMOVED → RETIRED`.
+- [x] parser و identity مستقل از remark برای VMess/VLESS/Trojan/SS/SOCKS، شامل SS SIP002.
+- [x] refresh generation با fetch bounded، dedup و ingest تراکنشی انبوه.
+- [x] event append-only، Beta/decay، lifecycle hysteresis، publication lease و full-jitter.
+- [x] cascade Stage 0–4 و Xray batch با split بازگشتی هنگام startup failure.
+- [x] scheduler queue-based، lease اتمی، AIMD جدا برای Xray/download و revalidation ACTIVE.
+- [x] network sentinel/incident guard، selection/feedback circuit و runtime/VIP پایه.
+- [x] routeهای HTTP سازگار، publisher Git lease-based و Docker multi-stage Rust.
+- [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، shadow migration و deploy/recreate؛ این‌ها هنوز شرط انتشار نیستند.
+
+آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` و
+`cargo clippy --all-targets -- -D warnings` موفق بوده‌اند. Docker build در
+این میزبان هنوز به دلیل timeout دسترسی آن به Docker Hub تأیید نشده است.
+
+## 1. هدف نهایی
+
+هدف پروژه پیدا کردن سریع proxyهایی است که **روی همین ماشین و همین شبکه** واقعاً قابلیت اتصال و دانلود دارند، نگه‌داشتن هوشمند proxyهای اثبات‌شده در برابر خطاهای موقت، بازآزمایی کنترل‌شدهٔ موارد ضعیف، و انتشار خودکار subscription عمومی است.
+
+نسخهٔ بازنویسی‌شده باید هم‌زمان این ویژگی‌ها را داشته باشد:
+
+- تمام قابلیت‌های نسخهٔ Python را حفظ کند.
+- الگوریتم جدید `ALGORITHM.md` را منبع حقیقت health و scheduling قرار دهد.
+- مصرف CPU، RAM، process و file descriptor را قابل‌کنترل و قابل‌اندازه‌گیری کند.
+- دیتابیس فعلی و تاریخچهٔ کاربران را بدون حذف یا تکثیر پرهزینه مهاجرت دهد.
+- API، پنل و لینک‌های اشتراک فعلی را نشکند.
+- failure محلی یا خرابی endpoint تست را به اشتباه به‌عنوان خرابی proxy ثبت نکند.
+- با publication lease جلوی ناپدیدشدن سریع proxy سالم را بگیرد.
+- در صورت خرابی نسخهٔ Rust، rollback سریع به image و دیتابیس قبلی ممکن باشد.
+
+## 2. تصمیم‌های قطعی طراحی
+
+### 2.1 زبان
+
+- [ ] پیاده‌سازی اصلی با Rust انجام شود.
+- [ ] Go فقط در صورتی دوباره بررسی شود که در زمان اجرا یک مانع اثبات‌شده و غیرقابل‌حل در اکوسیستم Rust پیدا شود؛ در بررسی فعلی چنین مانعی وجود ندارد.
+- [ ] نسخهٔ compiler و dependencyها در `Cargo.lock` قفل شوند تا build قابل‌تکرار باشد.
+
+دلایل انتخاب Rust:
+
+- Tokio برای workerهای async، timer، signal و مدیریت process.
+- Axum/Tower برای API و middleware.
+- Reqwest با SOCKS برای probeهای HTTP و download.
+- SQLx با SQLite برای queryهای async، transaction و migration.
+- Sysinfo برای CPU، RAM، process و pressure signal.
+- `yaml_serde` برای config؛ از crate منسوخ `serde_yml` استفاده نشود.
+- Rand برای full-jitter backoff.
+
+### 2.2 تصمیم‌های رفتاری
+
+- [ ] `health_score`، `next_test_at` و `publication_lease_until` سه مفهوم مستقل باقی بمانند.
+- [ ] یک failure منفرد، مخصوصاً `TLS_TIMEOUT`، باعث حذف proxy اثبات‌شده نشود.
+- [ ] union کردن کورکورانهٔ سه snapshot انتشار قدیمی حذف و با lease جایگزین شود.
+- [ ] `DEAD` قدیمی به `DORMANT` و `REMOVED` به `RETIRED` مهاجرت کند.
+- [ ] remarks در هویت فنی proxy دخالت نداشته باشد.
+- [ ] proxy فقط بعد از دانلود واقعی وارد `ACTIVE` شود.
+- [ ] local subnet یا شبکهٔ خاصی در کد hard-code نشود.
+- [ ] تمام timeoutها budget سراسری و cancellation امن داشته باشند.
+- [ ] تست‌ها stage-based باشند و هزینهٔ download فقط برای survivorها پرداخت شود.
+
+### 2.3 مواردی که عمداً در این بازنویسی انجام نمی‌شوند
+
+- [ ] HMM برای lifecycle ساخته نشود.
+- [ ] Neural Network برای تشخیص سلامت ساخته نشود.
+- [ ] Reinforcement Learning وارد scheduler نشود.
+- [ ] Thompson Sampling جداگانه برای تک‌تک proxyها ساخته نشود.
+- [ ] تا وقتی event واقعی کافی و benchmark روشن نداریم، مدل پیچیده‌تر از Bayesian decay اضافه نشود.
+- [ ] GitHub Actions بخشی از runtime اصلی یا شرط کارکرد publisher محلی نباشد.
+- [ ] دیتابیس یا message broker جدید بدون اثبات bottleneck واقعی SQLite اضافه نشود.
+
+## 3. فهرست کامل قابلیت‌های موجود و وضعیت آن‌ها
+
+| بخش | قابلیت فعلی | تصمیم در نسخهٔ Rust |
+|---|---|---|
+| دریافت ورودی | subscriptionهای چندگانه | حفظ و انتقال به refresh generation |
+| دریافت ورودی | manual import | حفظ کامل API و UI |
+| dedup | hash فنی مستقل از remark | حفظ و تست property-based |
+| protocol | VMess | حفظ |
+| protocol | VLESS | حفظ |
+| protocol | Trojan | حفظ |
+| protocol | Shadowsocks مدرن | حفظ |
+| protocol | SOCKS | حفظ |
+| transport | TCP/raw، WS، gRPC، HTTP Upgrade، SplitHTTP/XHTTP، KCP/mKCP، QUIC | حفظ و golden test با Xray |
+| security | none، TLS، REALITY | حفظ و اعتبارسنجی سخت‌گیرانه |
+| parser | UUID/custom ID، public key، short id، cipher validation | حفظ |
+| parser | تبدیل گزینه‌های قدیمی به config جاری Xray | حفظ |
+| تست | static validation | حفظ به‌عنوان Stage 0 |
+| تست | DNS/TCP preflight | ساخت دقیق‌تر به‌عنوان Stage 1 |
+| تست | Xray batch relay | حفظ به‌عنوان Stage 2 |
+| تست | HTTP واقعی | حفظ و مستقل از download به‌عنوان Stage 3 |
+| تست | bounded download | حفظ به‌عنوان Stage 4 |
+| تست | recursive split در batch startup failure | حفظ |
+| runtime | Xray process گروهی برای test | حفظ |
+| runtime | Xray process پایدار برای active | حفظ |
+| port | main/test port pools | حفظ |
+| port | `WAITING_FOR_PORT` | حفظ |
+| health | EWMA و streakهای فعلی | مهاجرت به evidence/Beta؛ فیلدهای compatibility باقی بمانند |
+| lifecycle | candidate/testing/active/probation/dead | گسترش به stateهای الگوریتم جدید |
+| retry | retry و dead revival | تبدیل به queue + circuit breaker + full jitter |
+| network | network sentinel | حفظ و ارتقا به global incident detector |
+| selection | weighted power-of-choices | حفظ |
+| selection | fairness و usage | حفظ |
+| feedback | used/broken/rate_limited | حفظ |
+| circuit | per-client CLOSED/OPEN/HALF_OPEN | حفظ |
+| VIP | انتخاب hot proxy و hysteresis | حفظ |
+| metadata | exit IP/country/org/timezone | حفظ، ولی failure آن health را خراب نکند |
+| storage | SQLite persistent | حفظ و migration افزایشی |
+| API | health، nodes، clients، logs، history، import و actions | حفظ route و payload سازگار |
+| UI | Fleet dashboard | حفظ |
+| UI | client view | حفظ |
+| UI | diagnostics | حفظ و توسعه |
+| UI | logs/history/manual import/docs | حفظ |
+| publisher | active.txt و active-raw.txt | حفظ URL و format |
+| publisher | commit/push خودکار Git | حفظ با debounce و retry امن |
+| container | host networking و healthcheck | حفظ |
+| deployment | persistent data/config mounts | حفظ |
+
+### 3.1 نگاشت تمام فایل‌های اجرایی فعلی به مقصد Rust
+
+| فایل/بخش Python فعلی | مسئولیت مشاهده‌شده | مقصد در Rust |
+|---|---|---|
+| `submanager/main.py` | bootstrap سرویس | `src/main.rs` و `app.rs` |
+| `submanager/config/models.py` | مدل config | `config.rs` |
+| `submanager/config/loader.py` | YAML/ENV loading | `config.rs` |
+| `submanager/parser.py` | decode، parse، normalize و Xray config | `parser/*` و `xray/config.rs` |
+| `submanager/storage/sqlite_store.py` | schema، query، scheduling state و history | `storage/*` و `migrations/*` |
+| `submanager/testing/probes.py` | relay، HTTP و download probe | `probe/*` |
+| `submanager/testing/xray.py` | Xray batch/process/config | `xray/*` |
+| `submanager/testing/service.py` | orchestration تست و batch split | `probe/*` و `scheduler/*` |
+| `submanager/core/models.py` | node/runtime/client مدل‌ها | `domain/*` |
+| `submanager/core/scheduling.py` | candidate/dead/active schedule | `scheduler/*` |
+| `submanager/core/ports.py` | port pool | `xray/ports.rs` |
+| `submanager/core/runtime.py` | persistent Xray runtime | `xray/runtime.rs` |
+| `submanager/core/network_guard.py` | network sentinel | `health/incident.rs` و `scheduler/pressure.rs` |
+| `submanager/core/feedback.py` | client feedback/circuit | `selection/feedback.rs` و `client_circuit.rs` |
+| `submanager/core/app.py` | loopها، VIP، reload و هماهنگی کل برنامه | serviceهای `app`, `scheduler`, `upstream`, `selection`, `publisher` |
+| `submanager/selection/engine.py` | weighted best-node selection | `selection/best.rs` |
+| `submanager/api/server.py` | HTTP routing/API | `api/routes.rs` و handlerها |
+| `submanager/api/pages.py` | HTML/CSS/JS پنل | `ui/pages.rs` و `assets/*` |
+| `submanager/publishing/active_subscription.py` | snapshot/render/Git publish | `publisher/*` |
+| `submanager/utils/hashing.py` | technical identity | `parser/identity.rs` |
+| `submanager/utils/logging.py` | log setup | `observability/logging.rs` |
+| `tests/*.py` | قراردادهای فعلی و regression | تست‌های Rust متناظر؛ fixtureهای مفید حذف نشوند |
+| `config/config.yml` | تنظیمات runtime | schema سازگار Rust با migration config |
+| `Dockerfile*` و `docker-compose.yml` | build/runtime/deployment | multi-stage Rust با compose سازگار |
+
+هیچ فایل Python بدون تعیین تکلیف متناظر حذف نمی‌شود. حذف نسخهٔ قدیمی فقط پس از عبور همان مسئولیت از تست parity مجاز است.
+
+## 4. قراردادهای سازگاری که نباید شکسته شوند
+
+### 4.1 لینک‌های عمومی
+
+- [ ] `subscriptions/active.txt` همچنان subscription مناسب v2rayN تولید کند.
+- [ ] `subscriptions/active-raw.txt` همچنان خطوط raw config را تولید کند.
+- [ ] ترتیب خروجی deterministic باشد تا commit بی‌دلیل ساخته نشود.
+- [ ] یک config با remark متفاوت فقط یک بار منتشر شود.
+
+### 4.2 routeهای فعلی
+
+routeهای زیر باید با همان path باقی بمانند:
+
+- [ ] `GET /health`
+- [ ] `GET /api/v1/nodes`
+- [ ] `GET /api/v1/network`
+- [ ] `GET /api/v1/vip`
+- [ ] `GET /api/v1/clients`
+- [ ] `GET /api/v1/client-status`
+- [ ] `GET /api/v1/logs`
+- [ ] `GET /api/v1/nodes/:id/config`
+- [ ] `GET /api/v1/nodes/:id/history`
+- [ ] `POST /api/v1/best`
+- [ ] `POST /api/v1/feedback`
+- [ ] `POST /api/v1/manual-import`
+- [ ] `POST /api/v1/nodes/dead/clear` به‌عنوان alias سازگار برای پاک‌سازی/بازنشانی dormantها
+- [ ] `POST /api/v1/subscriptions/reload`
+- [ ] `POST /api/v1/db/cleanup`
+- [ ] `POST /api/v1/nodes/:id/test`
+- [ ] صفحات `/`، `/clients`، `/diag`، `/logs`، `/history`، `/manual-import` و `/docs`
+- [ ] `HEAD` برای routeهایی که اکنون پشتیبانی می‌شوند.
+
+### 4.3 payloadهای فعلی
+
+- [ ] کلیدهای فعلی response حذف یا rename نشوند.
+- [ ] fieldهای قدیمی EWMA/streak در دورهٔ migration از مدل جدید derive شوند.
+- [ ] pagination/filter/search/status/country فعلی حفظ شود.
+- [ ] fieldهای جدید فقط به payload افزوده شوند.
+
+## 5. مدل دامنهٔ جدید
+
+### 5.1 stateها
+
+- `CANDIDATE`: config معتبر که هنوز دانلود واقعی موفق ندارد.
+- `TESTING`: lease داخلی کوتاه برای جلوگیری از تست هم‌زمان یک proxy.
+- `ACTIVE`: download واقعی موفق و health کافی.
+- `PROBATION`: سابقهٔ موفق دارد ولی evidence جدید ضعیف شده است.
+- `DORMANT`: فعلاً ضعیف است و با فاصلهٔ زیاد دوباره تست می‌شود.
+- `INVALID`: config از نظر ساختار یا سازگاری Xray نامعتبر است.
+- `RETIRED`: در refreshهای معتبر upstream ناپدید شده و lease انتشارش تمام شده است.
+- `WAITING_FOR_PORT`: آمادهٔ تست است ولی port capacity موجود نیست.
+
+### 5.2 دادهٔ مستقل هر proxy
+
+- [ ] هویت فنی canonical و hash پایدار.
+- [ ] raw config و normalized config.
+- [ ] مجموعهٔ sourceها و آخرین generation مشاهده‌شده.
+- [ ] state فعلی و زمان ورود به state.
+- [ ] `alpha`، `beta` و `health_score`.
+- [ ] `next_test_at` و test lease برای جلوگیری از duplicate work.
+- [ ] `publication_lease_until` و دلیل آخرین تمدید.
+- [ ] آخرین success/failure و failure class.
+- [ ] consecutive failure/success و تعداد failure مستقل.
+- [ ] آخرین latency، download speed و endpoint.
+- [ ] exit metadata.
+- [ ] main port/runtime ownership.
+
+### 5.3 failure classهای canonical
+
+- `INVALID_CONFIG`
+- `XRAY_START_FAILED`
+- `DNS_FAILURE`
+- `TCP_TIMEOUT`
+- `CONNECTION_REFUSED`
+- `TLS_TIMEOUT`
+- `RELAY_TIMEOUT`
+- `HTTP_FAILURE`
+- `DOWNLOAD_TIMEOUT`
+- `DOWNLOAD_TOO_SLOW`
+- `LOCAL_OVERLOAD`
+- `ENDPOINT_FAILURE`
+- `SUCCESS`
+
+`LOCAL_OVERLOAD` و `ENDPOINT_FAILURE` نتیجهٔ inconclusive هستند: event ذخیره می‌شود، اما beta، streak خرابی و demotion را افزایش نمی‌دهد.
+
+## 6. معماری هدف در `src/`
+
+ساختار پیشنهادی:
+
+```text
+src/
+├── Cargo.toml
+├── Cargo.lock
+├── build.rs                         # فقط اگر embed/build metadata لازم شد
+├── docs/
+│   ├── ALGORITHM.md
+│   └── TASKs.md
+├── migrations/
+│   ├── 0001_compatibility.sql
+│   ├── 0002_evidence_events.sql
+│   ├── 0003_upstream_generations.sql
+│   └── 0004_scheduler_state.sql
+├── assets/
+│   ├── app.css
+│   └── app.js
+└── src/
+    ├── main.rs
+    ├── app.rs
+    ├── config.rs
+    ├── error.rs
+    ├── shutdown.rs
+    ├── domain/
+    │   ├── proxy.rs
+    │   ├── lifecycle.rs
+    │   ├── evidence.rs
+    │   ├── failure.rs
+    │   └── events.rs
+    ├── parser/
+    │   ├── identity.rs
+    │   ├── subscription.rs
+    │   ├── vmess.rs
+    │   ├── vless.rs
+    │   ├── trojan.rs
+    │   ├── shadowsocks.rs
+    │   └── socks.rs
+    ├── storage/
+    │   ├── pool.rs
+    │   ├── migrations.rs
+    │   ├── nodes.rs
+    │   ├── events.rs
+    │   ├── clients.rs
+    │   ├── upstream.rs
+    │   └── publisher.rs
+    ├── health/
+    │   ├── bayesian.rs
+    │   ├── decay.rs
+    │   ├── classifier.rs
+    │   ├── transition.rs
+    │   └── incident.rs
+    ├── scheduler/
+    │   ├── queues.rs
+    │   ├── priority.rs
+    │   ├── backoff.rs
+    │   ├── concurrency.rs
+    │   └── pressure.rs
+    ├── xray/
+    │   ├── config.rs
+    │   ├── process.rs
+    │   ├── batch.rs
+    │   ├── runtime.rs
+    │   └── ports.rs
+    ├── probe/
+    │   ├── dns.rs
+    │   ├── tcp.rs
+    │   ├── relay.rs
+    │   ├── http.rs
+    │   ├── download.rs
+    │   └── metadata.rs
+    ├── upstream/
+    │   ├── fetch.rs
+    │   ├── refresh.rs
+    │   └── reconcile.rs
+    ├── selection/
+    │   ├── best.rs
+    │   ├── client_circuit.rs
+    │   ├── feedback.rs
+    │   └── vip.rs
+    ├── publisher/
+    │   ├── render.rs
+    │   ├── git.rs
+    │   └── service.rs
+    ├── api/
+    │   ├── routes.rs
+    │   ├── dto.rs
+    │   ├── nodes.rs
+    │   ├── clients.rs
+    │   ├── diagnostics.rs
+    │   └── actions.rs
+    ├── ui/
+    │   ├── pages.rs
+    │   └── assets.rs
+    └── observability/
+        ├── logging.rs
+        ├── metrics.rs
+        └── health.rs
+```
+
+### 6.1 مرزهای معماری
+
+- [ ] parser هیچ دسترسی مستقیمی به SQLite یا Xray نداشته باشد.
+- [ ] health model تابع deterministic از evidence و زمان باشد.
+- [ ] scheduler فقط job انتخاب کند؛ اجرای probe در worker باشد.
+- [ ] probe نتیجهٔ خام تولید کند؛ classifier آن را به failure class تبدیل کند.
+- [ ] publisher فقط snapshot transactionally خوانده‌شده از proxyهای دارای lease معتبر را ببیند.
+- [ ] API مستقیماً business rule تغییر ندهد و از service layer استفاده کند.
+- [ ] processهای Xray owner مشخص، cancellation token و cleanup قطعی داشته باشند.
+
+## 7. dependencyهای برنامه‌ریزی‌شده
+
+- [ ] `tokio`: runtime، signal، process، timer، channel و synchronization.
+- [ ] `axum` و `tower-http`: HTTP API، static assets، compression، timeout و trace.
+- [ ] `serde`، `serde_json` و `yaml_serde`: serialization و config.
+- [ ] `sqlx` با SQLite bundled: pool، migration و query.
+- [ ] `reqwest` با `rustls`، `stream` و `socks`: relay/HTTP/download.
+- [ ] `url`، `base64`، `uuid`، `regex`، `ipnet` و `sha2`: parser و identity.
+- [ ] `chrono` یا `time`: timestamp و duration؛ فقط یکی انتخاب شود.
+- [ ] `rand`: full-jitter و exploration.
+- [ ] `sysinfo`: pressure و process metrics.
+- [ ] `tracing` و `tracing-subscriber`: structured logs.
+- [ ] `thiserror`: خطاهای domain؛ `anyhow` فقط در application boundary.
+- [ ] `futures-util` و `tokio-util`: stream و cancellation token.
+- [ ] dependency اضافی فقط با دلیل و benchmark پذیرفته شود.
+
+## 8. مهاجرت دیتابیس
+
+### 8.1 اصول ایمنی
+
+- [ ] قبل از migration از `app.db` و فایل‌های `-wal/-shm` snapshot سازگار تهیه شود.
+- [ ] migrationها idempotent و داخل transaction باشند.
+- [ ] WAL، busy timeout و foreign key فعال شوند.
+- [ ] pool نوشتن کوچک و bounded باشد تا writer contention ایجاد نشود.
+- [ ] تاریخچهٔ فعلی حدود ۷۰۰ مگابایت کپی یا rewrite نشود.
+- [ ] هیچ node id، config hash، feedback، assignment یا usage حذف نشود.
+- [ ] schema version و binary version ثبت شود.
+
+### 8.2 تغییرات جدول `nodes`
+
+ستون‌های فعلی حفظ و ستون‌های زیر افزوده شوند:
+
+- [ ] `lifecycle_state TEXT NOT NULL`
+- [ ] `state_entered_at INTEGER`
+- [ ] `structurally_valid INTEGER NOT NULL DEFAULT 1`
+- [ ] `health_alpha REAL NOT NULL DEFAULT 1`
+- [ ] `health_beta REAL NOT NULL DEFAULT 1`
+- [ ] `health_score REAL NOT NULL DEFAULT 0.5`
+- [ ] `evidence_updated_at INTEGER`
+- [ ] `next_test_at INTEGER`
+- [ ] `test_lease_until INTEGER`
+- [ ] `publication_lease_until INTEGER`
+- [ ] `publication_lease_kind TEXT`
+- [ ] `activated_at INTEGER`
+- [ ] `last_success_at INTEGER`
+- [ ] `last_failure_at INTEGER`
+- [ ] `last_failure_class TEXT`
+- [ ] `failure_streak INTEGER NOT NULL DEFAULT 0`
+- [ ] `independent_failure_count INTEGER NOT NULL DEFAULT 0`
+- [ ] `last_test_endpoint TEXT`
+- [ ] `last_seen_generation INTEGER`
+- [ ] `upstream_missing_generations INTEGER NOT NULL DEFAULT 0`
+- [ ] `retired_at INTEGER`
+- [ ] `tombstone_until INTEGER`
+
+indexهای لازم:
+
+- [ ] `(lifecycle_state, next_test_at)`
+- [ ] `(publication_lease_until, structurally_valid)`
+- [ ] `(test_lease_until)`
+- [ ] `(last_seen_generation, upstream_missing_generations)`
+- [ ] `(config_hash)` unique فعلی حفظ شود.
+
+### 8.3 جدول append-only `proxy_test_events`
+
+هر stage یک event مستقل دارد:
+
+- [ ] `id INTEGER PRIMARY KEY`
+- [ ] `proxy_id TEXT NOT NULL`
+- [ ] `run_id TEXT NOT NULL`
+- [ ] `occurred_at INTEGER NOT NULL`
+- [ ] `stage TEXT NOT NULL`
+- [ ] `result TEXT NOT NULL`
+- [ ] `failure_class TEXT NOT NULL`
+- [ ] `evidence_alpha REAL NOT NULL DEFAULT 0`
+- [ ] `evidence_beta REAL NOT NULL DEFAULT 0`
+- [ ] `latency_ms REAL`
+- [ ] `download_bps REAL`
+- [ ] `bytes_transferred INTEGER`
+- [ ] `duration_ms INTEGER`
+- [ ] `endpoint TEXT`
+- [ ] `system_pressure REAL`
+- [ ] `incident_id TEXT`
+- [ ] `detail_json TEXT`
+- [ ] index روی `(proxy_id, occurred_at DESC)` و `(run_id)`.
+
+eventها update نشوند؛ aggregate health در `nodes` cache شود و از eventها قابل‌بازسازی باشد.
+
+### 8.4 جدول‌های upstream generation
+
+- [ ] `upstream_refresh_runs`: id، زمان شروع/پایان، status، source count، fetch count، parsed count، error و generation.
+- [ ] `upstream_sources`: URL، enabled، آخرین success، ETag/Last-Modified، failure streak.
+- [ ] `upstream_generation_members`: generation، source، config hash و seen_at.
+- [ ] فقط refresh کامل و سالم، missing counter را افزایش دهد.
+- [ ] refresh ناقص یا outage منبع هیچ proxy را retired نکند.
+
+### 8.5 جدول‌های runtime/scheduler
+
+- [ ] `scheduler_state`: quota debt، concurrency جاری، آخرین pressure و recovery timestamps.
+- [ ] `service_state`: آخرین publisher commit، آخرین refresh، incident و schema metadata.
+- [ ] process/port ownership persistent فقط در حد لازم ثبت شود؛ process واقعی پس از restart دوباره reconcile شود.
+
+### 8.6 تبدیل دادهٔ قدیمی
+
+- [ ] `CANDIDATE`، `TESTING`، `ACTIVE`، `PROBATION` و `WAITING_FOR_PORT` مستقیم نگاشت شوند.
+- [ ] `DEAD` به `DORMANT` نگاشت شود.
+- [ ] `REMOVED` به `RETIRED` نگاشت شود.
+- [ ] ACTIVEهایی که download معتبر دارند با prior مثبت و lease اولیه محافظت شوند.
+- [ ] PROBATIONهایی که سابقهٔ download دارند prior ضعیف‌تر ولی مثبت بگیرند.
+- [ ] node بدون سابقه prior خنثی `Beta(1,1)` بگیرد.
+- [ ] از کل `test_history` backfill کامل انجام نشود؛ فقط آخرین evidence محدود یا aggregateهای موجود برای seed استفاده شود.
+- [ ] جدول‌های `test_history` و `system_events` قدیمی read-only-compatible باقی بمانند.
+- [ ] history API در دورهٔ انتقال union مرتب‌شدهٔ تاریخچهٔ قدیمی و eventهای جدید را نشان دهد.
+
+## 9. parser و هویت فنی
+
+- [ ] decoder subscription بتواند plain، base64 و خطوط مخلوط را تشخیص دهد.
+- [ ] parserهای VMess/VLESS/Trojan/SS/SOCKS با fixtureهای واقعی منتقل شوند.
+- [ ] transportها و securityهای فعلی بدون regression منتقل شوند.
+- [ ] config canonical با ترتیب field ثابت ساخته شود.
+- [ ] fragment/remark، نام subscription و metadata نمایشی از technical hash حذف شود.
+- [ ] IPv4، IPv6، hostname، port، UUID/custom ID، SNI، ALPN، REALITY key/short-id و cipher validate شوند.
+- [ ] deprecated optionها به ساختار Xray جاری normalize شوند.
+- [ ] duplicateهای هم‌هویت sourceهای خود را merge کنند و آخرین remark مفید صرفاً برای نمایش حفظ شود.
+- [ ] parse failure با `INVALID_CONFIG` ثبت شود و process Xray برای آن ساخته نشود.
+- [ ] parser هیچ panic روی ورودی خراب یا بسیار بزرگ نداشته باشد.
+
+## 10. مدل evidence و محاسبهٔ health
+
+### 10.1 وزن evidence
+
+وزن‌های اولیه طبق `ALGORITHM.md`:
+
+| evidence | alpha | beta |
+|---|---:|---:|
+| دانلود سریع | +8 | 0 |
+| دانلود قابل‌قبول | +5 | 0 |
+| HTTP واقعی موفق | +3 | 0 |
+| relay موفق | +1 | 0 |
+| TLS timeout | 0 | +0.5 |
+| TCP timeout | 0 | +1 |
+| connection refused | 0 | +2 |
+| relay موفق ولی download صفر/خراب | 0 | +3 |
+| local overload | 0 | 0 |
+| endpoint failure | 0 | 0 |
+
+- [ ] threshold دقیق download سریع/قابل‌قبول از config خوانده شود.
+- [ ] evidence هر stage فقط یک‌بار برای هر run اعمال شود.
+- [ ] retry همان stage با همان run id double-count نشود.
+
+### 10.2 decay
+
+- [ ] evidence مثبت قوی half-life برابر ۲۴ ساعت داشته باشد.
+- [ ] evidence مثبت ضعیف half-life برابر ۶ ساعت داشته باشد.
+- [ ] timeout گذرا half-life برابر ۲ ساعت داشته باشد.
+- [ ] hard failure half-life برابر ۱۲ ساعت داشته باشد.
+- [ ] decay هنگام read/update به‌شکل lazy محاسبه شود؛ timer برای update همهٔ rowها اجرا نشود.
+- [ ] `health_score = alpha / (alpha + beta)` با clamp و prior امن محاسبه شود.
+
+### 10.3 hysteresis و transition
+
+- [ ] `CANDIDATE -> ACTIVE` فقط با download واقعی موفق.
+- [ ] `PROBATION -> ACTIVE` با health حداقل `0.70` یا download واقعی موفق.
+- [ ] `ACTIVE -> PROBATION` فقط با health کمتر از `0.35` و حداقل دو failure مستقل.
+- [ ] `PROBATION -> DORMANT` با health کمتر از `0.15` و چند failure جداشده در زمان.
+- [ ] ACTIVE حداقل ۳۰ دقیقه residence time داشته باشد؛ مقدار config بین ۱۵ تا ۳۰ دقیقه قابل‌تنظیم باشد.
+- [ ] یک TLS timeout هرگز ACTIVE را خارج نکند.
+- [ ] success قوی failure streak را reset کند ولی history را حذف نکند.
+- [ ] transition و event aggregate در یک transaction انجام شود.
+
+## 11. publication lease
+
+leaseهای پیش‌فرض:
+
+- [ ] دانلود سریع: ۱۲ ساعت.
+- [ ] دانلود قابل‌قبول: ۶ ساعت.
+- [ ] HTTP واقعی: ۲ ساعت.
+- [ ] relay: ۳۰ دقیقه.
+- [ ] موفقیت قوی‌تر lease ضعیف‌تر قبلی را کوتاه نکند.
+- [ ] failure معمولی lease را فوراً cancel نکند.
+- [ ] `INVALID_CONFIG` می‌تواند انتشار را فوراً متوقف کند.
+- [ ] `RETIRED` فقط پس از تمام‌شدن lease از خروجی حذف شود.
+- [ ] انتشار فقط اگر `structurally_valid = true` و `lease > now` و state نه INVALID/RETIRED باشد.
+
+این مدل رفتار موردنیاز «proxy سالم با شکست موقت همچنان به کاربر داده شود» را بدون نگهداری snapshotهای مبهم پیاده می‌کند.
+
+## 12. scheduler هوشمند
+
+### 12.1 queueها و سهم‌ها
+
+- [ ] ۴۰٪ ظرفیت: config جدید و `CANDIDATE`.
+- [ ] ۳۰٪ ظرفیت: `PROBATION` دارای سابقهٔ موفق.
+- [ ] ۲۰٪ ظرفیت: `DORMANT` قابل‌بازیابی.
+- [ ] ۱۰٪ ظرفیت: exploration و نمونه‌برداری از موارد کم‌اطمینان.
+- [ ] quota debt نگه‌داری شود تا خالی‌بودن یک queue سهم بقیه را متوقف نکند.
+- [ ] starvation هیچ queue ممکن نباشد.
+
+### 12.2 priority score
+
+- [ ] lease نزدیک به انقضا: `+100`.
+- [ ] سابقهٔ download موفق: `+80`.
+- [ ] آخرین failure از نوع TLS timeout: `+50`.
+- [ ] مدت زیادی تست نشده: `+40`.
+- [ ] در upstream جدید دیده شده: `+30`.
+- [ ] هرگز موفق نشده و failure زیاد دارد: `-80`.
+- [ ] pressure بالای سیستم: job سنگین `-100`.
+- [ ] tie-breaker deterministic با مقدار کوچک jitter باشد.
+
+### 12.3 circuit breaker و full jitter
+
+فرمول:
+
+```text
+delay = random(0, min(cap, base * 2^failure_streak))
+```
+
+- [ ] proxy دارای سابقهٔ success: base پنج دقیقه، cap شش ساعت.
+- [ ] proxy بدون success: base سی دقیقه، cap بیست‌وچهار ساعت.
+- [ ] dormant recovery: ۶، ۱۲ و ۲۴ ساعت.
+- [ ] `CONNECTION_REFUSED` نسبت به timeout backoff قوی‌تری ایجاد کند.
+- [ ] inconclusive result streak را زیاد نکند و retry کوتاه کنترل‌شده بگیرد.
+
+### 12.4 lease تست و idempotency
+
+- [ ] انتخاب job با atomic claim و `test_lease_until` انجام شود.
+- [ ] worker crash باعث قفل دائمی node نشود؛ lease منقضی شود.
+- [ ] یک node هم‌زمان در دو batch قرار نگیرد.
+- [ ] manual test بتواند اولویت را بالا ببرد، ولی test در حال اجرا را duplicate نکند.
+
+## 13. تست مرحله‌ای proxy
+
+### Stage 0: parse/static
+
+- [ ] syntax، fieldهای لازم، protocol/security/transport support.
+- [ ] نتیجهٔ invalid مستقیم و ارزان ثبت شود.
+
+### Stage 1: DNS و TCP
+
+- [ ] hostname resolve با timeout کوتاه و cache محدود.
+- [ ] TCP connect به server اصلی.
+- [ ] برای IP literal مرحلهٔ DNS رد شود.
+- [ ] DNS failure سیستم با DNS failure مقصد تفکیک شود.
+
+### Stage 2: Xray و relay
+
+- [ ] چند proxy در یک Xray batch با inbound SOCKS جدا اجرا شوند.
+- [ ] config قبل از spawn validate شود.
+- [ ] startup readiness با deadline بررسی شود.
+- [ ] failure batch با recursive split، proxy خراب را isolate کند.
+- [ ] relay probe از داخل SOCKS انجام شود.
+
+### Stage 3: HTTP واقعی
+
+- [ ] درخواست کوچک به حداقل دو endpoint مستقل و قابل‌تنظیم.
+- [ ] status، TLS، body limit و redirect policy بررسی شود.
+- [ ] endpoint quorum خرابی endpoint عمومی را تشخیص دهد.
+
+### Stage 4: download محدود
+
+- [ ] فقط survivorهای Stage 3 یا موارد مهم نزدیک انقضای lease وارد شوند.
+- [ ] محدودیت پیش‌فرض ۲ تا ۵ ثانیه یا ۱ تا ۲ مگابایت، هرکدام زودتر رخ داد.
+- [ ] سرعت بر اساس byte واقعی و مدت steady window محاسبه شود.
+- [ ] صفر byte با relay موفق failure قوی محسوب شود.
+- [ ] cancellation download باعث zombie connection/process نشود.
+
+### metadata
+
+- [ ] exit IP/country/org/timezone بعد از success و خارج از critical path اصلی خوانده شود.
+- [ ] خطای metadata هیچ evidence منفی به proxy ندهد.
+- [ ] providerها rate-limit و cache داشته باشند.
+
+## 14. مدیریت Xray و port
+
+- [ ] path و version Xray در startup تشخیص و log شود.
+- [ ] process با process group/child ownership مشخص اجرا شود.
+- [ ] shutdown ابتدا SIGTERM و سپس بعد از deadline kill انجام دهد.
+- [ ] بعد از kill حتماً `wait` انجام شود تا zombie نماند.
+- [ ] stdout/stderr bounded و structured capture شود.
+- [ ] Xray test batch و persistent runtime lifecycle جدا داشته باشند.
+- [ ] main/test port pool از config خوانده شود.
+- [ ] bind واقعی port پیش از تخصیص verify شود.
+- [ ] port allocation اتمیک باشد.
+- [ ] ظرفیت ناکافی state را به `WAITING_FOR_PORT` ببرد و health را خراب نکند.
+- [ ] runtimeهای یتیم در startup شناسایی و فقط در scope پروژه پاک شوند.
+
+## 15. concurrency تطبیقی و pressure
+
+- [ ] concurrency اولیه Xray برابر ۴ و download برابر ۲ باشد.
+- [ ] در شرایط پایدار concurrency هر window یک واحد زیاد شود.
+- [ ] با timeout cluster، latency spike یا pressure بالا ظرفیت در `0.7` ضرب شود.
+- [ ] min/max هر pool در config باشد.
+- [ ] CPU، load، RAM، open FD، تعداد child process و event-loop lag پایش شود.
+- [ ] local overload jobهای download جدید را متوقف کند، نه اینکه proxyها را خراب اعلام کند.
+- [ ] pressure snapshot در هر test event ثبت شود.
+- [ ] API مقدار concurrency جاری و علت آخرین کاهش/افزایش را نشان دهد.
+
+## 16. global incident detector
+
+- [ ] failureهای هم‌زمان میان protocol/source/serverهای مستقل در window کوتاه aggregate شوند.
+- [ ] خرابی چند endpoint تست، DNS محلی، loss عمومی شبکه و overload تشخیص داده شود.
+- [ ] هنگام incident نتیجه‌ها inconclusive شوند و demotion/lease shortening متوقف شود.
+- [ ] incident شروع/پایان و evidence آن در `system_events` ثبت شود.
+- [ ] network sentinel فعلی به detector داده بدهد.
+- [ ] بعد از recovery، retryها با jitter پخش شوند تا thundering herd ایجاد نشود.
+
+## 17. refresh و reconciliation منابع
+
+- [ ] هر refresh یک generation یکتا داشته باشد.
+- [ ] fetchها parallel ولی bounded باشند.
+- [ ] ETag و Last-Modified در صورت پشتیبانی منبع استفاده شود.
+- [ ] generation فقط وقتی complete است که معیار سلامت منابع پاس شود.
+- [ ] config موجود در هر source با technical hash ثبت شود، مستقل از remark.
+- [ ] proxy غایب فقط در generation کامل missing count بگیرد.
+- [ ] retirement فقط با هر سه شرط انجام شود:
+  - حداقل در سه refresh کامل هیچ منبعی آن را ندیده باشد؛
+  - حداقل ۱۲ تا ۲۴ ساعت از آخرین مشاهده گذشته باشد؛
+  - publication lease تمام شده باشد.
+- [ ] ابتدا tombstone/RETIRED شود؛ physical deletion با فاصله و cleanup جدا باشد.
+- [ ] proxy سالم دستی تا زمانی که منبع manual فعال است با غیبت upstream حذف نشود.
+- [ ] dead/dormantهایی که دوباره در upstream دیده می‌شوند priority مثبت بگیرند.
+
+## 18. selection، feedback و VIP
+
+### 18.1 best-node selection
+
+- [ ] weighted power-of-choices فعلی حفظ شود.
+- [ ] latency، download، health، lease freshness، availability، global usage و client usage در score باشد.
+- [ ] client-specific success history حفظ شود.
+- [ ] fairness مانع چسبیدن همهٔ کاربران به یک node شود.
+- [ ] فقط node دارای runtime سالم و شرایط lifecycle مناسب انتخاب شود.
+
+### 18.2 client circuit breaker
+
+- [ ] حالت‌های CLOSED/OPEN/HALF_OPEN حفظ شوند.
+- [ ] feedback `used`، `broken` و `rate_limited` حفظ شود.
+- [ ] cooldown با exponential full jitter باشد.
+- [ ] client failure با global proxy health یکی نشود؛ هر دو مدل جدا بمانند.
+
+### 18.3 VIP
+
+- [ ] VIP port فعلی و hot-runtime حفظ شود.
+- [ ] score شامل health، latency، download، availability و low-use باشد.
+- [ ] switch hysteresis حفظ شود تا flapping رخ ندهد.
+- [ ] VIP فقط وقتی candidate جدید به‌اندازهٔ margin مشخص بهتر است جابه‌جا شود.
+- [ ] switch failure باعث قطع runtime سالم قبلی نشود.
+
+## 19. publisher و Git
+
+- [ ] publisher از snapshot transactionally-consistent استفاده کند.
+- [ ] فقط proxyهای دارای publication lease معتبر render شوند.
+- [ ] raw configها بر اساس technical identity unique شوند.
+- [ ] remark مناسب نمایش بدون تغییر identity تولید شود.
+- [ ] `active-raw.txt` plain و `active.txt` با format فعلی سازگار باشد.
+- [ ] اگر محتوا تغییر نکرده commit ساخته نشود.
+- [ ] چند تغییر نزدیک با debounce به یک commit تبدیل شود.
+- [ ] commit message شامل تعداد active و generation باشد.
+- [ ] push با SSH mount فعلی و known_hosts انجام شود.
+- [ ] non-fast-forward با fetch/rebase کنترل‌شده retry شود؛ reset مخرب ممنوع باشد.
+- [ ] failure Git هیچ اثر منفی روی proxy health نداشته باشد.
+- [ ] آخرین commit/push status در API و UI diagnostics دیده شود.
+- [ ] publisher بعد از startup تا کامل‌شدن migration و اولین snapshot معتبر صبر کند.
+
+## 20. API جدید و توسعهٔ diagnostics
+
+در کنار routeهای سازگار، موارد زیر اضافه شوند:
+
+- [ ] `GET /api/v1/scheduler`: queue depth، quota، concurrency، pressure و overdue jobs.
+- [ ] `GET /api/v1/health-model`: thresholdها، decayها و lease policy جاری.
+- [ ] `GET /api/v1/upstream`: آخرین generation، source health و missing counts.
+- [ ] `GET /api/v1/incidents`: incidentهای فعال و اخیر.
+- [ ] `POST /api/v1/nodes/:id/revive`: انتقال کنترل‌شده به queue recovery.
+
+fieldهای جدید node:
+
+- [ ] `lifecycle_state`
+- [ ] `health_alpha`
+- [ ] `health_beta`
+- [ ] `health_score`
+- [ ] `next_test_at`
+- [ ] `publication_lease_until`
+- [ ] `publication_lease_kind`
+- [ ] `last_failure_class`
+- [ ] `last_seen_generation`
+- [ ] `upstream_missing_generations`
+- [ ] `evidence_summary`
+
+### 20.1 اصول API
+
+- [ ] queryهای list همیشه pagination و سقف page size داشته باشند.
+- [ ] response حجیم history به‌صورت محدود و newest-first باشد.
+- [ ] command endpointها idempotent یا دارای operation id باشند.
+- [ ] timeout HTTP مستقل از timeout worker باشد.
+- [ ] خطاها JSON استاندارد با code/message/details داشته باشند.
+- [ ] endpoint health بدون query سنگین پاسخ دهد.
+
+## 21. پنل وب
+
+- [ ] ظاهر و مسیرهای فعلی حفظ شوند؛ frontend build جدا لازم نباشد.
+- [ ] CSS/JS به‌صورت asset مستقل یا `include_bytes!` داخل binary قرار گیرد.
+- [ ] dashboard state، score، lease، next test و failure class را نشان دهد.
+- [ ] badge مجزا برای inconclusive/local incident نمایش داده شود.
+- [ ] filterهای state/country/source/protocol/failure class اضافه شوند.
+- [ ] history timeline stage، endpoint، latency، speed، pressure و evidence delta را نشان دهد.
+- [ ] diagnostics queueها، AIMD، FD/process، upstream generation، publisher و incident را نشان دهد.
+- [ ] manual test/revive/reload/import/cleanup با confirm و نتیجهٔ قابل‌مشاهده باشد.
+- [ ] صفحهٔ clients رفتار circuit فعلی را حفظ کند.
+- [ ] payload صفحهٔ nodes حتی با ده‌ها هزار node bounded بماند.
+
+## 22. config و environment
+
+- [ ] config فعلی YAML/ENV خوانده و به schema جدید map شود.
+- [ ] unknown field با warning مشخص شود؛ typoهای مهم silent نباشند.
+- [ ] env secretها هیچ‌وقت log نشوند.
+- [ ] گروه‌های config:
+  - server/API؛
+  - SQLite؛
+  - upstream sources/refresh؛
+  - parser limits؛
+  - probe endpoints/timeouts/download limits؛
+  - health evidence/decay/hysteresis؛
+  - publication leases؛
+  - scheduler quotas/backoff/concurrency؛
+  - Xray paths/ports؛
+  - VIP/selection/feedback؛
+  - publisher/Git؛
+  - retention/cleanup.
+- [ ] startup config validation قبل از migration و spawn process انجام شود.
+- [ ] defaultها general باشند و به ISP یا LAN فعلی وابسته نباشند.
+
+### 22.1 نگاشت config فعلی
+
+- [ ] هشت منبع `Sub1.txt` تا `Sub8.txt` فعلی barry-far از همان `subscriptions.urls` خوانده شوند و در کد hard-code نشوند.
+- [ ] `subscriptions.refresh_interval_seconds` به refresh service نسل‌دار منتقل شود.
+- [ ] `subscriptions.prune_missing_after_cycles: 2` به policy جدید حداقل سه generation کامل migrate و deprecated warning داده شود.
+- [ ] `publishing.retained_snapshots: 3` پس از migration نادیده گرفته و با publication lease جایگزین شود.
+- [ ] `health.recent_success_retention_hours` فقط برای seed migration قدیمی استفاده و سپس با leaseهای stage-specific جایگزین شود.
+- [ ] interval/thresholdهای candidate/probation/dead قدیمی به defaultهای scheduler/backoff جدید map شوند و keyهای منسوخ warning روشن بدهند.
+- [ ] `network_guard` فعلی بدون تغییر اولیه load شود و سپس ورودی global incident detector باشد.
+- [ ] weightهای `selection`، cooldownهای client، VIP port و port rangeهای فعلی حفظ شوند.
+- [ ] remote فعلی `git@github.com:moosavimaleki/proxy-fleet.git` از config خوانده شود؛ داخل binary ثابت نباشد.
+- [ ] config migration report در startup دقیقاً نشان دهد کدام key حفظ، تبدیل یا منسوخ شده است.
+
+## 23. observability
+
+- [ ] logها structured با timestamp، component، proxy id، run id و failure class باشند.
+- [ ] raw config و credential در log mask شوند.
+- [ ] counterها: parsed، deduped، invalid، tested، stage pass/fail، transitions و published.
+- [ ] gaugeها: queue depth، concurrency، child process، FD، active/probation/dormant و lease count.
+- [ ] histogramها: stage latency، download speed، DB query و API latency.
+- [ ] system eventهای مهم در SQLite با retention محدود ثبت شوند.
+- [ ] log storm ناشی از retry با sampling/rate-limit کنترل شود.
+- [ ] shutdown report تعداد job cancel‌شده و processهای پاک‌شده را ثبت کند.
+
+## 24. تست‌ها
+
+### 24.1 unit test
+
+- [ ] تمام transitionهای lifecycle.
+- [ ] evidence weights و time decay با clock مصنوعی.
+- [ ] lease extension و expiry.
+- [ ] full-jitter در bound صحیح.
+- [ ] queue quota و starvation prevention.
+- [ ] failure classifier و inconclusiveها.
+- [ ] technical hash مستقل از remark.
+- [ ] parser هر protocol/transport/security.
+- [ ] publication filter و deterministic ordering.
+
+### 24.2 property/fuzz test
+
+- [ ] parser روی input تصادفی panic نکند.
+- [ ] normalize(normalize(x)) برابر normalize(x) باشد.
+- [ ] تغییر remark hash را تغییر ندهد.
+- [ ] alpha/beta/score هیچ‌گاه NaN، infinity یا خارج از range نشوند.
+- [ ] scheduler هیچ node با lease تست فعال را دوباره claim نکند.
+
+### 24.3 integration test
+
+- [ ] SQLite migration از fixture schema فعلی.
+- [ ] API compatibility snapshot.
+- [ ] mock SOCKS/HTTP endpoint برای success/timeout/refused/TLS failure.
+- [ ] Xray batch startup، recursive split و cleanup.
+- [ ] process cancellation و نبود zombie.
+- [ ] upstream complete/incomplete generation.
+- [ ] publisher no-op/change/push failure/retry.
+- [ ] network incident بدون demotion.
+
+### 24.4 end-to-end
+
+- [ ] Docker با DB کپی‌شده بالا بیاید.
+- [ ] manual import تا publication کامل طی شود.
+- [ ] proxy موفق وارد ACTIVE و خروجی شود.
+- [ ] یک timeout بعدی آن را فوراً حذف نکند.
+- [ ] lease expiry بدون success جدید آن را حذف کند.
+- [ ] proxy recovered از DORMANT دوباره ACTIVE شود.
+- [ ] تمام صفحات پنل و actionها smoke test شوند.
+
+### 24.5 benchmark
+
+- [ ] corpus واقعی ۳۱هزار node برای parser/dedup.
+- [ ] query list/filter/history در دیتابیس واقعی کپی‌شده.
+- [ ] scheduler tick با queueهای بزرگ.
+- [ ] event insert و aggregate update.
+- [ ] API p50/p95 و response size.
+- [ ] CPU/RAM/FD تحت concurrency یکسان با نسخهٔ Python.
+- [ ] publisher render برای تعداد زیاد config.
+
+## 25. budgetهای عملکرد و پذیرش
+
+- [ ] هیچ full-table scan در scheduler tick عادی وجود نداشته باشد.
+- [ ] API list با pagination در اندازهٔ محدود باقی بماند.
+- [ ] یک writer کند SQLite کل HTTP server را block نکند.
+- [ ] تعداد process Xray از سقف config بالاتر نرود.
+- [ ] تعداد FD پس از چند چرخهٔ تست رشد دائمی نداشته باشد.
+- [ ] idle CPU/RAM از baseline Python بدتر نباشد و هدف کاهش محسوس باشد.
+- [ ] throughput تست با endpoint یکسان حداقل برابر نسخهٔ Python باشد.
+- [ ] benchmark قبل و بعد همراه با config و corpus ثبت شود.
+
+## 26. Docker و deployment
+
+- [ ] Dockerfile چندمرحله‌ای ساخته شود:
+  - builder رسمی Rust برای compile؛
+  - runtime slim با CA، curl، git/ssh، SQLite runtime tools و Xray.
+- [ ] binary به‌صورت release و stripped ساخته شود.
+- [ ] Xray version در build pin یا checksum-verified باشد؛ latest بدون checksum پذیرفته نشود.
+- [ ] compose فعلی host network، nofile، volumeها، SSH mount و healthcheck را حفظ کند.
+- [ ] container name و API port فعلی حفظ شود.
+- [ ] user داخل container تا حد ممکن non-root باشد؛ نیازهای Xray/port بررسی شود.
+- [ ] data/config/subscription pathهای فعلی حفظ شوند.
+- [ ] startup migration فقط یک instance leader داشته باشد.
+- [ ] healthcheck readiness را بعد از DB migration و worker startup اعلام کند.
+
+## 27. مسیر اجرای مرحله‌ای
+
+### فاز 0: baseline و freeze قراردادها
+
+- [ ] schema و row count دیتابیس فعلی ثبت شود.
+- [ ] نمونهٔ response تمام APIها ذخیره شود.
+- [ ] صفحه‌ها و actionهای فعلی فهرست و smoke شوند.
+- [ ] CPU/RAM/FD/process/API latency و test throughput baseline ثبت شود.
+- [ ] fixtureهای parser از configهای واقعی و بدون secret ساخته شوند.
+- [ ] لینک‌های subscription و format فعلی snapshot شوند.
+
+معیار خروج: قرارداد رفتاری و performance baseline قابل‌تکرار است.
+
+### فاز 1: skeleton Rust
+
+- [ ] workspace/crate، config، error، tracing و graceful shutdown.
+- [ ] Axum health endpoint.
+- [ ] SQLx pool و migration runner.
+- [ ] CI محلی `fmt`, `clippy`, `test`.
+
+معیار خروج: binary داخل container اجرا و clean shutdown می‌شود.
+
+### فاز 2: storage و migration
+
+- [ ] migrationهای افزایشی.
+- [ ] repositoryهای nodes/events/upstream/client.
+- [ ] seed evidence از schema قدیمی.
+- [ ] compatibility query برای history و EWMA.
+
+معیار خروج: DB کپی‌شده بدون data loss باز و تمام countها reconcile می‌شوند.
+
+### فاز 3: parser و ingestion
+
+- [ ] تمام protocolها و transportها.
+- [ ] canonical identity/dedup.
+- [ ] manual import و subscription decoder.
+- [ ] upstream generation fetch/reconcile.
+
+معیار خروج: خروجی parser Rust روی corpus فعلی با Python مقایسه و اختلاف‌ها توضیح داده شده‌اند.
+
+### فاز 4: health engine
+
+- [ ] event model، classifier، decay، Bayesian score.
+- [ ] transition/hysteresis.
+- [ ] publication lease.
+- [ ] incident-safe evidence application.
+
+معیار خروج: تمام سناریوهای `ALGORITHM.md` با تست clock-controlled پاس می‌شوند.
+
+### فاز 5: Xray و probe cascade
+
+- [ ] config generation.
+- [ ] process/port lifecycle.
+- [ ] Stage 0 تا 4.
+- [ ] batch split، cancellation، timeout budget و metadata.
+
+معیار خروج: proxyهای known-good/known-bad با failure class صحیح دسته‌بندی می‌شوند و process leak صفر است.
+
+### فاز 6: scheduler و pressure control
+
+- [ ] multi-queue quota.
+- [ ] priority/circuit/full jitter.
+- [ ] atomic claim.
+- [ ] AIMD و global incident detector.
+
+معیار خروج: simulation چندروزه starvation، retry storm یا حذف ناگهانی ACTIVE ایجاد نمی‌کند.
+
+### فاز 7: selection، client circuit و VIP
+
+- [ ] انتقال scoring و fairness.
+- [ ] feedback و per-client circuit.
+- [ ] persistent runtime و VIP hysteresis.
+
+معیار خروج: رفتار API best/feedback و VIP با نسخهٔ فعلی سازگار است.
+
+### فاز 8: API و UI
+
+- [ ] همهٔ routeهای compatibility.
+- [ ] APIهای جدید scheduler/upstream/incidents.
+- [ ] تمام صفحات و actionها.
+- [ ] pagination و response budget.
+
+معیار خروج: contract tests و browser smoke تمام صفحات پاس می‌شوند.
+
+### فاز 9: publisher
+
+- [ ] lease query، render، dedup و stable ordering.
+- [ ] Git commit/push/debounce/retry.
+- [ ] diagnostics و no-op detection.
+
+معیار خروج: لینک‌های عمومی بدون تغییر path با خروجی معتبر و unique به‌روز می‌شوند.
+
+### فاز 10: shadow validation
+
+- [ ] نسخهٔ Rust روی copy دیتابیس و port جدا اجرا شود.
+- [ ] ingestion و test در ابتدا بدون publisher واقعی اجرا شود.
+- [ ] تصمیم‌های health دو نسخه و نتیجهٔ واقعی proxyها مقایسه شود.
+- [ ] load test و soak test حداقل چند چرخهٔ کامل refresh/recovery را پوشش دهد.
+- [ ] اختلاف‌های غیرمنتظره قبل از cutover رفع شوند.
+
+معیار خروج: correctness و resource budget تأیید شده و هیچ migration blocker وجود ندارد.
+
+### فاز 11: cutover امن
+
+- [ ] publisher موقتاً pause شود.
+- [ ] backup سازگار دیتابیس گرفته شود.
+- [ ] container Python متوقف ولی image آن نگه داشته شود.
+- [ ] container Rust روی DB واقعی migration و start شود.
+- [ ] health/API/UI/Xray/VIP/subscription smoke شوند.
+- [ ] اولین publish فقط بعد از snapshot معتبر انجام شود.
+- [ ] metrics و logها در چند چرخه بررسی شوند.
+
+معیار خروج: سرویس Rust تنها writer و publisher فعال است.
+
+### فاز 12: cleanup و مستندات
+
+- [ ] کد Python فقط بعد از پایان rollback window archive/remove شود.
+- [ ] schema، config، API و runbook مستند شوند.
+- [ ] backupهای موقت طبق policy پاک شوند.
+- [ ] benchmark نهایی و تفاوت الگوریتم ثبت شود.
+
+## 28. rollback
+
+- [ ] image قبلی Python با tag immutable حفظ شود.
+- [ ] snapshot pre-migration دیتابیس تا پایان rollback window حفظ شود.
+- [ ] rollback script فقط این کارها را انجام دهد: توقف Rust، بازگردانی DB snapshot، اجرای image Python، health smoke.
+- [ ] subscription فایل سالم قبلی تا اولین publish موفق Rust overwrite نشود.
+- [ ] اگر migration forward-only شد، rollback حتماً با snapshot باشد نه downgrade query خطرناک.
+- [ ] triggerهای rollback: migration inconsistency، data loss، process leak، publisher خراب، API contract break یا افت شدید throughput.
+
+## 29. ریسک‌ها و کنترل آن‌ها
+
+| ریسک | کنترل |
+|---|---|
+| تغییر رفتار parser | corpus diff، golden test و Xray config validation |
+| قفل SQLite | WAL، pool کوچک، transaction کوتاه و benchmark |
+| رشد event table | index صحیح، retention/archival و aggregate cache |
+| حذف اشتباه proxy سالم | hysteresis، independent failure، lease و incident detector |
+| retry storm | full jitter، quota، AIMD و pressure gate |
+| zombie Xray | ownership، cancellation، terminate/kill/wait و leak test |
+| outage endpoint تست | چند endpoint، quorum و ENDPOINT_FAILURE |
+| outage شبکهٔ محلی | sentinel، global incident و inconclusive event |
+| upstream ناقص | complete generation requirement |
+| push conflict | debounce، fetch/rebase محدود و no destructive reset |
+| migration دیتابیس بزرگ | additive migration، no full history rewrite، shadow copy |
+| شکستن کاربران API/subscription | compatibility tests و stable paths |
+
+## 30. چک‌لیست نهایی parity
+
+- [ ] subscription ingest
+- [ ] manual import
+- [ ] remark-insensitive dedup
+- [ ] VMess/VLESS/Trojan/SS/SOCKS
+- [ ] تمام transport/securityهای فعلی
+- [ ] static validation
+- [ ] batch relay و recursive isolation
+- [ ] real HTTP و bounded download
+- [ ] retry/revival/quarantine
+- [ ] persistent active runtime
+- [ ] port pools و waiting state
+- [ ] exit metadata
+- [ ] network sentinel
+- [ ] weighted selection/fairness
+- [ ] client feedback/circuit breaker
+- [ ] VIP/hot port/hysteresis
+- [ ] SQLite persistence و history
+- [ ] تمام API routeهای فعلی
+- [ ] تمام صفحه‌های UI فعلی
+- [ ] logs/diagnostics/manual actions
+- [ ] active.txt و active-raw.txt
+- [ ] Git commit/push خودکار
+- [ ] Docker host network/volumes/SSH/healthcheck
+- [ ] graceful startup/shutdown/recovery
+
+## 31. تعریف Done
+
+بازنویسی فقط وقتی Done است که:
+
+- [ ] تمام parity itemها پاس شده باشند.
+- [ ] تمام قواعد `ALGORITHM.md` تست خودکار داشته باشند.
+- [ ] دیتابیس واقعی کپی‌شده بدون حذف داده مهاجرت کرده باشد.
+- [ ] ACTIVE با یک failure گذرا از انتشار حذف نشود.
+- [ ] INVALID و RETIRED اشتباهاً منتشر نشوند.
+- [ ] DORMANTها طبق backoff دوباره فرصت بگیرند.
+- [ ] outage محلی health جمعی proxyها را خراب نکند.
+- [ ] API و UI با دادهٔ واقعی responsive بمانند.
+- [ ] Xray process/port/FD leak در soak test وجود نداشته باشد.
+- [ ] publisher خروجی unique و قابل‌مصرف تولید و push کند.
+- [ ] Docker جدید روی سیستم فعلی healthy باشد.
+- [ ] benchmark نهایی correctness، سرعت و مصرف منابع را ثبت کرده باشد.
+- [ ] rollback یک بار عملاً روی محیط staging تمرین شده باشد.
+
+## 32. ترتیب شروع پیاده‌سازی
+
+اولین commit اجرایی نباید API یا UI باشد. ترتیب اجباری شروع:
+
+1. قراردادها و baseline.
+2. skeleton Rust و migration روی DB کپی.
+3. parser/identity.
+4. event + health + lease.
+5. Xray/probe.
+6. scheduler/AIMD/incident.
+7. selection/VIP.
+8. API/UI.
+9. publisher.
+10. shadow run، cutover و cleanup.
+
+این ترتیب باعث می‌شود UI یا publisher روی یک health model ناقص ساخته نشوند و مهاجرت داده از ابتدا بخشی از طراحی باشد، نه کاری پرخطر در انتهای پروژه.

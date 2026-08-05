@@ -1,6 +1,6 @@
 services:
   config-orchestrator:
-    image: src-config-orchestrator:latest
+    image: proxy-fleet-rust:latest
     build:
       context: .
       dockerfile: Dockerfile
