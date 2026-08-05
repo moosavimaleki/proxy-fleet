@@ -18,10 +18,10 @@ vless://2a6b708e-6799-473e-85e9-d4b116c5eedc@83.143.112.140.cdn-one.org:443/?typ
 trojan://humanity@2.144.21.112:40443?host=www.ignitelimit.com&path=/assignment&sni=www.ignitelimit.com&type=ws#🇮🇷133803 | ⚡️Telegram = t.me/SOSkeyNET
 vless://SoonTeam@ge.imsoon.org:8443?encryption=none&type=grpc&security=reality&sni=wxug.com&fp=chrome&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&sid=ce77fcf457&spx=/HesarWeb#• 🇩🇪 | 𝗚𝗲𝗿𝗺𝗮𝗻𝘆 - @HesarWeb
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.32:443#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
-vless://b2f6aa3a-2550-4a1c-b2c0-1c94b1207217@millionaire.levikogjgfdd.ir:443?path=/hdgrbws&security=tls&encryption=none&insecure=0&host=terazhediii.info&type=ws&allowInsecure=0&sni=terazhediii.info#@FarazV2ray
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.236:443#@V2rayi_net
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.244:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.243:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
+vless://b2f6aa3a-2550-4a1c-b2c0-1c94b1207217@millionaire.levikogjgfdd.ir:443?path=/hdgrbws&security=tls&encryption=none&insecure=0&host=terazhediii.info&type=ws&allowInsecure=0&sni=terazhediii.info#@FarazV2ray
 vless://b2f6aa3a-2550-4a1c-b2c0-1c94b1207217@millionaire.levikogjgfdd.ir:443?path=/hdgrbws&security=tls&encryption=none&host=terazhediii.info&type=ws&sni=terazhediii.info#@meliproxyy
 vless://b2f6aa3a-2550-4a1c-b2c0-1c94b1207217@162.159.38.119:443?path=/hdgrbws&security=tls&encryption=none&host=terazhediii.info&type=ws&sni=terazhediii.info#@configprxy
 ss://YWVzLTI1Ni1nY206ZDFmYTJmNGI5OGEzOGJjOA==@62.76.234.75:10901#@Alpha_v2rayIP
