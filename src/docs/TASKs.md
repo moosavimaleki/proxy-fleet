@@ -21,7 +21,7 @@
 - [x] migration افزایشی روی `app.db` واقعی پس از backup سازگار، سپس startup reconciliation برای runtimeهای ACTIVE و smoke واقعی `/best`.
 - [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، incident aggregation بین منبع/protocol/windowهای مستقل، contract snapshot کامل و soak test؛ این‌ها هنوز شرط انتشار نیستند.
 
-آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۲۹
+آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۳۳
 تست) و `cargo clippy --all-targets -- -D warnings` موفق بوده‌اند. Docker
 build و compose startup روی همین میزبان موفق بوده و `/health`، publisher و
 `POST /api/v1/best` نیز روی دادهٔ واقعی smoke شده‌اند. برای محدودیت mirror
@@ -639,7 +639,7 @@ delay = random(0, min(cap, base * 2^failure_streak))
 - [x] Xray test batch و persistent runtime lifecycle جدا داشته باشند.
 - [x] main/test port pool از config خوانده شود.
 - [x] bind واقعی port پیش از تخصیص verify شود.
-- [ ] port allocation اتمیک باشد.
+- [x] port allocation اتمیک باشد.
 - [ ] ظرفیت ناکافی state را به `WAITING_FOR_PORT` ببرد و health را خراب نکند.
 - [ ] runtimeهای یتیم در startup شناسایی و فقط در scope پروژه پاک شوند.
 

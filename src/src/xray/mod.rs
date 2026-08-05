@@ -1,4 +1,10 @@
-use std::{ops::RangeInclusive, path::PathBuf, time::Duration};
+use std::{
+    collections::HashSet,
+    ops::RangeInclusive,
+    path::PathBuf,
+    sync::{LazyLock, Mutex},
+    time::Duration,
+};
 
 use anyhow::Context;
 use tokio::{
@@ -11,10 +17,37 @@ use crate::parser::{ParsedProxy, xray_outbound};
 
 pub mod runtime;
 
+static PORT_RESERVATIONS: LazyLock<Mutex<HashSet<u16>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// A process-local reservation closes the race where concurrent testers both
+/// observe the same free TCP port between probe bind and Xray spawn. The OS
+/// still owns the definitive bind, but a failed Xray start is now isolated
+/// rather than caused by another fleet worker selecting the same port.
+pub struct PortReservation {
+    port: u16,
+}
+
+impl PortReservation {
+    pub const fn port(&self) -> u16 {
+        self.port
+    }
+}
+
+impl Drop for PortReservation {
+    fn drop(&mut self) {
+        let mut reservations = PORT_RESERVATIONS
+            .lock()
+            .expect("port reservation mutex is not poisoned");
+        reservations.remove(&self.port);
+    }
+}
+
 pub struct XraySession {
     child: Child,
     config_path: PathBuf,
     pub socks_port: u16,
+    _reservation: Option<PortReservation>,
 }
 
 /// A single Xray process with one SOCKS inbound per candidate.  The routing
@@ -24,17 +57,41 @@ pub struct XrayBatchSession {
     child: Child,
     config_path: PathBuf,
     pub socks_ports: Vec<u16>,
+    _reservations: Vec<PortReservation>,
 }
 
 impl XraySession {
-    pub async fn start(binary: &str, proxy: &ParsedProxy, socks_port: u16) -> anyhow::Result<Self> {
-        Self::start_with_listen(binary, proxy, socks_port, "127.0.0.1").await
+    pub async fn start(
+        binary: &str,
+        proxy: &ParsedProxy,
+        reservation: PortReservation,
+    ) -> anyhow::Result<Self> {
+        Self::start_with_listen(binary, proxy, reservation, "127.0.0.1").await
     }
 
     pub async fn start_with_listen(
         binary: &str,
         proxy: &ParsedProxy,
+        reservation: PortReservation,
+        listen: &str,
+    ) -> anyhow::Result<Self> {
+        Self::start_at_port(binary, proxy, reservation.port(), Some(reservation), listen).await
+    }
+
+    pub async fn start_fixed_with_listen(
+        binary: &str,
+        proxy: &ParsedProxy,
         socks_port: u16,
+        listen: &str,
+    ) -> anyhow::Result<Self> {
+        Self::start_at_port(binary, proxy, socks_port, None, listen).await
+    }
+
+    async fn start_at_port(
+        binary: &str,
+        proxy: &ParsedProxy,
+        socks_port: u16,
+        reservation: Option<PortReservation>,
         listen: &str,
     ) -> anyhow::Result<Self> {
         let outbound = xray_outbound(proxy)?;
@@ -63,6 +120,7 @@ impl XraySession {
             child,
             config_path,
             socks_port,
+            _reservation: reservation,
         };
         if let Err(error) = session.wait_ready().await {
             session.stop().await;
@@ -97,8 +155,9 @@ impl XrayBatchSession {
     pub async fn start(
         binary: &str,
         proxies: &[ParsedProxy],
-        socks_ports: Vec<u16>,
+        reservations: Vec<PortReservation>,
     ) -> anyhow::Result<Self> {
+        let socks_ports: Vec<_> = reservations.iter().map(PortReservation::port).collect();
         anyhow::ensure!(
             proxies.len() == socks_ports.len() && !proxies.is_empty(),
             "invalid Xray batch"
@@ -141,6 +200,7 @@ impl XrayBatchSession {
             child,
             config_path,
             socks_ports,
+            _reservations: reservations,
         };
         if let Err(error) = session.wait_ready().await {
             session.stop().await;
@@ -228,31 +288,74 @@ impl Drop for XraySession {
     }
 }
 
-pub async fn allocate_port(range: RangeInclusive<u16>) -> anyhow::Result<u16> {
+pub async fn allocate_port(range: RangeInclusive<u16>) -> anyhow::Result<PortReservation> {
     for port in range {
+        {
+            let reservations = PORT_RESERVATIONS
+                .lock()
+                .expect("port reservation mutex is not poisoned");
+            if reservations.contains(&port) {
+                continue;
+            }
+        }
         if tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
             .is_ok()
         {
-            return Ok(port);
+            let mut reservations = PORT_RESERVATIONS
+                .lock()
+                .expect("port reservation mutex is not poisoned");
+            if reservations.insert(port) {
+                return Ok(PortReservation { port });
+            }
         }
     }
     anyhow::bail!("no available test port")
 }
 
-pub async fn allocate_ports(range: RangeInclusive<u16>, count: usize) -> anyhow::Result<Vec<u16>> {
+pub async fn allocate_ports(
+    range: RangeInclusive<u16>,
+    count: usize,
+) -> anyhow::Result<Vec<PortReservation>> {
     let mut ports = Vec::with_capacity(count);
     for port in range {
         if ports.len() == count {
             break;
         }
+        {
+            let reservations = PORT_RESERVATIONS
+                .lock()
+                .expect("port reservation mutex is not poisoned");
+            if reservations.contains(&port) {
+                continue;
+            }
+        }
         if tokio::net::TcpListener::bind(("127.0.0.1", port))
             .await
             .is_ok()
         {
-            ports.push(port);
+            let mut reservations = PORT_RESERVATIONS
+                .lock()
+                .expect("port reservation mutex is not poisoned");
+            if reservations.insert(port) {
+                ports.push(PortReservation { port });
+            }
         }
     }
     anyhow::ensure!(ports.len() == count, "not enough available test ports");
     Ok(ports)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allocate_port;
+
+    #[tokio::test]
+    async fn concurrent_allocations_do_not_reserve_the_same_port() {
+        let range = 45_000..=45_200;
+        let (left, right) = tokio::join!(allocate_port(range.clone()), allocate_port(range));
+        let left = left.expect("first reservation");
+        let right = right.expect("second reservation");
+        assert_ne!(left.port(), right.port());
+    }
 }

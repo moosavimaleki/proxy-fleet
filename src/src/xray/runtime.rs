@@ -50,9 +50,11 @@ impl RuntimeManager {
             return Ok(port);
         }
         let proxy: ParsedProxy = parse_share_url(raw_config, "runtime")?;
-        let port = allocate_port(config.ports.main.start..=config.ports.main.end).await?;
+        let reservation = allocate_port(config.ports.main.start..=config.ports.main.end).await?;
+        let port = reservation.port();
         let session =
-            XraySession::start_with_listen(&config.xray_bin, &proxy, port, "0.0.0.0").await?;
+            XraySession::start_with_listen(&config.xray_bin, &proxy, reservation, "0.0.0.0")
+                .await?;
         let mut runtimes = self.inner.lock().await;
         let existing_port = runtimes.get(node_id).map(|existing| existing.port);
         if let Some(port) = existing_port {
@@ -140,7 +142,7 @@ impl RuntimeManager {
         if let Some(old) = previous.as_mut() {
             old.session.stop().await;
         }
-        match XraySession::start_with_listen(
+        match XraySession::start_fixed_with_listen(
             &config.xray_bin,
             &proxy,
             config.vip_port.port,
@@ -163,7 +165,7 @@ impl RuntimeManager {
                 // the original switch failure if it too cannot be recovered.
                 if let Some(old) = previous {
                     if let Ok(proxy) = parse_share_url(&old.raw_config, "vip-recovery") {
-                        if let Ok(session) = XraySession::start_with_listen(
+                        if let Ok(session) = XraySession::start_fixed_with_listen(
                             &config.xray_bin,
                             &proxy,
                             config.vip_port.port,

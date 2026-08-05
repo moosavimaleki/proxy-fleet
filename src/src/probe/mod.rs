@@ -50,8 +50,8 @@ pub async fn test(raw_config: &str, source: &str, config: &AppConfig) -> ProbeRe
             events: vec![failure],
         };
     }
-    let socks_port = match allocate_port(config.ports.test.start..=config.ports.test.end).await {
-        Ok(port) => port,
+    let reservation = match allocate_port(config.ports.test.start..=config.ports.test.end).await {
+        Ok(reservation) => reservation,
         Err(error) => {
             return ProbeReport {
                 proxy: Some(proxy),
@@ -64,7 +64,8 @@ pub async fn test(raw_config: &str, source: &str, config: &AppConfig) -> ProbeRe
             };
         }
     };
-    let mut session = match XraySession::start(&config.xray_bin, &proxy, socks_port).await {
+    let socks_port = reservation.port();
+    let mut session = match XraySession::start(&config.xray_bin, &proxy, reservation).await {
         Ok(session) => session,
         Err(error) => {
             return ProbeReport {
@@ -225,13 +226,13 @@ async fn test_survivor_batch(
     if survivors.is_empty() {
         return Vec::new();
     }
-    let ports = match allocate_ports(
+    let reservations = match allocate_ports(
         config.ports.test.start..=config.ports.test.end,
         survivors.len(),
     )
     .await
     {
-        Ok(ports) => ports,
+        Ok(reservations) => reservations,
         Err(error) => {
             return survivors
                 .into_iter()
@@ -250,7 +251,11 @@ async fn test_survivor_batch(
         }
     };
     let proxies: Vec<_> = survivors.iter().map(|(_, proxy)| proxy.clone()).collect();
-    match XrayBatchSession::start(&config.xray_bin, &proxies, ports.clone()).await {
+    let ports: Vec<_> = reservations
+        .iter()
+        .map(|reservation| reservation.port())
+        .collect();
+    match XrayBatchSession::start(&config.xray_bin, &proxies, reservations).await {
         Ok(mut session) => {
             let results =
                 stream::iter(
