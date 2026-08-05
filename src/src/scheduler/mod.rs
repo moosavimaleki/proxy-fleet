@@ -14,7 +14,7 @@ pub struct TestJob {
     pub reason: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct QueueQuota {
     pub new: usize,
     pub successful_probation: usize,
@@ -47,14 +47,26 @@ pub fn is_mass_failure(reports: &[(String, ProbeReport)], threshold_percent: u8)
 
 impl QueueQuota {
     pub fn for_capacity(capacity: usize) -> Self {
-        let new = capacity * 40 / 100;
-        let successful_probation = capacity * 30 / 100;
-        let recoverable_dormant = capacity * 20 / 100;
+        // Largest-remainder allocation preserves the configured 40/30/20/10
+        // policy for large batches and never turns a capacity-1 tick into
+        // ACTIVE exploration while fresh candidates are waiting.
+        let mut quotas = [
+            (capacity * 40 / 100, capacity * 40 % 100, 0_usize),
+            (capacity * 30 / 100, capacity * 30 % 100, 1_usize),
+            (capacity * 20 / 100, capacity * 20 % 100, 2_usize),
+            (capacity * 10 / 100, capacity * 10 % 100, 3_usize),
+        ];
+        let allocated = quotas.iter().map(|(whole, _, _)| *whole).sum::<usize>();
+        quotas.sort_by_key(|(_, remainder, priority)| (std::cmp::Reverse(*remainder), *priority));
+        for (whole, _, _) in quotas.iter_mut().take(capacity.saturating_sub(allocated)) {
+            *whole += 1;
+        }
+        quotas.sort_by_key(|(_, _, priority)| *priority);
         Self {
-            new,
-            successful_probation,
-            recoverable_dormant,
-            exploration: capacity.saturating_sub(new + successful_probation + recoverable_dormant),
+            new: quotas[0].0,
+            successful_probation: quotas[1].0,
+            recoverable_dormant: quotas[2].0,
+            exploration: quotas[3].0,
         }
     }
 }
@@ -235,6 +247,28 @@ mod tests {
         assert_eq!(
             quota.new + quota.successful_probation + quota.recoverable_dormant + quota.exploration,
             17
+        );
+    }
+
+    #[test]
+    fn queue_quota_prioritizes_candidates_at_small_capacities() {
+        assert_eq!(
+            QueueQuota::for_capacity(1),
+            QueueQuota {
+                new: 1,
+                successful_probation: 0,
+                recoverable_dormant: 0,
+                exploration: 0,
+            }
+        );
+        assert_eq!(
+            QueueQuota::for_capacity(4),
+            QueueQuota {
+                new: 2,
+                successful_probation: 1,
+                recoverable_dormant: 1,
+                exploration: 0,
+            }
         );
     }
 
