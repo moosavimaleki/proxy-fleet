@@ -5,8 +5,8 @@ vless://49e76398-5127-4005-90cb-c2a971f745f1@162.159.38.119:443?path=/all&securi
 vless://49e76398-5127-4005-90cb-c2a971f745f1@162.159.38.119:443?path=/all&security=tls&alpn=h2&encryption=none&insecure=0&host=dcbgd.minipixelport-qad.sbs&fp=chrome&type=ws&allowInsecure=0&sni=dcbgd.minipixelport-qad.sbs#🚀@VPNine1
 vless://49e76398-5127-4005-90cb-c2a971f745f1@162.159.38.119:443?encryption=none&security=tls&sni=feywi.goldleaflab-psr.sbs&alpn=h2&fp=chrome&type=ws&host=feywi.goldleaflab-psr.sbs&path=/all#@meliproxyy
 vless://49e76398-5127-4005-90cb-c2a971f745f1@162.159.38.119:443?path=/carbon&security=tls&encryption=none&insecure=0&host=uhnjk.greenlionport-fla.sbs&fp=chrome&type=ws&allowInsecure=0&sni=uhnjk.greenlionport-fla.sbs#V2ray_Alpha🚇 11
-vless://a34b5e88-cf0d-4c01-8199-2d1002d3c787@meow-warsaw.nethcloud.top:443/?type=tcp&encryption=none&flow=xtls-rprx-vision&sni=www.wikihow.com&fp=chrome&security=reality&pbk=HKpd1sbrhBds8SJSL0d22MAq_QyTR6EP6y5b5DYol3U&sid=&packetEncoding=xudp#🇸🇪
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.57:443#%FREE_VPN02
+vless://a34b5e88-cf0d-4c01-8199-2d1002d3c787@meow-warsaw.nethcloud.top:443/?type=tcp&encryption=none&flow=xtls-rprx-vision&sni=www.wikihow.com&fp=chrome&security=reality&pbk=HKpd1sbrhBds8SJSL0d22MAq_QyTR6EP6y5b5DYol3U&sid=&packetEncoding=xudp#🇸🇪
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.162:443#@Iran_v2ray1
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.15:443#Tel-@ProxyMtAlpha🍔 3
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.35:443#@SylphNet | 2026-07-14 21:29
@@ -33,6 +33,7 @@ ss://YWVzLTI1Ni1nY206ZDFmYTJmNGI5OGEzOGJjOA==@it2.levikogjgfdd.ir:10901#🇮🇹
 vless://431fe973-a43a-4fac-bf83-2a772e0d0625@60.249.101.14:10000?security=&encryption=none&headerType=none&type=tcp#Unblocked_ir
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA1YzQ@r3mrcg001286ek2.cybervena.com:50099#🇹🇼 Join+Telegram:@Farah_VPN 🇹🇼
 vless://431fe973-a43a-4fac-bf83-2a772e0d0625@60.249.101.14:10000?security=&encryption=none&headerType=&type=tcp#@filembad
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.42:8080#@hex_proxy ¹
 vless://555a098f-06db-427c-a535-4ba284046dbf@93.119.168.26:63443?&type=tcp&headerType=none&path=/#@filembad
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFdkxmV0dlMEFLdks=@70.39.198.35:54166#@Alpha_v2rayIP
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA1YzQ=@r3mrcg00129437x.cybervena.com:50099#[🇹🇼]t.me/ConfigsHub
