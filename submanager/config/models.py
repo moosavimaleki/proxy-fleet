@@ -12,6 +12,7 @@ class SubscriptionSource:
 @dataclass
 class SubscriptionSettings:
     refresh_interval_seconds: int = 60
+    prune_missing_after_cycles: int = 2
     urls: list[SubscriptionSource] = field(default_factory=list)
 
 
@@ -41,7 +42,10 @@ class PortSettings:
 class HealthSettings:
     active_pool_relay_check_interval_seconds: int = 10
     active_pool_download_check_interval_seconds: int = 300
+    active_relay_failure_threshold: int = 3
     probation_recheck_interval_seconds: int = 120
+    probation_failure_threshold: int = 3
+    probation_success_threshold: int = 1
     candidate_recheck_interval_seconds: int = 60
     candidate_max_failures: int = 5
     candidate_retry_backoff_seconds: list[int] = field(
@@ -52,6 +56,10 @@ class HealthSettings:
     candidate_batch_concurrency: int = 128
     candidate_parallel_batches: int = 4
     candidate_batch_timeout_seconds: int = 12
+    recent_success_retention_hours: int = 24
+    dead_recheck_batch_size: int = 32
+    dead_retry_recent_seconds: int = 7200
+    dead_retry_unverified_seconds: int = 21600
     relay_timeout_ms: int = 3000
     max_relay_delay_ms: int = 1500
     test_url: str = "http://www.msftconnecttest.com/connecttest.txt"

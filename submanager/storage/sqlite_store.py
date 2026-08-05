@@ -90,7 +90,9 @@ class SqliteStore:
                   last_download_test_at TEXT NULL,
                   next_test_at TEXT NULL,
                   exit_info_fetched_at TEXT NULL,
-                  dead_until TEXT NULL
+                  dead_until TEXT NULL,
+                  dead_recheckable INTEGER NOT NULL DEFAULT 1,
+                  upstream_missing_cycles INTEGER NOT NULL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS client_node_state (
@@ -199,11 +201,18 @@ class SqliteStore:
                 conn.execute("ALTER TABLE nodes ADD COLUMN last_download_test_at TEXT NULL")
             if "next_test_at" not in columns:
                 conn.execute("ALTER TABLE nodes ADD COLUMN next_test_at TEXT NULL")
+            if "dead_recheckable" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN dead_recheckable INTEGER NOT NULL DEFAULT 1")
+            if "upstream_missing_cycles" not in columns:
+                conn.execute("ALTER TABLE nodes ADD COLUMN upstream_missing_cycles INTEGER NOT NULL DEFAULT 0")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_nodes_status_next_test ON nodes(status, next_test_at, last_test_at, created_at)"
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_nodes_status_download_test ON nodes(status, last_download_test_at)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_nodes_dead_recheck ON nodes(status, dead_recheckable, next_test_at)"
             )
 
     def get_node_by_hash(self, config_hash: str) -> NodeRecord | None:
@@ -255,8 +264,8 @@ class SqliteStore:
                     exit_region, exit_country, exit_loc, exit_org, exit_postal, exit_timezone, exit_info_json, health_success_ewma,
                     consecutive_relay_failures, consecutive_relay_successes, created_at, updated_at,
                     last_health_check_at, last_test_at, last_download_test_at, next_test_at,
-                    exit_info_fetched_at, dead_until
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    exit_info_fetched_at, dead_until, dead_recheckable, upstream_missing_cycles
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     config_hash=excluded.config_hash,
                     raw_config=excluded.raw_config,
@@ -285,7 +294,9 @@ class SqliteStore:
                     last_download_test_at=excluded.last_download_test_at,
                     next_test_at=excluded.next_test_at,
                     exit_info_fetched_at=excluded.exit_info_fetched_at,
-                    dead_until=excluded.dead_until
+                    dead_until=excluded.dead_until,
+                    dead_recheckable=excluded.dead_recheckable,
+                    upstream_missing_cycles=excluded.upstream_missing_cycles
                 """,
                 (
                     node.id,
@@ -318,6 +329,8 @@ class SqliteStore:
                     dt_to_str(node.next_test_at),
                     dt_to_str(node.exit_info_fetched_at),
                     dt_to_str(node.dead_until),
+                    int(node.dead_recheckable),
+                    node.upstream_missing_cycles,
                 ),
             )
 
@@ -346,6 +359,101 @@ class SqliteStore:
                 (NodeStatus.CANDIDATE.value, now, effective_limit),
             ).fetchall()
             return [self._row_to_node(row) for row in rows]
+
+    def list_dead_nodes_for_testing(self, limit: int) -> list[NodeRecord]:
+        effective_limit = max(1, int(limit))
+        now = dt_to_str(utcnow())
+        with self.lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM nodes
+                WHERE status = ?
+                  AND dead_recheckable = 1
+                  AND next_test_at IS NOT NULL
+                  AND next_test_at <= ?
+                ORDER BY
+                  CASE WHEN last_download_test_at IS NULL THEN 1 ELSE 0 END,
+                  next_test_at ASC,
+                  COALESCE(last_download_test_at, created_at) DESC,
+                  id ASC
+                LIMIT ?
+                """,
+                (NodeStatus.DEAD.value, now, effective_limit),
+            ).fetchall()
+            return [self._row_to_node(row) for row in rows]
+
+    def list_nodes_for_publication(self, recent_success_since: datetime) -> list[NodeRecord]:
+        with self.lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM nodes
+                WHERE status = ?
+                   OR (last_download_test_at IS NOT NULL AND last_download_test_at >= ?)
+                """,
+                (NodeStatus.ACTIVE.value, dt_to_str(recent_success_since)),
+            ).fetchall()
+            return [self._row_to_node(row) for row in rows]
+
+    def reconcile_upstream_nodes(
+        self,
+        *,
+        seen_sources_by_hash: dict[str, set[str]],
+        prune_after_cycles: int,
+        recent_success_since: datetime,
+    ) -> dict[str, int]:
+        threshold = max(1, int(prune_after_cycles))
+        deleted_ids: list[str] = []
+        updated = 0
+        missing = 0
+        with self.lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, config_hash, source_subs, status, last_download_test_at,
+                       upstream_missing_cycles
+                FROM nodes
+                """
+            ).fetchall()
+            for row in rows:
+                config_hash = str(row["config_hash"])
+                previous_sources = set(json.loads(row["source_subs"] or "[]"))
+                protected_sources = {source for source in previous_sources if source.startswith("manual://")}
+                current_sources = seen_sources_by_hash.get(config_hash)
+                if current_sources is not None:
+                    new_sources = sorted(protected_sources | current_sources)
+                    if new_sources != sorted(previous_sources) or int(row["upstream_missing_cycles"] or 0) != 0:
+                        conn.execute(
+                            "UPDATE nodes SET source_subs = ?, upstream_missing_cycles = 0, updated_at = ? WHERE id = ?",
+                            (json.dumps(new_sources, ensure_ascii=False), dt_to_str(utcnow()), row["id"]),
+                        )
+                        updated += 1
+                    continue
+
+                if protected_sources:
+                    new_sources = sorted(protected_sources)
+                    if new_sources != sorted(previous_sources) or int(row["upstream_missing_cycles"] or 0) != 0:
+                        conn.execute(
+                            "UPDATE nodes SET source_subs = ?, upstream_missing_cycles = 0, updated_at = ? WHERE id = ?",
+                            (json.dumps(new_sources, ensure_ascii=False), dt_to_str(utcnow()), row["id"]),
+                        )
+                        updated += 1
+                    continue
+
+                missing_cycles = int(row["upstream_missing_cycles"] or 0) + 1
+                missing += 1
+                last_download = str_to_dt(row["last_download_test_at"])
+                recently_verified = last_download is not None and last_download >= recent_success_since
+                protected_status = str(row["status"]) in {NodeStatus.ACTIVE.value, NodeStatus.TESTING.value}
+                if missing_cycles >= threshold and not recently_verified and not protected_status:
+                    deleted_ids.append(str(row["id"]))
+                    continue
+                conn.execute(
+                    "UPDATE nodes SET source_subs = '[]', upstream_missing_cycles = ?, updated_at = ? WHERE id = ?",
+                    (missing_cycles, dt_to_str(utcnow()), row["id"]),
+                )
+                updated += 1
+
+            self._delete_node_ids(conn, deleted_ids)
+        return {"seen": len(seen_sources_by_hash), "missing": missing, "updated": updated, "deleted": len(deleted_ids)}
 
     def count_nodes_by_status(self) -> dict[str, int]:
         with self.lock, self._connect() as conn:
@@ -727,27 +835,34 @@ class SqliteStore:
         now = utcnow().isoformat()
         with self.lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT id FROM nodes WHERE status = ? AND dead_until IS NOT NULL AND dead_until <= ?",
+                """
+                SELECT id FROM nodes
+                WHERE status = ?
+                  AND dead_until IS NOT NULL
+                  AND dead_until <= ?
+                  AND source_subs = '[]'
+                  AND upstream_missing_cycles = 0
+                """,
                 (NodeStatus.DEAD.value, now),
             ).fetchall()
             node_ids = [str(row["id"]) for row in rows]
-            if not node_ids:
-                return 0
-            placeholders = ",".join("?" for _ in node_ids)
-            conn.execute(f"DELETE FROM test_history WHERE node_id IN ({placeholders})", node_ids)
-            conn.execute(f"DELETE FROM client_node_state WHERE node_id IN ({placeholders})", node_ids)
-            conn.execute(f"DELETE FROM assignment_events WHERE node_id IN ({placeholders})", node_ids)
-            conn.execute(f"DELETE FROM usage_events WHERE node_id IN ({placeholders})", node_ids)
-            conn.execute(f"DELETE FROM nodes WHERE id IN ({placeholders})", node_ids)
+            self._delete_node_ids(conn, node_ids)
             return len(node_ids)
 
     def delete_node(self, node_id: str) -> None:
         with self.lock, self._connect() as conn:
-            conn.execute("DELETE FROM test_history WHERE node_id = ?", (node_id,))
-            conn.execute("DELETE FROM client_node_state WHERE node_id = ?", (node_id,))
-            conn.execute("DELETE FROM assignment_events WHERE node_id = ?", (node_id,))
-            conn.execute("DELETE FROM usage_events WHERE node_id = ?", (node_id,))
-            conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
+            self._delete_node_ids(conn, [node_id])
+
+    @staticmethod
+    def _delete_node_ids(conn: sqlite3.Connection, node_ids: list[str]) -> None:
+        if not node_ids:
+            return
+        placeholders = ",".join("?" for _ in node_ids)
+        conn.execute(f"DELETE FROM test_history WHERE node_id IN ({placeholders})", node_ids)
+        conn.execute(f"DELETE FROM client_node_state WHERE node_id IN ({placeholders})", node_ids)
+        conn.execute(f"DELETE FROM assignment_events WHERE node_id IN ({placeholders})", node_ids)
+        conn.execute(f"DELETE FROM usage_events WHERE node_id IN ({placeholders})", node_ids)
+        conn.execute(f"DELETE FROM nodes WHERE id IN ({placeholders})", node_ids)
 
     def delete_nodes_by_status(self, status: NodeStatus) -> int:
         with self.lock, self._connect() as conn:
@@ -967,6 +1082,8 @@ class SqliteStore:
             next_test_at=str_to_dt(row["next_test_at"]),
             exit_info_fetched_at=str_to_dt(row["exit_info_fetched_at"]),
             dead_until=str_to_dt(row["dead_until"]),
+            dead_recheckable=bool(row["dead_recheckable"]),
+            upstream_missing_cycles=int(row["upstream_missing_cycles"] or 0),
         )
 
     def _row_to_client_state(self, row: sqlite3.Row) -> ClientNodeStateRecord:

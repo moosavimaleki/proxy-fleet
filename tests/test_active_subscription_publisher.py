@@ -3,8 +3,10 @@ from __future__ import annotations
 import base64
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from submanager.core.models import NodeStatus
 from submanager.publishing.active_subscription import ActiveSubscriptionPublisher
 
 
@@ -12,6 +14,8 @@ from submanager.publishing.active_subscription import ActiveSubscriptionPublishe
 class FakeNode:
     config_hash: str
     raw_config: str
+    status: NodeStatus = NodeStatus.ACTIVE
+    last_download_test_at: datetime | None = None
 
 
 class FakeStore:
@@ -19,7 +23,15 @@ class FakeStore:
         self.nodes = nodes
 
     def list_nodes_by_status(self, status):  # type: ignore[no-untyped-def]
-        return list(self.nodes)
+        return [node for node in self.nodes if node.status == status]
+
+    def list_nodes_for_publication(self, recent_success_since: datetime):
+        return [
+            node
+            for node in self.nodes
+            if node.status == NodeStatus.ACTIVE
+            or (node.last_download_test_at is not None and node.last_download_test_at >= recent_success_since)
+        ]
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -93,3 +105,31 @@ def test_publisher_commits_only_when_active_content_changes(tmp_path: Path) -> N
     after_restart = reloaded.publish()
     assert after_restart.pushed is False
     assert after_restart.published_count == 3
+
+
+def test_publisher_includes_recently_verified_non_active_nodes(tmp_path: Path) -> None:
+    now = datetime.now(timezone.utc)
+    recent = FakeNode(
+        "recent",
+        "vless://recent",
+        status=NodeStatus.DEAD,
+        last_download_test_at=now - timedelta(hours=23),
+    )
+    stale = FakeNode(
+        "stale",
+        "vless://stale",
+        status=NodeStatus.DEAD,
+        last_download_test_at=now - timedelta(hours=25),
+    )
+    store = FakeStore([recent, stale])
+    publisher = ActiveSubscriptionPublisher(
+        store,  # type: ignore[arg-type]
+        data_dir=tmp_path / "data",
+        remote="",
+        branch="main",
+        author_name="Proxy Fleet Test",
+        author_email="proxy-fleet@example.invalid",
+        recent_success_hours=24,
+    )
+
+    assert publisher._current_configs() == ["vless://recent"]

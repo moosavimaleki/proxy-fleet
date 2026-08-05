@@ -6,7 +6,7 @@ It provides:
 
 - Subscription and manual config import with deduplication.
 - A staged local-health funnel: config validation, batched relay checks, then real downloads only for survivors.
-- Progressive retry backoff for transient failures and long quarantine for invalid configs.
+- Progressive retry backoff for transient failures, periodic dead-node revival, and long quarantine for invalid configs.
 - Periodic relay and download revalidation of active nodes on the same host/network that will use them.
 - Active, probation, dead, and waiting pools.
 - Global VIP/hot port routing to the best current node.
@@ -43,12 +43,14 @@ Runtime data is stored under `data/` and ignored by git except for `data/.gitkee
 
 ## Public tested subscription
 
-The running local Docker service publishes a rolling, de-duplicated union of the current ACTIVE snapshot and the two immediately previous ACTIVE snapshots. This gives clients recently healthy fallbacks while they run their own real-delay tests:
+The running local Docker service publishes a rolling, de-duplicated union of ACTIVE nodes and nodes that completed a successful real download during the previous 24 hours. Two immediately previous eligible snapshots are also retained. This gives clients recently healthy fallbacks while they run their own real-delay tests:
 
 - v2rayN/base64 subscription: `https://raw.githubusercontent.com/moosavimaleki/proxy-fleet/main/subscriptions/active.txt`
 - Plain share URLs: `https://raw.githubusercontent.com/moosavimaleki/proxy-fleet/main/subscriptions/active-raw.txt`
 
 Publication uses a read-only SSH key mounted into the container. No GitHub token or private key is stored in the image or repository. A 60-second reconciliation pass retries failed pushes but creates no commit when the three-snapshot union is unchanged.
+
+Every complete upstream refresh also reconciles normalized configuration hashes. Remarks are ignored for identity. An unhealthy node absent from two complete refreshes is removed, while manual imports, ACTIVE nodes, and recently download-verified nodes are protected.
 
 ## How health is decided
 

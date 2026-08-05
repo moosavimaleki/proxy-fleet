@@ -39,3 +39,25 @@ def download_revalidation_due(
     if last_download_test_at is None:
         return True
     return last_download_test_at <= now - timedelta(seconds=interval_seconds)
+
+
+def dead_retry_at(
+    *,
+    last_download_test_at: datetime | None,
+    recent_success_hours: int,
+    recent_retry_seconds: int,
+    unverified_retry_seconds: int,
+    now: datetime,
+) -> datetime:
+    recently_verified = (
+        last_download_test_at is not None
+        and last_download_test_at >= now - timedelta(hours=recent_success_hours)
+    )
+    retry_seconds = recent_retry_seconds if recently_verified else unverified_retry_seconds
+    return now + timedelta(seconds=retry_seconds)
+
+
+def should_demote_active(*, failure_count: int, threshold: int, download_revalidation: bool) -> bool:
+    if download_revalidation:
+        return True
+    return failure_count >= threshold

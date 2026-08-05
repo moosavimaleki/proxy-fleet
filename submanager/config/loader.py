@@ -16,9 +16,9 @@ from submanager.config.models import (
     PortRange,
     PortSettings,
     PublishingSettings,
-    SentinelTarget,
     SelectionSettings,
     SelectionWeights,
+    SentinelTarget,
     ServiceSettings,
     SubscriptionSettings,
     SubscriptionSource,
@@ -60,6 +60,7 @@ class ConfigLoader:
         urls = [SubscriptionSource(**item) for item in payload.get("urls", [])]
         return SubscriptionSettings(
             refresh_interval_seconds=int(payload.get("refresh_interval_seconds", 60)),
+            prune_missing_after_cycles=int(payload.get("prune_missing_after_cycles", 2)),
             urls=urls,
         )
 
@@ -102,10 +103,18 @@ class ConfigLoader:
         settings.ports.validate()
         if settings.subscriptions.refresh_interval_seconds <= 0:
             raise ValueError("refresh interval must be greater than zero")
+        if settings.subscriptions.prune_missing_after_cycles <= 0:
+            raise ValueError("prune missing cycles must be greater than zero")
         if settings.health.active_pool_relay_check_interval_seconds <= 0:
             raise ValueError("active pool relay check interval must be greater than zero")
         if settings.health.active_pool_download_check_interval_seconds <= 0:
             raise ValueError("active pool download check interval must be greater than zero")
+        if settings.health.active_relay_failure_threshold <= 0:
+            raise ValueError("active relay failure threshold must be greater than zero")
+        if settings.health.probation_failure_threshold <= 0:
+            raise ValueError("probation failure threshold must be greater than zero")
+        if settings.health.probation_success_threshold <= 0:
+            raise ValueError("probation success threshold must be greater than zero")
         if settings.health.candidate_recheck_interval_seconds <= 0:
             raise ValueError("candidate recheck interval must be greater than zero")
         if settings.health.candidate_batch_size <= 0:
@@ -118,6 +127,14 @@ class ConfigLoader:
             raise ValueError("candidate parallel batches must be greater than zero")
         if settings.health.candidate_batch_timeout_seconds <= 0:
             raise ValueError("candidate batch timeout must be greater than zero")
+        if settings.health.recent_success_retention_hours <= 0:
+            raise ValueError("recent success retention must be greater than zero")
+        if settings.health.dead_recheck_batch_size <= 0:
+            raise ValueError("dead recheck batch size must be greater than zero")
+        if settings.health.dead_retry_recent_seconds <= 0:
+            raise ValueError("recent dead retry interval must be greater than zero")
+        if settings.health.dead_retry_unverified_seconds <= 0:
+            raise ValueError("unverified dead retry interval must be greater than zero")
         if settings.health.candidate_max_failures <= 1:
             raise ValueError("candidate max failures must be greater than one")
         if not settings.health.candidate_retry_backoff_seconds:

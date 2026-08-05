@@ -3,7 +3,13 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from submanager.core.scheduling import candidate_retry_at, download_revalidation_due, should_suppress_candidate_failures
+from submanager.core.scheduling import (
+    candidate_retry_at,
+    dead_retry_at,
+    download_revalidation_due,
+    should_demote_active,
+    should_suppress_candidate_failures,
+)
 
 
 class CandidateFailurePolicyTests(unittest.TestCase):
@@ -59,6 +65,35 @@ class CandidateFailurePolicyTests(unittest.TestCase):
                 now=now,
             )
         )
+
+    def test_transient_dead_nodes_retry_sooner_when_previously_verified(self) -> None:
+        now = datetime.now(timezone.utc)
+        self.assertEqual(
+            now + timedelta(hours=2),
+            dead_retry_at(
+                last_download_test_at=now - timedelta(hours=1),
+                recent_success_hours=24,
+                recent_retry_seconds=7200,
+                unverified_retry_seconds=21600,
+                now=now,
+            ),
+        )
+        self.assertEqual(
+            now + timedelta(hours=6),
+            dead_retry_at(
+                last_download_test_at=None,
+                recent_success_hours=24,
+                recent_retry_seconds=7200,
+                unverified_retry_seconds=21600,
+                now=now,
+            ),
+        )
+
+    def test_active_relay_failure_uses_hysteresis_but_download_failure_does_not(self) -> None:
+        self.assertFalse(should_demote_active(failure_count=1, threshold=3, download_revalidation=False))
+        self.assertFalse(should_demote_active(failure_count=2, threshold=3, download_revalidation=False))
+        self.assertTrue(should_demote_active(failure_count=3, threshold=3, download_revalidation=False))
+        self.assertTrue(should_demote_active(failure_count=1, threshold=3, download_revalidation=True))
 
 
 if __name__ == "__main__":

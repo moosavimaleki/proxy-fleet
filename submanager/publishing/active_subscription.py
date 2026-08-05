@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from submanager.core.models import NodeStatus
@@ -23,7 +24,7 @@ class PublishResult:
 
 
 class ActiveSubscriptionPublisher:
-    """Export ACTIVE nodes and push content changes to a Git repository."""
+    """Export active and recently download-verified nodes to a Git repository."""
 
     def __init__(
         self,
@@ -35,6 +36,7 @@ class ActiveSubscriptionPublisher:
         author_name: str,
         author_email: str,
         retained_snapshots: int = 3,
+        recent_success_hours: int = 24,
         command_timeout_seconds: int = 45,
     ) -> None:
         self.store = store
@@ -43,6 +45,7 @@ class ActiveSubscriptionPublisher:
         self.author_name = author_name
         self.author_email = author_email
         self.retained_snapshots = max(1, retained_snapshots)
+        self.recent_success_hours = max(1, recent_success_hours)
         self.command_timeout_seconds = command_timeout_seconds
         self.snapshot_dir = data_dir / "publish"
         self.repo_dir = data_dir / "publisher-repo"
@@ -53,7 +56,7 @@ class ActiveSubscriptionPublisher:
         history = self._update_history(current_configs)
         published_configs = self._merge_history(history)
         raw_payload, encoded_payload = self._encode_configs(published_configs)
-        active_count = len(current_configs)
+        active_count = len(self._active_configs())
         published_count = len(published_configs)
         snapshot_changed = self._write_if_changed(self.snapshot_dir / "active-raw.txt", raw_payload)
         snapshot_changed = self._write_if_changed(self.snapshot_dir / "active.txt", encoded_payload) or snapshot_changed
@@ -85,10 +88,15 @@ class ActiveSubscriptionPublisher:
         return PublishResult(active_count, published_count, len(history), snapshot_changed, changed, True, commit)
 
     def _current_configs(self) -> list[str]:
+        recent_since = datetime.now(timezone.utc) - timedelta(hours=self.recent_success_hours)
         nodes = sorted(
-            self.store.list_nodes_by_status(NodeStatus.ACTIVE),
+            self.store.list_nodes_for_publication(recent_since),
             key=lambda item: (item.config_hash, item.raw_config),
         )
+        return list(dict.fromkeys(node.raw_config.strip() for node in nodes if node.raw_config.strip()))
+
+    def _active_configs(self) -> list[str]:
+        nodes = self.store.list_nodes_by_status(NodeStatus.ACTIVE)
         return list(dict.fromkeys(node.raw_config.strip() for node in nodes if node.raw_config.strip()))
 
     def _update_history(self, current_configs: list[str]) -> list[list[str]]:
@@ -100,7 +108,7 @@ class ActiveSubscriptionPublisher:
             changed = True
         if changed:
             payload = json.dumps(
-                {"version": 1, "snapshots": history},
+                {"version": 2, "snapshots": history},
                 ensure_ascii=False,
                 separators=(",", ":"),
             ).encode("utf-8")
@@ -111,6 +119,8 @@ class ActiveSubscriptionPublisher:
         if self.history_path.exists():
             try:
                 payload = json.loads(self.history_path.read_text(encoding="utf-8"))
+                if not isinstance(payload, dict) or payload.get("version") != 2:
+                    return []
                 raw_snapshots = payload.get("snapshots", []) if isinstance(payload, dict) else []
                 snapshots = [
                     list(dict.fromkeys(item.strip() for item in snapshot if isinstance(item, str) and item.strip()))
@@ -120,38 +130,7 @@ class ActiveSubscriptionPublisher:
                 return snapshots[-self.retained_snapshots :]
             except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 pass
-
-        # One-time migration from the old publisher. Its Git history contains
-        # exact ACTIVE snapshots, so preserve up to the newest configured count.
-        snapshots: list[list[str]] = []
-        if (self.repo_dir / ".git").is_dir():
-            try:
-                revisions = self._run_git(
-                    "log",
-                    f"-{self.retained_snapshots}",
-                    "--format=%H",
-                    "--",
-                    "subscriptions/active-raw.txt",
-                ).splitlines()
-                for revision in reversed(revisions):
-                    content = self._run_git("show", f"{revision}:subscriptions/active-raw.txt")
-                    configs = list(dict.fromkeys(line.strip() for line in content.splitlines() if line.strip()))
-                    if configs and (not snapshots or snapshots[-1] != configs):
-                        snapshots.append(configs)
-            except RuntimeError:
-                snapshots = []
-
-        # The local legacy file may be newer than the last successful push.
-        legacy_path = self.snapshot_dir / "active-raw.txt"
-        if legacy_path.exists():
-            try:
-                configs = [line.strip() for line in legacy_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-                configs = list(dict.fromkeys(configs))
-                if configs and (not snapshots or snapshots[-1] != configs):
-                    snapshots.append(configs)
-            except (OSError, UnicodeDecodeError):
-                pass
-        return snapshots[-self.retained_snapshots :]
+        return []
 
     @staticmethod
     def _merge_history(history: list[list[str]]) -> list[str]:

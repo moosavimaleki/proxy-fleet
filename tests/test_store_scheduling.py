@@ -63,6 +63,54 @@ class StoreSchedulingTests(unittest.TestCase):
         self.assertIn(due.id, [node.id for node in selected])
         self.assertNotIn(deferred.id, [node.id for node in selected])
 
+    def test_dead_recheck_selects_only_due_recheckable_nodes(self) -> None:
+        now = datetime.now(timezone.utc)
+        due = self._save_node("1", status=NodeStatus.DEAD, next_test_at=now - timedelta(seconds=1))
+        deferred = self._save_node("2", status=NodeStatus.DEAD, next_test_at=now + timedelta(hours=1))
+        invalid = self._save_node("3", status=NodeStatus.DEAD, next_test_at=now - timedelta(seconds=1))
+        invalid.dead_recheckable = False
+        self.store.save_node(invalid)
+
+        selected = self.store.list_dead_nodes_for_testing(limit=10)
+
+        self.assertEqual([due.id], [node.id for node in selected])
+        self.assertNotIn(deferred.id, [node.id for node in selected])
+        self.assertNotIn(invalid.id, [node.id for node in selected])
+
+    def test_upstream_reconciliation_prunes_only_after_two_complete_misses(self) -> None:
+        now = datetime.now(timezone.utc)
+        stale = self._save_node("1", status=NodeStatus.DEAD)
+        stale.dead_until = now - timedelta(hours=1)
+        self.store.save_node(stale)
+        current = self._save_node("2")
+        recent = self._save_node("3", status=NodeStatus.DEAD)
+        recent.last_download_test_at = now - timedelta(hours=1)
+        self.store.save_node(recent)
+        manual = self._save_node("4")
+        manual.source_subs = ["manual://import"]
+        self.store.save_node(manual)
+
+        first = self.store.reconcile_upstream_nodes(
+            seen_sources_by_hash={current.config_hash: {"test://source"}},
+            prune_after_cycles=2,
+            recent_success_since=now - timedelta(hours=24),
+        )
+        self.assertEqual(0, first["deleted"])
+        self.assertEqual(1, self.store.get_node(stale.id).upstream_missing_cycles)  # type: ignore[union-attr]
+        self.assertEqual(0, self.store.delete_expired_dead_nodes())
+        self.assertIsNotNone(self.store.get_node(stale.id))
+
+        second = self.store.reconcile_upstream_nodes(
+            seen_sources_by_hash={current.config_hash: {"test://source"}},
+            prune_after_cycles=2,
+            recent_success_since=now - timedelta(hours=24),
+        )
+        self.assertEqual(1, second["deleted"])
+        self.assertIsNone(self.store.get_node(stale.id))
+        self.assertIsNotNone(self.store.get_node(current.id))
+        self.assertIsNotNone(self.store.get_node(recent.id))
+        self.assertIsNotNone(self.store.get_node(manual.id))
+
     def test_node_page_is_filtered_counted_and_does_not_load_every_node(self) -> None:
         self._save_node("1", country="US")
         expected = self._save_node("2", country="DE")

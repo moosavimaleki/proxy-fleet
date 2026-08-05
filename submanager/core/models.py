@@ -68,6 +68,8 @@ class NodeRecord:
     next_test_at: datetime | None = None
     exit_info_fetched_at: datetime | None = None
     dead_until: datetime | None = None
+    dead_recheckable: bool = True
+    upstream_missing_cycles: int = 0
 
 
 @dataclass
