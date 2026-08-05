@@ -16,12 +16,12 @@
 - [x] event append-only، Beta/decay، lifecycle hysteresis، publication lease و full-jitter.
 - [x] cascade Stage 0–4 و Xray batch با split بازگشتی هنگام startup failure.
 - [x] scheduler queue-based، lease اتمی، AIMD جدا برای Xray/download و revalidation ACTIVE.
-- [x] network sentinel/incident guard، selection/feedback circuit و runtime/VIP پایه.
+- [x] network sentinel، guard شکست هم‌بستهٔ یک batch (ثبت incident و evidence inconclusive)، selection/feedback circuit و runtime/VIP پایه.
 - [x] routeهای HTTP سازگار، publisher Git lease-based و Docker multi-stage Rust؛ image محلی build و container healthy است.
 - [x] migration افزایشی روی `app.db` واقعی پس از backup سازگار، سپس startup reconciliation برای runtimeهای ACTIVE و smoke واقعی `/best`.
-- [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، incident aggregation، contract snapshot کامل و soak test؛ این‌ها هنوز شرط انتشار نیستند.
+- [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، incident aggregation بین منبع/protocol/windowهای مستقل، contract snapshot کامل و soak test؛ این‌ها هنوز شرط انتشار نیستند.
 
-آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۲۱
+آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۲۴
 تست) و `cargo clippy --all-targets -- -D warnings` موفق بوده‌اند. Docker
 build و compose startup روی همین میزبان موفق بوده و `/health`، publisher و
 `POST /api/v1/best` نیز روی دادهٔ واقعی smoke شده‌اند. برای محدودیت mirror

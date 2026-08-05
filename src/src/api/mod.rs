@@ -299,6 +299,7 @@ async fn feedback(
 }
 #[derive(Deserialize)]
 struct ManualImportRequest {
+    #[serde(alias = "content")]
     configs: String,
 }
 async fn manual_import(
@@ -439,5 +440,20 @@ mod tests {
             .await
             .expect("head response");
         assert_eq!(head.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn manual_import_accepts_legacy_content_field() {
+        let (_temp, app) = test_router().await;
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/v1/manual-import")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"content":"vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?security=tls#demo"}"#,
+            ))
+            .unwrap();
+        let response = app.oneshot(request).await.expect("import response");
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

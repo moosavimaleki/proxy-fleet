@@ -54,7 +54,9 @@ impl XraySession {
             .arg(&config_path)
             .kill_on_drop(true)
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
+            // We do not consume a child pipe here.  Keeping stderr piped can
+            // deadlock a noisy Xray process once its pipe buffer fills.
+            .stderr(std::process::Stdio::null())
             .spawn()
             .with_context(|| format!("starting Xray binary {binary}"))?;
         let mut session = Self {
@@ -134,7 +136,9 @@ impl XrayBatchSession {
             .arg(&config_path)
             .kill_on_drop(true)
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
+            // See the single-session startup path above: do not leave an
+            // unread pipe attached to a long-lived batch process.
+            .stderr(std::process::Stdio::null())
             .spawn()
             .with_context(|| format!("starting Xray binary {binary}"))?;
         let mut session = Self {

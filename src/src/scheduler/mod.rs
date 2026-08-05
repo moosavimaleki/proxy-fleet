@@ -4,6 +4,7 @@ use chrono::{DateTime, Duration, Utc};
 use sqlx::Row;
 
 use crate::storage::Store;
+use crate::{domain::failure::FailureClass, probe::ProbeReport};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TestJob {
@@ -19,6 +20,29 @@ pub struct QueueQuota {
     pub successful_probation: usize,
     pub recoverable_dormant: usize,
     pub exploration: usize,
+}
+
+/// Detects a correlated failure before the evidence writer sees the batch.
+/// A proxy that has any successful stage is not counted as failed.  Structural
+/// errors remain per-proxy and are deliberately excluded by the caller.
+pub fn is_mass_failure(reports: &[(String, ProbeReport)], threshold_percent: u8) -> bool {
+    if reports.len() < 3 {
+        return false;
+    }
+    let failed = reports
+        .iter()
+        .filter(|(_, report)| {
+            let succeeded = report
+                .events
+                .iter()
+                .any(|event| event.class == FailureClass::Success);
+            let inconclusive_only = report.events.iter().all(|event| {
+                event.class.inconclusive() || event.class == FailureClass::InvalidConfig
+            });
+            !succeeded && !inconclusive_only && !report.events.is_empty()
+        })
+        .count();
+    failed.saturating_mul(100) >= reports.len().saturating_mul(threshold_percent as usize)
 }
 
 impl QueueQuota {
@@ -177,4 +201,51 @@ async fn append_claims(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        domain::{evidence::TestStage, failure::FailureClass},
+        probe::{ProbeEvent, ProbeReport},
+    };
+
+    use super::{QueueQuota, is_mass_failure};
+
+    fn report(class: FailureClass) -> ProbeReport {
+        ProbeReport {
+            proxy: None,
+            events: vec![ProbeEvent {
+                stage: TestStage::Relay,
+                class,
+                fast_download: false,
+                latency_ms: None,
+                download_bps: None,
+                bytes_transferred: None,
+                duration_ms: None,
+                endpoint: None,
+                detail: serde_json::json!({}),
+            }],
+        }
+    }
+
+    #[test]
+    fn queue_quota_conserves_capacity() {
+        let quota = QueueQuota::for_capacity(17);
+        assert_eq!(
+            quota.new + quota.successful_probation + quota.recoverable_dormant + quota.exploration,
+            17
+        );
+    }
+
+    #[test]
+    fn correlated_batch_failure_is_detected_but_single_failure_is_not() {
+        let reports = vec![
+            ("one".to_owned(), report(FailureClass::TcpTimeout)),
+            ("two".to_owned(), report(FailureClass::RelayTimeout)),
+            ("three".to_owned(), report(FailureClass::Success)),
+        ];
+        assert!(is_mass_failure(&reports, 60));
+        assert!(!is_mass_failure(&reports[..2], 40));
+    }
 }

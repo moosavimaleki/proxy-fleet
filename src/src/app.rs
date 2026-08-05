@@ -211,6 +211,28 @@ impl AppState {
                         // recursively isolates startup failures, then permits only a small
                         // number of bounded downloads through that batch.
                         let reports = crate::probe::test_batch(jobs.into_iter().map(|job| (job.id, job.raw_config)).collect(), "scheduler", &config, download_concurrency).await;
+                        let mass_failure = crate::scheduler::is_mass_failure(
+                            &reports,
+                            config.network_guard.mass_failure_threshold_percent,
+                        );
+                        let incident_id = mass_failure.then(|| format!("batch-{}", uuid::Uuid::new_v4().simple()));
+                        if mass_failure {
+                            let message = format!("correlated failure detected across {} scheduler jobs", reports.len());
+                            {
+                                let mut runtime = state.runtime.write().await;
+                                runtime.network_incident = true;
+                                runtime.network_message = message.clone();
+                            }
+                            if let Err(error) = store.record_system_event(
+                                "WARN",
+                                "incident",
+                                "MASS_FAILURE",
+                                &message,
+                                serde_json::json!({"jobs": reports.len(), "threshold_percent": config.network_guard.mass_failure_threshold_percent}),
+                            ).await {
+                                warn!(%error, "could not record correlated scheduler failure");
+                            }
+                        }
                         let mut results = Vec::with_capacity(reports.len());
                         for (node_id, report) in reports {
                             let mut real_download_success = false;
@@ -218,7 +240,10 @@ impl AppState {
                             for probe_event in report.events {
                                 real_download_success |= probe_event.stage == crate::domain::evidence::TestStage::Download
                                     && probe_event.class == crate::domain::failure::FailureClass::Success;
-                                let event = crate::storage::TestEventInput { proxy_id: node_id.clone(), run_id: run_id.clone(), stage: probe_event.stage, class: probe_event.class, fast_download: probe_event.fast_download, latency_ms: probe_event.latency_ms, download_bps: probe_event.download_bps, bytes_transferred: probe_event.bytes_transferred, duration_ms: probe_event.duration_ms, endpoint: probe_event.endpoint, system_pressure: Some(crate::scheduler::system_pressure()), incident_id: None, detail_json: probe_event.detail };
+                                let class = if mass_failure && probe_event.class != crate::domain::failure::FailureClass::Success && probe_event.class != crate::domain::failure::FailureClass::InvalidConfig {
+                                    crate::domain::failure::FailureClass::EndpointFailure
+                                } else { probe_event.class };
+                                let event = crate::storage::TestEventInput { proxy_id: node_id.clone(), run_id: run_id.clone(), stage: probe_event.stage, class, fast_download: probe_event.fast_download, latency_ms: probe_event.latency_ms, download_bps: probe_event.download_bps, bytes_transferred: probe_event.bytes_transferred, duration_ms: probe_event.duration_ms, endpoint: probe_event.endpoint, system_pressure: Some(crate::scheduler::system_pressure()), incident_id: incident_id.clone(), detail_json: probe_event.detail };
                                 if let Err(error) = store.apply_test_event(event, Duration::from_secs(config.health.active_pool_download_check_interval_seconds)).await { warn!(node = %node_id, %error, "could not persist test event"); }
                             }
                             if real_download_success {
