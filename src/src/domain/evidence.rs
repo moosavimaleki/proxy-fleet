@@ -146,3 +146,54 @@ pub fn full_jitter_delay(failure_streak: u32, had_real_success: bool, dormant: b
     let ceiling = base_seconds.saturating_mul(1_u64 << shift).min(cap_seconds);
     Duration::seconds(rand::rng().random_range(0..=ceiling) as i64)
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{Duration, TimeZone, Utc};
+    use proptest::prelude::*;
+
+    use super::{TestStage, decay, full_jitter_delay, health, lease_until};
+
+    #[test]
+    fn decay_halves_exactly_at_the_half_life() {
+        assert!((decay(8.0, Duration::hours(24), Duration::hours(24)) - 4.0).abs() < 1e-9);
+        assert!((decay(8.0, Duration::zero(), Duration::hours(24)) - 8.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn leases_match_the_publication_policy() {
+        let now = Utc.with_ymd_and_hms(2026, 8, 5, 9, 0, 0).unwrap();
+        assert_eq!(
+            lease_until(TestStage::Download, true, now),
+            now + Duration::hours(12)
+        );
+        assert_eq!(
+            lease_until(TestStage::Download, false, now),
+            now + Duration::hours(6)
+        );
+        assert_eq!(
+            lease_until(TestStage::Http, false, now),
+            now + Duration::hours(2)
+        );
+        assert_eq!(
+            lease_until(TestStage::Relay, false, now),
+            now + Duration::minutes(30)
+        );
+    }
+
+    proptest! {
+        #[test]
+        fn health_is_always_finite_and_bounded(alpha in -1.0e12_f64..1.0e12, beta in -1.0e12_f64..1.0e12) {
+            let score = health(alpha, beta);
+            prop_assert!(score.is_finite());
+            prop_assert!((0.0..=1.0).contains(&score));
+        }
+
+        #[test]
+        fn jitter_is_never_negative_or_above_its_cap(streak in 0_u32..30, successful in any::<bool>(), dormant in any::<bool>()) {
+            let delay = full_jitter_delay(streak, successful, dormant);
+            let cap = if dormant { 12 * 60 * 60 } else if successful { 6 * 60 * 60 } else { 24 * 60 * 60 };
+            prop_assert!((0..=cap).contains(&delay.num_seconds()));
+        }
+    }
+}

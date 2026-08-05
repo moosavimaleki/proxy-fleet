@@ -62,6 +62,40 @@ impl AppState {
         ]
     }
 
+    /// Process-local Xray ports cannot survive a restart.  Restore a runtime
+    /// for every still-publishable ACTIVE node before serving `/best`; a
+    /// failure remains isolated to that node and does not demote its evidence.
+    pub async fn reconcile_active_runtimes(&self) -> (usize, usize) {
+        let candidates = match self.store.active_runtime_candidates().await {
+            Ok(candidates) => candidates,
+            Err(error) => {
+                warn!(%error, "could not load ACTIVE runtimes for reconciliation");
+                return (0, 0);
+            }
+        };
+        let mut started = 0;
+        let mut failed = 0;
+        for candidate in candidates {
+            match self
+                .xray_runtimes
+                .ensure(
+                    &candidate.id,
+                    &candidate.raw_config,
+                    &self.config,
+                    &self.store,
+                )
+                .await
+            {
+                Ok(_) => started += 1,
+                Err(error) => {
+                    failed += 1;
+                    warn!(node = %candidate.id, %error, "could not reconcile ACTIVE runtime");
+                }
+            }
+        }
+        (started, failed)
+    }
+
     fn spawn_network_guard(&self) -> JoinHandle<()> {
         let state = self.clone();
         tokio::spawn(async move {

@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        RUNTIME_BASE: runtime-cached
     container_name: config-orchestrator
     restart: unless-stopped
     network_mode: host
@@ -12,12 +14,13 @@ services:
         soft: 65535
         hard: 65535
     environment:
+      HOME: /home/app
       GIT_SSH_COMMAND: "ssh -i /run/secrets/github_ssh_key -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o Hostname=ssh.github.com -p 443"
     volumes:
       - ./data:/app/data
       - ./config/config.yml:/app/config/config.yml:ro
       - /home/h-mousavi/.ssh/id_ed25519:/run/secrets/github_ssh_key:ro
-      - /home/h-mousavi/.ssh/known_hosts:/root/.ssh/known_hosts:ro
+      - /home/h-mousavi/.ssh/known_hosts:/home/app/.ssh/known_hosts:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 30s

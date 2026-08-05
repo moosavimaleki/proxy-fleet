@@ -12,17 +12,21 @@
 - [x] crate Rust، config سازگار YAML، shutdown، logging JSON، Axum و health endpoint.
 - [x] migration افزایشی SQLite، backup پیش از اولین migration، WAL/busy timeout و نگاشت `DEAD → DORMANT` / `REMOVED → RETIRED`.
 - [x] parser و identity مستقل از remark برای VMess/VLESS/Trojan/SS/SOCKS، شامل SS SIP002.
-- [x] refresh generation با fetch bounded، dedup و ingest تراکنشی انبوه.
+- [x] refresh generation با fetch bounded، ETag/Last-Modified، dedup و ingest تراکنشی انبوه؛ `304` membership generation را حفظ می‌کند.
 - [x] event append-only، Beta/decay، lifecycle hysteresis، publication lease و full-jitter.
 - [x] cascade Stage 0–4 و Xray batch با split بازگشتی هنگام startup failure.
 - [x] scheduler queue-based، lease اتمی، AIMD جدا برای Xray/download و revalidation ACTIVE.
 - [x] network sentinel/incident guard، selection/feedback circuit و runtime/VIP پایه.
-- [x] routeهای HTTP سازگار، publisher Git lease-based و Docker multi-stage Rust.
-- [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، shadow migration و deploy/recreate؛ این‌ها هنوز شرط انتشار نیستند.
+- [x] routeهای HTTP سازگار، publisher Git lease-based و Docker multi-stage Rust؛ image محلی build و container healthy است.
+- [x] migration افزایشی روی `app.db` واقعی پس از backup سازگار، سپس startup reconciliation برای runtimeهای ACTIVE و smoke واقعی `/best`.
+- [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، incident aggregation، contract snapshot کامل و soak test؛ این‌ها هنوز شرط انتشار نیستند.
 
-آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` و
-`cargo clippy --all-targets -- -D warnings` موفق بوده‌اند. Docker build در
-این میزبان هنوز به دلیل timeout دسترسی آن به Docker Hub تأیید نشده است.
+آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۲۱
+تست) و `cargo clippy --all-targets -- -D warnings` موفق بوده‌اند. Docker
+build و compose startup روی همین میزبان موفق بوده و `/health`، publisher و
+`POST /api/v1/best` نیز روی دادهٔ واقعی smoke شده‌اند. برای محدودیت mirror
+Debian در این میزبان، compose از stage محلیِ `runtime-cached` استفاده می‌کند؛
+مسیر استاندارد `runtime-network` همچنان در Dockerfile باقی مانده است.
 
 ## 1. هدف نهایی
 

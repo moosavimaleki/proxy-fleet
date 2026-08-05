@@ -19,6 +19,15 @@ pub struct RefreshReport {
     pub errors: Vec<String>,
 }
 
+enum FetchResult {
+    Body {
+        body: String,
+        etag: Option<String>,
+        last_modified: Option<String>,
+    },
+    NotModified,
+}
+
 pub async fn refresh(store: &Store, config: Arc<AppConfig>) -> anyhow::Result<RefreshReport> {
     let sources = config.subscriptions.urls.clone();
     let (run_id, generation) = store.begin_refresh(sources.len()).await?;
@@ -27,17 +36,49 @@ pub async fn refresh(store: &Store, config: Arc<AppConfig>) -> anyhow::Result<Re
         .timeout(Duration::from_secs(30))
         .user_agent("proxy-fleet/0.1")
         .build()?;
-    let mut requests = stream::iter(sources.iter().cloned().map(|source| {
-        let client = client.clone();
-        async move {
-            let result = async {
-                let response = client.get(&source.url).send().await?.error_for_status()?;
-                response.text().await
+    let mut cached_sources = Vec::with_capacity(sources.len());
+    for source in &sources {
+        let (etag, last_modified) = store.source_http_cache(&source.name).await?;
+        cached_sources.push((source.clone(), etag, last_modified));
+    }
+    let mut requests = stream::iter(cached_sources.into_iter().map(
+        |(source, etag, last_modified)| {
+            let client = client.clone();
+            async move {
+                let result: anyhow::Result<FetchResult> = async {
+                    let mut request = client.get(&source.url);
+                    if let Some(etag) = etag.as_deref() {
+                        request = request.header(reqwest::header::IF_NONE_MATCH, etag);
+                    }
+                    if let Some(last_modified) = last_modified.as_deref() {
+                        request = request.header(reqwest::header::IF_MODIFIED_SINCE, last_modified);
+                    }
+                    let response = request.send().await?;
+                    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+                        return Ok(FetchResult::NotModified);
+                    }
+                    let response = response.error_for_status()?;
+                    let headers = response.headers();
+                    let etag = headers
+                        .get(reqwest::header::ETAG)
+                        .and_then(|value| value.to_str().ok())
+                        .map(str::to_owned);
+                    let last_modified = headers
+                        .get(reqwest::header::LAST_MODIFIED)
+                        .and_then(|value| value.to_str().ok())
+                        .map(str::to_owned);
+                    let body = response.text().await?;
+                    Ok(FetchResult::Body {
+                        body,
+                        etag,
+                        last_modified,
+                    })
+                }
+                .await;
+                (source, result)
             }
-            .await;
-            (source, result)
-        }
-    }))
+        },
+    ))
     .buffer_unordered(8);
     let mut successful_sources = 0;
     let mut accepted = 0;
@@ -46,15 +87,34 @@ pub async fn refresh(store: &Store, config: Arc<AppConfig>) -> anyhow::Result<Re
     let mut parsed = Vec::new();
     while let Some((source, result)) = requests.next().await {
         match result {
-            Ok(body) => {
+            Ok(FetchResult::Body {
+                body,
+                etag,
+                last_modified,
+            }) => {
                 successful_sources += 1;
                 store
-                    .record_source_success(&source.name, &source.url)
+                    .record_source_success(
+                        &source.name,
+                        &source.url,
+                        etag.as_deref(),
+                        last_modified.as_deref(),
+                    )
                     .await?;
                 let report = parse_subscription(&body, &source.name);
                 accepted += report.accepted.len();
                 rejected += report.rejected.len();
                 parsed.extend(report.accepted);
+            }
+            Ok(FetchResult::NotModified) => {
+                successful_sources += 1;
+                let copied = store
+                    .copy_cached_source_generation(&source.name, generation)
+                    .await?;
+                store
+                    .record_source_success(&source.name, &source.url, None, None)
+                    .await?;
+                accepted += copied as usize;
             }
             Err(error) => {
                 store

@@ -97,6 +97,12 @@ pub struct VipCandidate {
     pub score: f64,
 }
 
+#[derive(Debug, Clone)]
+pub struct RuntimeCandidate {
+    pub id: String,
+    pub raw_config: String,
+}
+
 impl Store {
     pub async fn connect(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref();
@@ -344,7 +350,7 @@ impl Store {
     ) -> anyhow::Result<TestEventApplied> {
         let now = Utc::now();
         let mut transaction = self.pool.begin().await?;
-        let row = sqlx::query("SELECT lifecycle_state, testing_from_state, status, publication_lease_until, activated_at, failure_streak, independent_failure_count, last_success_at, last_real_download_at, last_failure_run_id FROM nodes WHERE id = ?")
+        let row = sqlx::query("SELECT lifecycle_state, testing_from_state, status, publication_lease_until, activated_at, failure_streak, independent_failure_count, last_success_at, last_real_download_at, last_failure_run_id, health_score, next_test_at FROM nodes WHERE id = ?")
             .bind(&event.proxy_id)
             .fetch_optional(&mut *transaction)
             .await?
@@ -357,6 +363,28 @@ impl Store {
             .unwrap_or_else(|| "CANDIDATE".to_owned())
             .parse()
             .unwrap_or(LifecycleState::Candidate);
+        // A worker may be retried after it has persisted an event but before
+        // acknowledging completion.  The event stream must remain append-only
+        // *and* idempotent: the same run/stage is one observation, never two.
+        let already_applied = sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM proxy_test_events WHERE proxy_id = ? AND run_id = ? AND stage = ?)",
+        )
+        .bind(&event.proxy_id)
+        .bind(&event.run_id)
+        .bind(event.stage.as_str())
+        .fetch_one(&mut *transaction)
+        .await?
+            != 0;
+        if already_applied {
+            transaction.commit().await?;
+            return Ok(TestEventApplied {
+                lifecycle_state: lifecycle.as_str().to_owned(),
+                health_score: row.get::<Option<f64>, _>("health_score").unwrap_or(0.5),
+                publication_lease_until: parse_time(row.get("publication_lease_until")),
+                next_test_at: parse_time(row.get("next_test_at")).unwrap_or(now),
+                inconclusive: event.class.inconclusive(),
+            });
+        }
         let contribution = event_contribution(event.stage, event.class, event.fast_download);
         let mut detail = event.detail_json;
         if let serde_json::Value::Object(ref mut object) = detail {
@@ -566,10 +594,58 @@ impl Store {
         Ok(true)
     }
 
-    pub async fn record_source_success(&self, name: &str, url: &str) -> anyhow::Result<()> {
-        sqlx::query("INSERT INTO upstream_sources(name, url, enabled, last_success_at, failure_streak) VALUES (?, ?, 1, ?, 0) ON CONFLICT(name) DO UPDATE SET url = excluded.url, enabled = 1, last_success_at = excluded.last_success_at, failure_streak = 0")
-            .bind(name).bind(url).bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
+    pub async fn source_http_cache(
+        &self,
+        name: &str,
+    ) -> anyhow::Result<(Option<String>, Option<String>)> {
+        Ok(sqlx::query_as::<_, (Option<String>, Option<String>)>(
+            "SELECT etag, last_modified FROM upstream_sources WHERE name = ?",
+        )
+        .bind(name)
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or((None, None)))
+    }
+
+    pub async fn record_source_success(
+        &self,
+        name: &str,
+        url: &str,
+        etag: Option<&str>,
+        last_modified: Option<&str>,
+    ) -> anyhow::Result<()> {
+        sqlx::query("INSERT INTO upstream_sources(name, url, enabled, last_success_at, etag, last_modified, failure_streak) VALUES (?, ?, 1, ?, ?, ?, 0) ON CONFLICT(name) DO UPDATE SET url = excluded.url, enabled = 1, last_success_at = excluded.last_success_at, etag = COALESCE(excluded.etag, upstream_sources.etag), last_modified = COALESCE(excluded.last_modified, upstream_sources.last_modified), failure_streak = 0")
+            .bind(name).bind(url).bind(Utc::now().to_rfc3339()).bind(etag).bind(last_modified).execute(&self.pool).await?;
         Ok(())
+    }
+
+    /// A 304 response is a successful observation of a source. Recreate its
+    /// membership for the current generation so reconciliation never treats a
+    /// cached source as if all of its proxies disappeared.
+    pub async fn copy_cached_source_generation(
+        &self,
+        source_name: &str,
+        generation: i64,
+    ) -> anyhow::Result<u64> {
+        let now = Utc::now().to_rfc3339();
+        let mut transaction = self.pool.begin().await?;
+        let previous = sqlx::query_scalar::<_, Option<i64>>(
+            "SELECT MAX(generation) FROM upstream_generation_members WHERE source_name = ? AND generation < ?",
+        )
+        .bind(source_name)
+        .bind(generation)
+        .fetch_one(&mut *transaction)
+        .await?;
+        let Some(previous) = previous else {
+            transaction.commit().await?;
+            return Ok(0);
+        };
+        let copied = sqlx::query("INSERT OR IGNORE INTO upstream_generation_members(generation, source_name, config_hash, seen_at) SELECT ?, source_name, config_hash, ? FROM upstream_generation_members WHERE generation = ? AND source_name = ?")
+            .bind(generation).bind(&now).bind(previous).bind(source_name).execute(&mut *transaction).await?.rows_affected();
+        sqlx::query("UPDATE nodes SET last_seen_generation = ?, upstream_missing_generations = 0, updated_at = ? WHERE config_hash IN (SELECT config_hash FROM upstream_generation_members WHERE generation = ? AND source_name = ?)")
+            .bind(generation).bind(&now).bind(generation).bind(source_name).execute(&mut *transaction).await?;
+        transaction.commit().await?;
+        Ok(copied)
     }
 
     pub async fn record_source_failure(&self, name: &str, url: &str) -> anyhow::Result<()> {
@@ -614,6 +690,22 @@ impl Store {
         .execute(&self.pool)
         .await?
         .rows_affected())
+    }
+
+    pub async fn active_runtime_candidates(&self) -> anyhow::Result<Vec<RuntimeCandidate>> {
+        let rows = sqlx::query(
+            "SELECT id, raw_config FROM nodes WHERE lifecycle_state = 'ACTIVE' AND structurally_valid = 1 AND publication_lease_until > ? ORDER BY health_score DESC, config_hash ASC",
+        )
+        .bind(Utc::now().to_rfc3339())
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| RuntimeCandidate {
+                id: row.get("id"),
+                raw_config: row.get("raw_config"),
+            })
+            .collect())
     }
 
     pub async fn raw_config(&self, proxy_id: &str) -> anyhow::Result<Option<String>> {
@@ -1078,6 +1170,7 @@ const INDEXES: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::parse_share_url;
 
     #[tokio::test]
     async fn fresh_database_migrates_with_evidence_columns() {
@@ -1096,5 +1189,140 @@ mod tests {
         assert!(names.contains("publication_lease_until"));
         assert!(names.contains("last_failure_run_id"));
         assert_eq!(store.counts().await.expect("counts").total, 0);
+    }
+
+    async fn test_store() -> (tempfile::TempDir, Store, String) {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        let proxy = parse_share_url(
+            "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?security=tls&sni=example.com#display",
+            "test",
+        )
+        .expect("parse");
+        store.ingest_proxy(&proxy, 1).await.expect("ingest");
+        let id = sqlx::query_scalar::<_, String>("SELECT id FROM nodes WHERE config_hash = ?")
+            .bind(proxy.config_hash)
+            .fetch_one(store.pool())
+            .await
+            .expect("node id");
+        (temp, store, id)
+    }
+
+    fn event(id: &str, run_id: &str, stage: TestStage, class: FailureClass) -> TestEventInput {
+        TestEventInput {
+            proxy_id: id.to_owned(),
+            run_id: run_id.to_owned(),
+            stage,
+            class,
+            fast_download: true,
+            latency_ms: Some(10.0),
+            download_bps: Some(1_000_000.0),
+            bytes_transferred: Some(1_000_000),
+            duration_ms: Some(1000),
+            endpoint: Some("https://example.test".to_owned()),
+            system_pressure: Some(0.1),
+            incident_id: None,
+            detail_json: serde_json::json!({}),
+        }
+    }
+
+    #[tokio::test]
+    async fn repeated_stage_in_one_run_is_idempotent() {
+        let (_temp, store, id) = test_store().await;
+        let first = store
+            .apply_test_event(
+                event(&id, "one-run", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(300),
+            )
+            .await
+            .expect("first event");
+        let second = store
+            .apply_test_event(
+                event(&id, "one-run", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(300),
+            )
+            .await
+            .expect("duplicate event");
+        let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM proxy_test_events")
+            .fetch_one(store.pool())
+            .await
+            .expect("event count");
+        assert_eq!(count, 1);
+        assert_eq!(first.lifecycle_state, "ACTIVE");
+        assert_eq!(first.lifecycle_state, second.lifecycle_state);
+        assert!((first.health_score - second.health_score).abs() < f64::EPSILON);
+    }
+
+    #[tokio::test]
+    async fn endpoint_incident_does_not_demote_or_shorten_an_active_lease() {
+        let (_temp, store, id) = test_store().await;
+        let active = store
+            .apply_test_event(
+                event(&id, "download", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(300),
+            )
+            .await
+            .expect("activate");
+        let incident = store
+            .apply_test_event(
+                event(
+                    &id,
+                    "incident",
+                    TestStage::Http,
+                    FailureClass::EndpointFailure,
+                ),
+                std::time::Duration::from_secs(300),
+            )
+            .await
+            .expect("incident event");
+        assert_eq!(incident.lifecycle_state, "ACTIVE");
+        assert!(incident.inconclusive);
+        assert_eq!(
+            incident.publication_lease_until,
+            active.publication_lease_until
+        );
+    }
+
+    #[tokio::test]
+    async fn cached_source_members_are_carried_into_a_not_modified_generation() {
+        let (_temp, store, id) = test_store().await;
+        let copied = store
+            .copy_cached_source_generation("test", 2)
+            .await
+            .expect("copy membership");
+        assert_eq!(copied, 1);
+        let generation = sqlx::query_scalar::<_, Option<i64>>(
+            "SELECT last_seen_generation FROM nodes WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_one(store.pool())
+        .await
+        .expect("generation");
+        assert_eq!(generation, Some(2));
+        let memberships = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM upstream_generation_members WHERE generation = 2 AND source_name = 'test'",
+        )
+        .fetch_one(store.pool())
+        .await
+        .expect("memberships");
+        assert_eq!(memberships, 1);
+    }
+
+    #[tokio::test]
+    async fn recently_downloaded_active_is_reconciled_as_runtime_candidate() {
+        let (_temp, store, id) = test_store().await;
+        store
+            .apply_test_event(
+                event(&id, "download", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(300),
+            )
+            .await
+            .expect("activate");
+        let candidates = store.active_runtime_candidates().await.expect("candidates");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].id, id);
     }
 }

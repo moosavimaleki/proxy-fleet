@@ -523,6 +523,8 @@ fn redact(raw: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
 
     #[test]
@@ -559,5 +561,68 @@ mod tests {
         assert_eq!(parsed.protocol, "ss");
         assert_eq!(parsed.port, 443);
         assert_eq!(parsed.normalized_config["method"], "chacha20-ietf-poly1305");
+    }
+
+    #[test]
+    fn supports_all_documented_vless_transports_and_security_modes() {
+        for (network, extra) in [
+            ("tcp", ""),
+            ("ws", "&host=cdn.example.com&path=%2Fws"),
+            ("grpc", "&serviceName=grpc-service"),
+            ("httpupgrade", "&host=cdn.example.com&path=%2Fupgrade"),
+            ("splithttp", "&host=cdn.example.com&path=%2Fsplit"),
+            ("xhttp", "&host=cdn.example.com&path=%2Fxhttp"),
+            ("kcp", "&headerType=srtp"),
+            ("quic", ""),
+        ] {
+            let raw = format!(
+                "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?type={network}&security=tls&sni=example.com{extra}#label"
+            );
+            let proxy = parse_share_url(&raw, "fixture").expect(network);
+            let outbound = xray_outbound(&proxy).expect(network);
+            assert_eq!(outbound["streamSettings"]["network"], network);
+            assert_eq!(outbound["streamSettings"]["security"], "tls");
+        }
+        let reality = parse_share_url(
+            "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?type=tcp&security=reality&pbk=public-key&sid=abcd&sni=example.com#label",
+            "fixture",
+        )
+        .expect("reality parse");
+        assert_eq!(
+            xray_outbound(&reality).unwrap()["streamSettings"]["security"],
+            "reality"
+        );
+    }
+
+    #[test]
+    fn supports_vmess_trojan_and_socks_outbounds() {
+        let vmess_json = serde_json::json!({
+            "v":"2", "ps":"display", "add":"Example.COM", "port":"443",
+            "id":"123e4567-e89b-12d3-a456-426614174001", "aid":"0", "scy":"auto",
+            "net":"ws", "host":"cdn.example.com", "path":"/ws", "tls":"tls", "sni":"example.com"
+        });
+        let vmess = parse_share_url(
+            &format!("vmess://{}", STANDARD.encode(vmess_json.to_string())),
+            "fixture",
+        )
+        .expect("vmess");
+        assert_eq!(xray_outbound(&vmess).unwrap()["protocol"], "vmess");
+        let trojan = parse_share_url(
+            "trojan://password@example.com:443?security=tls&sni=example.com#label",
+            "fixture",
+        )
+        .expect("trojan");
+        assert_eq!(xray_outbound(&trojan).unwrap()["protocol"], "trojan");
+        let socks =
+            parse_share_url("socks5://user:pass@example.com:1080#label", "fixture").expect("socks");
+        assert_eq!(xray_outbound(&socks).unwrap()["protocol"], "socks");
+    }
+
+    proptest! {
+        #[test]
+        fn arbitrary_subscription_input_never_panics(value in ".{0,8192}") {
+            let result = std::panic::catch_unwind(|| parse_subscription(&value, "fuzz"));
+            prop_assert!(result.is_ok());
+        }
     }
 }

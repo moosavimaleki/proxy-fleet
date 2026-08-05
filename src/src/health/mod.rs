@@ -193,4 +193,35 @@ mod tests {
         let decision = decide(event);
         assert_eq!(decision.lifecycle, LifecycleState::Active);
     }
+
+    #[test]
+    fn active_demotes_only_after_residence_and_two_independent_failures() {
+        let mut event = input(
+            LifecycleState::Active,
+            TestStage::Relay,
+            FailureClass::TcpTimeout,
+        );
+        event.alpha = 1.0;
+        event.beta = 9.0;
+        event.activated_at = Some(event.now - ACTIVE_MIN_RESIDENCE - Duration::minutes(1));
+        event.independent_failures = 1;
+        assert_eq!(decide(event).lifecycle, LifecycleState::Probation);
+    }
+
+    #[test]
+    fn inconclusive_event_preserves_failure_counters_and_lease() {
+        let mut event = input(
+            LifecycleState::Active,
+            TestStage::Http,
+            FailureClass::EndpointFailure,
+        );
+        event.failure_streak = 4;
+        event.independent_failures = 3;
+        event.prior_lease_until = Some(event.now + Duration::hours(4));
+        let result = decide(event);
+        assert_eq!(result.lifecycle, LifecycleState::Active);
+        assert_eq!(result.failure_streak, 4);
+        assert_eq!(result.independent_failures, 3);
+        assert!(result.lease_until.is_some());
+    }
 }

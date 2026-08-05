@@ -350,9 +350,94 @@ fn api_error(error: anyhow::Error) -> axum::response::Response {
     )
         .into_response()
 }
+
 fn bad_request(code: &str) -> axum::response::Response {
     (StatusCode::BAD_REQUEST, Json(json!({"error":code}))).into_response()
 }
 fn not_found(code: &str) -> axum::response::Response {
     (StatusCode::NOT_FOUND, Json(json!({"error":code}))).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
+
+    use crate::{app::AppState, config::AppConfig, storage::Store};
+
+    async fn test_router() -> (tempfile::TempDir, axum::Router) {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        let state = AppState::new(
+            Arc::new(AppConfig::default()),
+            store,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        (temp, super::router(state))
+    }
+
+    #[tokio::test]
+    async fn compatibility_routes_are_available_and_bounded() {
+        let (_temp, app) = test_router().await;
+        for uri in [
+            "/health",
+            "/api/v1/nodes?page=1&page_size=100000",
+            "/api/v1/network",
+            "/api/v1/vip",
+            "/api/v1/scheduler",
+            "/api/v1/health-model",
+            "/api/v1/upstream",
+            "/api/v1/incidents",
+            "/api/v1/clients",
+            "/api/v1/logs",
+            "/",
+            "/clients",
+            "/diag",
+            "/logs",
+            "/history",
+            "/manual-import",
+            "/docs",
+        ] {
+            let response = app
+                .clone()
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::OK, "{uri}");
+        }
+    }
+
+    #[tokio::test]
+    async fn manual_import_and_head_health_follow_contract() {
+        let (_temp, app) = test_router().await;
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/v1/manual-import")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"configs":"vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?security=tls#demo"}"#,
+            ))
+            .unwrap();
+        let response = app.clone().oneshot(request).await.expect("import response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let head = app
+            .oneshot(
+                Request::builder()
+                    .method("HEAD")
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("head response");
+        assert_eq!(head.status(), StatusCode::OK);
+    }
 }

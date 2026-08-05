@@ -35,6 +35,11 @@ async fn main() -> anyhow::Result<()> {
 
     let shutdown = CancellationToken::new();
     let state = AppState::new(config.clone(), store, shutdown.clone());
+    let (restored_runtimes, failed_runtimes) = state.reconcile_active_runtimes().await;
+    info!(
+        restored_runtimes,
+        failed_runtimes, "reconciled ACTIVE Xray runtimes"
+    );
     state.spawn_background_services();
 
     let app = api::router(state.clone())
