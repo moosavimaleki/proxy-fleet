@@ -3,6 +3,7 @@
 
 use std::{path::Path, time::Duration};
 
+use anyhow::Context;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use tokio::process::Command;
 
@@ -52,12 +53,7 @@ pub async fn publish(
         | write_if_changed(&snapshot_dir.join("active.txt"), &encoded).await?;
     let repo_dir = data_dir.join("publisher-repo");
     ensure_repo(&repo_dir, config).await?;
-    run_git(&repo_dir, &["fetch", "origin", &config.git_branch]).await?;
-    run_git(
-        &repo_dir,
-        &["rebase", &format!("origin/{}", config.git_branch)],
-    )
-    .await?;
+    rebase_to_remote(&repo_dir, &config.git_branch).await?;
     let repo_changed = write_if_changed(&repo_dir.join("subscriptions/active-raw.txt"), &raw)
         .await?
         | write_if_changed(&repo_dir.join("subscriptions/active.txt"), &encoded).await?;
@@ -98,11 +94,7 @@ pub async fn publish(
     .await?;
     let pushed = pending.trim().parse::<u64>().unwrap_or(0) > 0;
     if pushed {
-        run_git(
-            &repo_dir,
-            &["push", "origin", &format!("HEAD:{}", config.git_branch)],
-        )
-        .await?;
+        push_with_rebase_retry(&repo_dir, &config.git_branch).await?;
     }
     let commit = run_git(&repo_dir, &["rev-parse", "--short", "HEAD"])
         .await
@@ -116,6 +108,37 @@ pub async fn publish(
         pushed,
         commit,
     })
+}
+
+/// A publisher shares its branch with application code. A concurrent code or
+/// subscription commit can make the first push non-fast-forward; fetch and
+/// rebase once, never reset, then retry the exact HEAD that was rendered.
+async fn push_with_rebase_retry(repo_dir: &Path, branch: &str) -> anyhow::Result<()> {
+    let push_args = ["push", "origin", &format!("HEAD:{branch}")];
+    match run_git(repo_dir, &push_args).await {
+        Ok(_) => Ok(()),
+        Err(first_error) => {
+            rebase_to_remote(repo_dir, branch).await.with_context(|| {
+                format!("push rejected and safe rebase retry could not be prepared: {first_error}")
+            })?;
+            run_git(repo_dir, &push_args)
+                .await
+                .context("publisher push failed after safe rebase retry")?;
+            Ok(())
+        }
+    }
+}
+
+async fn rebase_to_remote(repo_dir: &Path, branch: &str) -> anyhow::Result<()> {
+    run_git(repo_dir, &["fetch", "origin", branch]).await?;
+    let target = format!("origin/{branch}");
+    if let Err(error) = run_git(repo_dir, &["rebase", &target]).await {
+        // A rebase abort returns the working tree to the exact pre-rebase
+        // commit; unlike reset it never throws away a rendered publication.
+        let _ = run_git(repo_dir, &["rebase", "--abort"]).await;
+        return Err(error).context("publisher rebase failed");
+    }
+    Ok(())
 }
 
 async fn ensure_repo(repo_dir: &Path, config: &PublishingConfig) -> anyhow::Result<()> {
