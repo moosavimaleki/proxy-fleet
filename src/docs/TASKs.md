@@ -21,7 +21,7 @@
 - [x] migration افزایشی روی `app.db` واقعی پس از backup سازگار، سپس startup reconciliation برای runtimeهای ACTIVE و smoke واقعی `/best`.
 - [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، incident aggregation بین منبع/protocol/windowهای مستقل، contract snapshot کامل و soak test؛ این‌ها هنوز شرط انتشار نیستند.
 
-آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۲۵
+آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۲۶
 تست) و `cargo clippy --all-targets -- -D warnings` موفق بوده‌اند. Docker
 build و compose startup روی همین میزبان موفق بوده و `/health`، publisher و
 `POST /api/v1/best` نیز روی دادهٔ واقعی smoke شده‌اند. برای محدودیت mirror
@@ -724,11 +724,11 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 در کنار routeهای سازگار، موارد زیر اضافه شوند:
 
-- [ ] `GET /api/v1/scheduler`: queue depth، quota، concurrency، pressure و overdue jobs.
+- [x] `GET /api/v1/scheduler`: queue depth، quota، concurrency، pressure و overdue jobs.
 - [ ] `GET /api/v1/health-model`: thresholdها، decayها و lease policy جاری.
-- [ ] `GET /api/v1/upstream`: آخرین generation، source health و missing counts.
-- [ ] `GET /api/v1/incidents`: incidentهای فعال و اخیر.
-- [ ] `POST /api/v1/nodes/:id/revive`: انتقال کنترل‌شده به queue recovery.
+- [x] `GET /api/v1/upstream`: آخرین generation، source health و missing counts.
+- [x] `GET /api/v1/incidents`: incidentهای فعال و اخیر.
+- [x] `POST /api/v1/nodes/:id/revive`: انتقال کنترل‌شده به queue recovery.
 
 fieldهای جدید node:
 
@@ -846,7 +846,7 @@ fieldهای جدید node:
 
 ### 24.4 end-to-end
 
-- [ ] Docker با DB کپی‌شده بالا بیاید.
+- [x] Docker با DB کپی‌شده بالا بیاید.
 - [ ] manual import تا publication کامل طی شود.
 - [ ] proxy موفق وارد ACTIVE و خروجی شود.
 - [ ] یک timeout بعدی آن را فوراً حذف نکند.
@@ -877,17 +877,17 @@ fieldهای جدید node:
 
 ## 26. Docker و deployment
 
-- [ ] Dockerfile چندمرحله‌ای ساخته شود:
+- [x] Dockerfile چندمرحله‌ای ساخته شود:
   - builder رسمی Rust برای compile؛
   - runtime slim با CA، curl، git/ssh، SQLite runtime tools و Xray.
-- [ ] binary به‌صورت release و stripped ساخته شود.
+- [x] binary به‌صورت release و stripped ساخته شود.
 - [ ] Xray version در build pin یا checksum-verified باشد؛ latest بدون checksum پذیرفته نشود.
-- [ ] compose فعلی host network، nofile، volumeها، SSH mount و healthcheck را حفظ کند.
-- [ ] container name و API port فعلی حفظ شود.
-- [ ] user داخل container تا حد ممکن non-root باشد؛ نیازهای Xray/port بررسی شود.
-- [ ] data/config/subscription pathهای فعلی حفظ شوند.
+- [x] compose فعلی host network، nofile، volumeها، SSH mount و healthcheck را حفظ کند.
+- [x] container name و API port فعلی حفظ شود.
+- [x] user داخل container تا حد ممکن non-root باشد؛ نیازهای Xray/port بررسی شود.
+- [x] data/config/subscription pathهای فعلی حفظ شوند.
 - [ ] startup migration فقط یک instance leader داشته باشد.
-- [ ] healthcheck readiness را بعد از DB migration و worker startup اعلام کند.
+- [x] healthcheck readiness را بعد از DB migration و worker startup اعلام کند.
 
 ## 27. مسیر اجرای مرحله‌ای
 

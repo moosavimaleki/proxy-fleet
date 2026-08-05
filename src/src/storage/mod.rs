@@ -343,6 +343,68 @@ impl Store {
         Ok(pages * page_size)
     }
 
+    /// Bounded operational snapshot for the diagnostics API.  This avoids
+    /// making the dashboard infer scheduler pressure from an unbounded node
+    /// listing.
+    pub async fn scheduler_snapshot(&self) -> anyhow::Result<serde_json::Value> {
+        let rows = sqlx::query(
+            "SELECT lifecycle_state, COUNT(*) AS count, SUM(CASE WHEN next_test_at IS NULL OR next_test_at <= ? THEN 1 ELSE 0 END) AS overdue FROM nodes GROUP BY lifecycle_state ORDER BY lifecycle_state",
+        )
+        .bind(Utc::now().to_rfc3339())
+        .fetch_all(&self.pool)
+        .await?;
+        let queues: Vec<_> = rows
+            .into_iter()
+            .map(|row| {
+                serde_json::json!({
+                    "state": row.get::<Option<String>, _>("lifecycle_state").unwrap_or_else(|| "CANDIDATE".to_owned()),
+                    "depth": row.get::<i64, _>("count"),
+                    "overdue": row.get::<Option<i64>, _>("overdue").unwrap_or_default(),
+                })
+            })
+            .collect();
+        Ok(serde_json::json!({"queues":queues}))
+    }
+
+    /// Source-level health and current reconciliation state for diagnostics.
+    pub async fn upstream_snapshot(&self) -> anyhow::Result<serde_json::Value> {
+        let latest = sqlx::query(
+            "SELECT generation, status, finished_at, parsed_count, successful_source_count, source_count FROM upstream_refresh_runs ORDER BY generation DESC LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        let sources = sqlx::query(
+            "SELECT name, url, enabled, last_success_at, failure_streak, etag, last_modified FROM upstream_sources ORDER BY name",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let missing = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM nodes WHERE upstream_missing_generations > 0 AND source_subs NOT LIKE '%manual%'",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(serde_json::json!({
+            "latest": latest.map(|row| serde_json::json!({
+                "generation":row.get::<i64,_>("generation"),
+                "status":row.get::<String,_>("status"),
+                "finished_at":row.get::<Option<String>,_>("finished_at"),
+                "parsed_count":row.get::<i64,_>("parsed_count"),
+                "successful_sources":row.get::<i64,_>("successful_source_count"),
+                "source_count":row.get::<i64,_>("source_count"),
+            })),
+            "sources": sources.into_iter().map(|row| serde_json::json!({
+                "name":row.get::<String,_>("name"),
+                "url":row.get::<String,_>("url"),
+                "enabled":row.get::<i64,_>("enabled") != 0,
+                "last_success_at":row.get::<Option<String>,_>("last_success_at"),
+                "failure_streak":row.get::<i64,_>("failure_streak"),
+                "etag":row.get::<Option<String>,_>("etag"),
+                "last_modified":row.get::<Option<String>,_>("last_modified"),
+            })).collect::<Vec<_>>(),
+            "nodes_with_missing_generations":missing,
+        }))
+    }
+
     pub async fn apply_test_event(
         &self,
         event: TestEventInput,
@@ -1401,5 +1463,28 @@ mod tests {
                 .await
                 .expect("retired state");
         assert_eq!(retired, "RETIRED");
+    }
+
+    #[tokio::test]
+    async fn diagnostics_snapshots_are_bounded_and_include_source_health() {
+        let (_temp, store, _id) = test_store().await;
+        store
+            .record_source_success("test", "https://example.test/sub", Some("tag"), None)
+            .await
+            .expect("source success");
+        let (run_id, generation) = store.begin_refresh(1).await.expect("refresh");
+        store
+            .finish_refresh(&run_id, generation, 1, 1, 1, 3)
+            .await
+            .expect("finish");
+        let scheduler = store
+            .scheduler_snapshot()
+            .await
+            .expect("scheduler snapshot");
+        assert_eq!(scheduler["queues"].as_array().map(Vec::len), Some(1));
+        let upstream = store.upstream_snapshot().await.expect("upstream snapshot");
+        assert_eq!(upstream["latest"]["generation"], generation);
+        assert_eq!(upstream["sources"][0]["name"], "test");
+        assert_eq!(upstream["sources"][0]["etag"], "tag");
     }
 }

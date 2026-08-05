@@ -167,11 +167,15 @@ async fn vip(State(state): State<AppState>) -> Json<serde_json::Value> {
         ),
     }
 }
-async fn scheduler(State(state): State<AppState>) -> Json<serde_json::Value> {
+async fn scheduler(State(state): State<AppState>) -> impl IntoResponse {
     let runtime = state.runtime.read().await.clone();
-    Json(
-        json!({"runtime":runtime,"policy":{"new":40,"successful_probation":30,"recoverable_dormant":20,"exploration":10},"concurrency":{"xray_initial":4,"download_initial":2}}),
-    )
+    match state.store.scheduler_snapshot().await {
+        Ok(snapshot) => Json(
+            json!({"runtime":runtime,"policy":{"new":40,"successful_probation":30,"recoverable_dormant":20,"exploration":10},"concurrency":{"xray_current":runtime.xray_concurrency,"download_current":runtime.download_concurrency},"snapshot":snapshot}),
+        )
+        .into_response(),
+        Err(error) => api_error(error),
+    }
 }
 async fn health_model() -> Json<serde_json::Value> {
     Json(
@@ -179,11 +183,9 @@ async fn health_model() -> Json<serde_json::Value> {
     )
 }
 async fn upstream_status(State(state): State<AppState>) -> impl IntoResponse {
-    match sqlx::query_as::<_, (Option<i64>, Option<String>, Option<String>, Option<i64>, Option<i64>)>("SELECT generation, status, finished_at, parsed_count, successful_source_count FROM upstream_refresh_runs ORDER BY generation DESC LIMIT 1")
-        .fetch_optional(state.store.pool()).await {
-        Ok(Some((generation, status, finished_at, parsed_count, successful_sources))) => Json(json!({"generation":generation,"status":status,"finished_at":finished_at,"parsed_count":parsed_count,"successful_sources":successful_sources})).into_response(),
-        Ok(None) => Json(json!({"generation":null,"status":"not-yet-started"})).into_response(),
-        Err(error) => api_error(error.into()),
+    match state.store.upstream_snapshot().await {
+        Ok(snapshot) => Json(snapshot).into_response(),
+        Err(error) => api_error(error),
     }
 }
 async fn incidents(State(state): State<AppState>) -> impl IntoResponse {
