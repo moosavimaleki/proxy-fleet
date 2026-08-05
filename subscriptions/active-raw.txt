@@ -1,8 +1,8 @@
 trojan://MiTiVPN@199.232.78.21:443?type=ws&security=tls&path=/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/NL---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN&host=s2s-mitivpn--mitivpn--mitivpn-mitivpn---mitivpn.global.ssl.fastly.net&sni=ssl.fastly.com&alpn=http/1.1&fp=chrome&insecure=1&allowInsecure=1#🇺🇸134094 | ⚡️Telegram = t.me/SOSkeyNET
 trojan://humanity@2.144.21.112:40443?host=www.ignitelimit.com&path=/assignment&sni=www.ignitelimit.com&type=ws#🇮🇷133803 | ⚡️Telegram = t.me/SOSkeyNET
 vless://1ee1f28d-4975-4d7c-95c7-76172c20eed5@185.143.234.238:2086?path=/&security=&encryption=none&host=parsi.parsi.sbs&type=ws#🇮🇷IR-🚀@VPNine1
-vless://7aa508f3-176f-0024-add3-646af94d6288@185.137.232.194:443?mode=packet-up&path=/assets&security=reality&encryption=none&pbk=kYwdZueXQt_DEKPrWTw8yoj6G4AWqupg8UrWjAgWbkE&fp=chrome&type=xhttp&sni=aispir.ru&sid=8ba6e72ee60667f6#@icv2ray
 ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206VkREK3ZERmRxOGFkNFloMmY5aEI3Y0VheVdJS21aa1RhVXh4QzJ1Qy9jOD06d0UwQ0ErcUZ5NkhwWEVZRGNrRWcxU2xocUwzN0JQdEphQ1BvdGt6WWpFMD0@91.107.157.137:56352#@filembad
+vless://7aa508f3-176f-0024-add3-646af94d6288@185.137.232.194:443?mode=packet-up&path=/assets&security=reality&encryption=none&pbk=kYwdZueXQt_DEKPrWTw8yoj6G4AWqupg8UrWjAgWbkE&fp=chrome&type=xhttp&sni=aispir.ru&sid=8ba6e72ee60667f6#@icv2ray
 vless://SoonTeam@ge.imsoon.org:2443?mode=auto&path=/x0netBot&security=reality&encryption=none&extra={"mode":"auto","xPaddingBytes":"100-1000"}&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&fp=chrome&spx=/446d13373223738&type=xhttp&sni=weatherunderground.com&sid=32ac365b183c88#@meliproxyy
 vless://SoonTeam@ge.imsoon.org:8443?security=reality&encryption=none&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&fp=chrome&spx=/446d13373223738&type=grpc&sni=wxug.com&sid=ce77fcf457#@meliproxyy
 vless://SoonTeam@ge.imsoon.org:8443?encryption=none&type=grpc&security=reality&sni=wxug.com&fp=chrome&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&sid=ce77fcf457&spx=/HesarWeb#• 🇩🇪 | 𝗚𝗲𝗿𝗺𝗮𝗻𝘆 - @HesarWeb
@@ -14,6 +14,7 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvOTE3dXZwM2pXSU1reTV1@20.123.9.48:443#@filem
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpHbWwyZTZ6bHVJYThXU3BO@104.46.88.136:443#@filembad
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpCTGVuWHk4amxJZ1NiYWZj@104.46.88.136:443#@filembad
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTptZmZBS1J0azh3Smk4ZkZ1@104.46.88.136:443#@filembad
+vless://518a99df-54f6-4f42-819d-b60abd880edf@176.96.138.122:443?security=reality&encryption=none&pbk=O_YZOJVON0LE1U01hAtNUOVRy7z6fkBUXbMtpCGoGEg&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=kind-vortex.cdn.cachefleet.com#@tootffarangi🍓-5
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpiWDI5N0FzMzFiUU1Sc0xQ@20.123.9.48:443#@filembad
 ss://YWVzLTI1Ni1nY206ZDFmYTJmNGI5OGEzOGJjOA==@62.76.234.75:10901#@Alpha_v2rayIP
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.42:8080#@hex_proxy ²
