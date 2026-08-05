@@ -47,9 +47,9 @@ Debian در این میزبان، compose از stage محلیِ `runtime-cached`
 
 ### 2.1 زبان
 
-- [ ] پیاده‌سازی اصلی با Rust انجام شود.
-- [ ] Go فقط در صورتی دوباره بررسی شود که در زمان اجرا یک مانع اثبات‌شده و غیرقابل‌حل در اکوسیستم Rust پیدا شود؛ در بررسی فعلی چنین مانعی وجود ندارد.
-- [ ] نسخهٔ compiler و dependencyها در `Cargo.lock` قفل شوند تا build قابل‌تکرار باشد.
+- [x] پیاده‌سازی اصلی با Rust انجام شود.
+- [x] Go فقط در صورتی دوباره بررسی شود که در زمان اجرا یک مانع اثبات‌شده و غیرقابل‌حل در اکوسیستم Rust پیدا شود؛ در بررسی فعلی چنین مانعی وجود ندارد.
+- [x] نسخهٔ compiler و dependencyها در `Cargo.lock` قفل شوند تا build قابل‌تکرار باشد.
 
 دلایل انتخاب Rust:
 
@@ -63,25 +63,25 @@ Debian در این میزبان، compose از stage محلیِ `runtime-cached`
 
 ### 2.2 تصمیم‌های رفتاری
 
-- [ ] `health_score`، `next_test_at` و `publication_lease_until` سه مفهوم مستقل باقی بمانند.
-- [ ] یک failure منفرد، مخصوصاً `TLS_TIMEOUT`، باعث حذف proxy اثبات‌شده نشود.
-- [ ] union کردن کورکورانهٔ سه snapshot انتشار قدیمی حذف و با lease جایگزین شود.
-- [ ] `DEAD` قدیمی به `DORMANT` و `REMOVED` به `RETIRED` مهاجرت کند.
-- [ ] remarks در هویت فنی proxy دخالت نداشته باشد.
-- [ ] proxy فقط بعد از دانلود واقعی وارد `ACTIVE` شود.
-- [ ] local subnet یا شبکهٔ خاصی در کد hard-code نشود.
+- [x] `health_score`، `next_test_at` و `publication_lease_until` سه مفهوم مستقل باقی بمانند.
+- [x] یک failure منفرد، مخصوصاً `TLS_TIMEOUT`، باعث حذف proxy اثبات‌شده نشود.
+- [x] union کردن کورکورانهٔ سه snapshot انتشار قدیمی حذف و با lease جایگزین شود.
+- [x] `DEAD` قدیمی به `DORMANT` و `REMOVED` به `RETIRED` مهاجرت کند.
+- [x] remarks در هویت فنی proxy دخالت نداشته باشد.
+- [x] proxy فقط بعد از دانلود واقعی وارد `ACTIVE` شود.
+- [x] local subnet یا شبکهٔ خاصی در کد hard-code نشود.
 - [ ] تمام timeoutها budget سراسری و cancellation امن داشته باشند.
 - [ ] تست‌ها stage-based باشند و هزینهٔ download فقط برای survivorها پرداخت شود.
 
 ### 2.3 مواردی که عمداً در این بازنویسی انجام نمی‌شوند
 
-- [ ] HMM برای lifecycle ساخته نشود.
-- [ ] Neural Network برای تشخیص سلامت ساخته نشود.
-- [ ] Reinforcement Learning وارد scheduler نشود.
-- [ ] Thompson Sampling جداگانه برای تک‌تک proxyها ساخته نشود.
-- [ ] تا وقتی event واقعی کافی و benchmark روشن نداریم، مدل پیچیده‌تر از Bayesian decay اضافه نشود.
-- [ ] GitHub Actions بخشی از runtime اصلی یا شرط کارکرد publisher محلی نباشد.
-- [ ] دیتابیس یا message broker جدید بدون اثبات bottleneck واقعی SQLite اضافه نشود.
+- [x] HMM برای lifecycle ساخته نشود.
+- [x] Neural Network برای تشخیص سلامت ساخته نشود.
+- [x] Reinforcement Learning وارد scheduler نشود.
+- [x] Thompson Sampling جداگانه برای تک‌تک proxyها ساخته نشود.
+- [x] تا وقتی event واقعی کافی و benchmark روشن نداریم، مدل پیچیده‌تر از Bayesian decay اضافه نشود.
+- [x] GitHub Actions بخشی از runtime اصلی یا شرط کارکرد publisher محلی نباشد.
+- [x] دیتابیس یا message broker جدید بدون اثبات bottleneck واقعی SQLite اضافه نشود.
 
 ## 3. فهرست کامل قابلیت‌های موجود و وضعیت آن‌ها
 
@@ -165,33 +165,33 @@ Debian در این میزبان، compose از stage محلیِ `runtime-cached`
 
 ### 4.1 لینک‌های عمومی
 
-- [ ] `subscriptions/active.txt` همچنان subscription مناسب v2rayN تولید کند.
-- [ ] `subscriptions/active-raw.txt` همچنان خطوط raw config را تولید کند.
-- [ ] ترتیب خروجی deterministic باشد تا commit بی‌دلیل ساخته نشود.
-- [ ] یک config با remark متفاوت فقط یک بار منتشر شود.
+- [x] `subscriptions/active.txt` همچنان subscription مناسب v2rayN تولید کند.
+- [x] `subscriptions/active-raw.txt` همچنان خطوط raw config را تولید کند.
+- [x] ترتیب خروجی deterministic باشد تا commit بی‌دلیل ساخته نشود.
+- [x] یک config با remark متفاوت فقط یک بار منتشر شود.
 
 ### 4.2 routeهای فعلی
 
 routeهای زیر باید با همان path باقی بمانند:
 
-- [ ] `GET /health`
-- [ ] `GET /api/v1/nodes`
-- [ ] `GET /api/v1/network`
-- [ ] `GET /api/v1/vip`
-- [ ] `GET /api/v1/clients`
-- [ ] `GET /api/v1/client-status`
-- [ ] `GET /api/v1/logs`
-- [ ] `GET /api/v1/nodes/:id/config`
-- [ ] `GET /api/v1/nodes/:id/history`
-- [ ] `POST /api/v1/best`
-- [ ] `POST /api/v1/feedback`
-- [ ] `POST /api/v1/manual-import`
-- [ ] `POST /api/v1/nodes/dead/clear` به‌عنوان alias سازگار برای پاک‌سازی/بازنشانی dormantها
-- [ ] `POST /api/v1/subscriptions/reload`
-- [ ] `POST /api/v1/db/cleanup`
-- [ ] `POST /api/v1/nodes/:id/test`
-- [ ] صفحات `/`، `/clients`، `/diag`، `/logs`، `/history`، `/manual-import` و `/docs`
-- [ ] `HEAD` برای routeهایی که اکنون پشتیبانی می‌شوند.
+- [x] `GET /health`
+- [x] `GET /api/v1/nodes`
+- [x] `GET /api/v1/network`
+- [x] `GET /api/v1/vip`
+- [x] `GET /api/v1/clients`
+- [x] `GET /api/v1/client-status`
+- [x] `GET /api/v1/logs`
+- [x] `GET /api/v1/nodes/:id/config`
+- [x] `GET /api/v1/nodes/:id/history`
+- [x] `POST /api/v1/best`
+- [x] `POST /api/v1/feedback`
+- [x] `POST /api/v1/manual-import`
+- [x] `POST /api/v1/nodes/dead/clear` به‌عنوان alias سازگار برای پاک‌سازی/بازنشانی dormantها
+- [x] `POST /api/v1/subscriptions/reload`
+- [x] `POST /api/v1/db/cleanup`
+- [x] `POST /api/v1/nodes/:id/test`
+- [x] صفحات `/`، `/clients`، `/diag`، `/logs`، `/history`، `/manual-import` و `/docs`
+- [x] `HEAD` برای routeهایی که اکنون پشتیبانی می‌شوند.
 
 ### 4.3 payloadهای فعلی
 
