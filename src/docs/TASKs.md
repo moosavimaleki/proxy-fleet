@@ -70,7 +70,7 @@ Debian در این میزبان، compose از stage محلیِ `runtime-cached`
 - [x] remarks در هویت فنی proxy دخالت نداشته باشد.
 - [x] proxy فقط بعد از دانلود واقعی وارد `ACTIVE` شود.
 - [x] local subnet یا شبکهٔ خاصی در کد hard-code نشود.
-- [ ] تمام timeoutها budget سراسری و cancellation امن داشته باشند.
+- [x] تمام timeoutها budget سراسری و cancellation امن داشته باشند.
 - [ ] تست‌ها stage-based باشند و هزینهٔ download فقط برای survivorها پرداخت شود.
 
 ### 2.3 مواردی که عمداً در این بازنویسی انجام نمی‌شوند
@@ -504,43 +504,43 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 | local overload | 0 | 0 |
 | endpoint failure | 0 | 0 |
 
-- [ ] threshold دقیق download سریع/قابل‌قبول از config خوانده شود.
-- [ ] evidence هر stage فقط یک‌بار برای هر run اعمال شود.
-- [ ] retry همان stage با همان run id double-count نشود.
+- [x] threshold دقیق download سریع/قابل‌قبول از config خوانده شود.
+- [x] evidence هر stage فقط یک‌بار برای هر run اعمال شود.
+- [x] retry همان stage با همان run id double-count نشود.
 
 ### 10.2 decay
 
-- [ ] evidence مثبت قوی half-life برابر ۲۴ ساعت داشته باشد.
-- [ ] evidence مثبت ضعیف half-life برابر ۶ ساعت داشته باشد.
-- [ ] timeout گذرا half-life برابر ۲ ساعت داشته باشد.
-- [ ] hard failure half-life برابر ۱۲ ساعت داشته باشد.
-- [ ] decay هنگام read/update به‌شکل lazy محاسبه شود؛ timer برای update همهٔ rowها اجرا نشود.
-- [ ] `health_score = alpha / (alpha + beta)` با clamp و prior امن محاسبه شود.
+- [x] evidence مثبت قوی half-life برابر ۲۴ ساعت داشته باشد.
+- [x] evidence مثبت ضعیف half-life برابر ۶ ساعت داشته باشد.
+- [x] timeout گذرا half-life برابر ۲ ساعت داشته باشد.
+- [x] hard failure half-life برابر ۱۲ ساعت داشته باشد.
+- [x] decay هنگام read/update به‌شکل lazy محاسبه شود؛ timer برای update همهٔ rowها اجرا نشود.
+- [x] `health_score = alpha / (alpha + beta)` با clamp و prior امن محاسبه شود.
 
 ### 10.3 hysteresis و transition
 
-- [ ] `CANDIDATE -> ACTIVE` فقط با download واقعی موفق.
-- [ ] `PROBATION -> ACTIVE` با health حداقل `0.70` یا download واقعی موفق.
-- [ ] `ACTIVE -> PROBATION` فقط با health کمتر از `0.35` و حداقل دو failure مستقل.
-- [ ] `PROBATION -> DORMANT` با health کمتر از `0.15` و چند failure جداشده در زمان.
+- [x] `CANDIDATE -> ACTIVE` فقط با download واقعی موفق.
+- [x] `PROBATION -> ACTIVE` با health حداقل `0.70` یا download واقعی موفق.
+- [x] `ACTIVE -> PROBATION` فقط با health کمتر از `0.35` و حداقل دو failure مستقل.
+- [x] `PROBATION -> DORMANT` با health کمتر از `0.15` و چند failure جداشده در زمان.
 - [ ] ACTIVE حداقل ۳۰ دقیقه residence time داشته باشد؛ مقدار config بین ۱۵ تا ۳۰ دقیقه قابل‌تنظیم باشد.
-- [ ] یک TLS timeout هرگز ACTIVE را خارج نکند.
-- [ ] success قوی failure streak را reset کند ولی history را حذف نکند.
-- [ ] transition و event aggregate در یک transaction انجام شود.
+- [x] یک TLS timeout هرگز ACTIVE را خارج نکند.
+- [x] success قوی failure streak را reset کند ولی history را حذف نکند.
+- [x] transition و event aggregate در یک transaction انجام شود.
 
 ## 11. publication lease
 
 leaseهای پیش‌فرض:
 
-- [ ] دانلود سریع: ۱۲ ساعت.
-- [ ] دانلود قابل‌قبول: ۶ ساعت.
-- [ ] HTTP واقعی: ۲ ساعت.
-- [ ] relay: ۳۰ دقیقه.
-- [ ] موفقیت قوی‌تر lease ضعیف‌تر قبلی را کوتاه نکند.
-- [ ] failure معمولی lease را فوراً cancel نکند.
-- [ ] `INVALID_CONFIG` می‌تواند انتشار را فوراً متوقف کند.
-- [ ] `RETIRED` فقط پس از تمام‌شدن lease از خروجی حذف شود.
-- [ ] انتشار فقط اگر `structurally_valid = true` و `lease > now` و state نه INVALID/RETIRED باشد.
+- [x] دانلود سریع: ۱۲ ساعت.
+- [x] دانلود قابل‌قبول: ۶ ساعت.
+- [x] HTTP واقعی: ۲ ساعت.
+- [x] relay: ۳۰ دقیقه.
+- [x] موفقیت قوی‌تر lease ضعیف‌تر قبلی را کوتاه نکند.
+- [x] failure معمولی lease را فوراً cancel نکند.
+- [x] `INVALID_CONFIG` می‌تواند انتشار را فوراً متوقف کند.
+- [x] `RETIRED` فقط پس از تمام‌شدن lease از خروجی حذف شود.
+- [x] انتشار فقط اگر `structurally_valid = true` و `lease > now` و state نه INVALID/RETIRED باشد.
 
 این مدل رفتار موردنیاز «proxy سالم با شکست موقت همچنان به کاربر داده شود» را بدون نگهداری snapshotهای مبهم پیاده می‌کند.
 
@@ -557,12 +557,12 @@ leaseهای پیش‌فرض:
 
 ### 12.2 priority score
 
-- [ ] lease نزدیک به انقضا: `+100`.
-- [ ] سابقهٔ download موفق: `+80`.
-- [ ] آخرین failure از نوع TLS timeout: `+50`.
-- [ ] مدت زیادی تست نشده: `+40`.
-- [ ] در upstream جدید دیده شده: `+30`.
-- [ ] هرگز موفق نشده و failure زیاد دارد: `-80`.
+- [x] lease نزدیک به انقضا: `+100`.
+- [x] سابقهٔ download موفق: `+80`.
+- [x] آخرین failure از نوع TLS timeout: `+50`.
+- [x] مدت زیادی تست نشده: `+40`.
+- [x] در upstream جدید دیده شده: `+30`.
+- [x] هرگز موفق نشده و failure زیاد دارد: `-80`.
 - [ ] pressure بالای سیستم: job سنگین `-100`.
 - [ ] tie-breaker deterministic با مقدار کوچک jitter باشد.
 
@@ -574,25 +574,25 @@ leaseهای پیش‌فرض:
 delay = random(0, min(cap, base * 2^failure_streak))
 ```
 
-- [ ] proxy دارای سابقهٔ success: base پنج دقیقه، cap شش ساعت.
-- [ ] proxy بدون success: base سی دقیقه، cap بیست‌وچهار ساعت.
+- [x] proxy دارای سابقهٔ success: base پنج دقیقه، cap شش ساعت.
+- [x] proxy بدون success: base سی دقیقه، cap بیست‌وچهار ساعت.
 - [ ] dormant recovery: ۶، ۱۲ و ۲۴ ساعت.
 - [ ] `CONNECTION_REFUSED` نسبت به timeout backoff قوی‌تری ایجاد کند.
-- [ ] inconclusive result streak را زیاد نکند و retry کوتاه کنترل‌شده بگیرد.
+- [x] inconclusive result streak را زیاد نکند و retry کوتاه کنترل‌شده بگیرد.
 
 ### 12.4 lease تست و idempotency
 
-- [ ] انتخاب job با atomic claim و `test_lease_until` انجام شود.
-- [ ] worker crash باعث قفل دائمی node نشود؛ lease منقضی شود.
-- [ ] یک node هم‌زمان در دو batch قرار نگیرد.
-- [ ] manual test بتواند اولویت را بالا ببرد، ولی test در حال اجرا را duplicate نکند.
+- [x] انتخاب job با atomic claim و `test_lease_until` انجام شود.
+- [x] worker crash باعث قفل دائمی node نشود؛ lease منقضی شود.
+- [x] یک node هم‌زمان در دو batch قرار نگیرد.
+- [x] manual test بتواند اولویت را بالا ببرد، ولی test در حال اجرا را duplicate نکند.
 
 ## 13. تست مرحله‌ای proxy
 
 ### Stage 0: parse/static
 
-- [ ] syntax، fieldهای لازم، protocol/security/transport support.
-- [ ] نتیجهٔ invalid مستقیم و ارزان ثبت شود.
+- [x] syntax، fieldهای لازم، protocol/security/transport support.
+- [x] نتیجهٔ invalid مستقیم و ارزان ثبت شود.
 
 ### Stage 1: DNS و TCP
 
@@ -603,11 +603,11 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 ### Stage 2: Xray و relay
 
-- [ ] چند proxy در یک Xray batch با inbound SOCKS جدا اجرا شوند.
-- [ ] config قبل از spawn validate شود.
-- [ ] startup readiness با deadline بررسی شود.
-- [ ] failure batch با recursive split، proxy خراب را isolate کند.
-- [ ] relay probe از داخل SOCKS انجام شود.
+- [x] چند proxy در یک Xray batch با inbound SOCKS جدا اجرا شوند.
+- [x] config قبل از spawn validate شود.
+- [x] startup readiness با deadline بررسی شود.
+- [x] failure batch با recursive split، proxy خراب را isolate کند.
+- [x] relay probe از داخل SOCKS انجام شود.
 
 ### Stage 3: HTTP واقعی
 
@@ -617,10 +617,10 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 ### Stage 4: download محدود
 
-- [ ] فقط survivorهای Stage 3 یا موارد مهم نزدیک انقضای lease وارد شوند.
-- [ ] محدودیت پیش‌فرض ۲ تا ۵ ثانیه یا ۱ تا ۲ مگابایت، هرکدام زودتر رخ داد.
-- [ ] سرعت بر اساس byte واقعی و مدت steady window محاسبه شود.
-- [ ] صفر byte با relay موفق failure قوی محسوب شود.
+- [x] فقط survivorهای Stage 3 یا موارد مهم نزدیک انقضای lease وارد شوند.
+- [x] محدودیت پیش‌فرض ۲ تا ۵ ثانیه یا ۱ تا ۲ مگابایت، هرکدام زودتر رخ داد.
+- [x] سرعت بر اساس byte واقعی و مدت steady window محاسبه شود.
+- [x] صفر byte با relay موفق failure قوی محسوب شود.
 - [ ] cancellation download باعث zombie connection/process نشود.
 
 ### metadata

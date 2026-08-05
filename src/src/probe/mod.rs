@@ -30,6 +30,7 @@ pub struct ProbeReport {
 }
 
 pub async fn test(raw_config: &str, source: &str, config: &AppConfig) -> ProbeReport {
+    let deadline = probe_deadline(config);
     let proxy = match parse_share_url(raw_config, source) {
         Ok(proxy) => proxy,
         Err(error) => {
@@ -44,7 +45,7 @@ pub async fn test(raw_config: &str, source: &str, config: &AppConfig) -> ProbeRe
             };
         }
     };
-    if let Err(failure) = preflight(&proxy, config).await {
+    if let Err(failure) = preflight(&proxy, config, deadline).await {
         return ProbeReport {
             proxy: Some(proxy),
             events: vec![failure],
@@ -79,7 +80,7 @@ pub async fn test(raw_config: &str, source: &str, config: &AppConfig) -> ProbeRe
             };
         }
     };
-    let events = test_through_xray(socks_port, config).await;
+    let events = test_through_xray(socks_port, config, deadline).await;
     session.stop().await;
     ProbeReport {
         proxy: Some(proxy),
@@ -101,8 +102,9 @@ pub async fn test_batch(
     let preflight_results = stream::iter(configs.into_iter().map(|(id, raw)| {
         let source = source.clone();
         async move {
+            let deadline = probe_deadline(config);
             let report = match parse_share_url(&raw, &source) {
-                Ok(proxy) => match preflight(&proxy, config).await {
+                Ok(proxy) => match preflight(&proxy, config, deadline).await {
                     Ok(()) => ProbeReport {
                         proxy: Some(proxy),
                         events: Vec::new(),
@@ -122,7 +124,7 @@ pub async fn test_batch(
                     )],
                 },
             };
-            (id, report)
+            (id, report, deadline)
         }
     }))
     .buffer_unordered(download_concurrency.max(1).saturating_mul(2))
@@ -131,10 +133,10 @@ pub async fn test_batch(
 
     let mut results = std::collections::BTreeMap::<String, ProbeReport>::new();
     let mut survivors = Vec::new();
-    for (id, report) in preflight_results {
+    for (id, report, deadline) in preflight_results {
         if let Some(proxy) = report.proxy.clone() {
             if report.events.is_empty() {
-                survivors.push((id.clone(), proxy));
+                survivors.push((id.clone(), proxy, deadline));
             }
         }
         results.insert(id, report);
@@ -147,12 +149,24 @@ pub async fn test_batch(
     results.into_iter().collect()
 }
 
-async fn preflight(proxy: &ParsedProxy, config: &AppConfig) -> Result<(), ProbeEvent> {
+async fn preflight(
+    proxy: &ParsedProxy,
+    config: &AppConfig,
+    deadline: Instant,
+) -> Result<(), ProbeEvent> {
     let tcp_started = Instant::now();
     let address = proxy.address.clone();
     let port = proxy.port;
+    let Some(remaining) = remaining_budget(deadline) else {
+        return Err(event(
+            TestStage::DnsTcp,
+            FailureClass::DnsFailure,
+            None,
+            serde_json::json!({"error":"global probe deadline exceeded before DNS"}),
+        ));
+    };
     let addresses = match tokio::time::timeout(
-        Duration::from_secs(3),
+        remaining.min(Duration::from_secs(3)),
         tokio::net::lookup_host((address.as_str(), port)),
     )
     .await
@@ -183,8 +197,16 @@ async fn preflight(proxy: &ParsedProxy, config: &AppConfig) -> Result<(), ProbeE
             serde_json::json!({"error":"no address returned"}),
         ));
     }
+    let Some(remaining) = remaining_budget(deadline) else {
+        return Err(event(
+            TestStage::DnsTcp,
+            FailureClass::TcpTimeout,
+            Some(tcp_started.elapsed()),
+            serde_json::json!({"error":"global probe deadline exceeded before TCP"}),
+        ));
+    };
     let connected = tokio::time::timeout(
-        Duration::from_millis(config.health.relay_timeout_ms),
+        remaining.min(Duration::from_millis(config.health.relay_timeout_ms)),
         tokio::net::TcpStream::connect(addresses[0]),
     )
     .await;
@@ -219,7 +241,7 @@ async fn preflight(proxy: &ParsedProxy, config: &AppConfig) -> Result<(), ProbeE
 }
 
 async fn test_survivor_batch(
-    survivors: Vec<(String, ParsedProxy)>,
+    survivors: Vec<(String, ParsedProxy, Instant)>,
     config: &AppConfig,
     download_concurrency: usize,
 ) -> Vec<(String, Vec<ProbeEvent>)> {
@@ -236,7 +258,7 @@ async fn test_survivor_batch(
         Err(error) => {
             return survivors
                 .into_iter()
-                .map(|(id, _)| {
+                .map(|(id, _, _)| {
                     (
                         id,
                         vec![event(
@@ -250,25 +272,24 @@ async fn test_survivor_batch(
                 .collect();
         }
     };
-    let proxies: Vec<_> = survivors.iter().map(|(_, proxy)| proxy.clone()).collect();
+    let proxies: Vec<_> = survivors
+        .iter()
+        .map(|(_, proxy, _)| proxy.clone())
+        .collect();
     let ports: Vec<_> = reservations
         .iter()
         .map(|reservation| reservation.port())
         .collect();
     match XrayBatchSession::start(&config.xray_bin, &proxies, reservations).await {
         Ok(mut session) => {
-            let results =
-                stream::iter(
-                    survivors
-                        .into_iter()
-                        .zip(ports)
-                        .map(|((id, _), port)| async move {
-                            (id, test_through_xray(port, config).await)
-                        }),
-                )
-                .buffer_unordered(download_concurrency.max(1))
-                .collect::<Vec<_>>()
-                .await;
+            let results = stream::iter(survivors.into_iter().zip(ports).map(
+                |((id, _, deadline), port)| async move {
+                    (id, test_through_xray(port, config, deadline).await)
+                },
+            ))
+            .buffer_unordered(download_concurrency.max(1))
+            .collect::<Vec<_>>()
+            .await;
             session.stop().await;
             results
         }
@@ -302,7 +323,11 @@ async fn test_survivor_batch(
     }
 }
 
-async fn test_through_xray(socks_port: u16, config: &AppConfig) -> Vec<ProbeEvent> {
+async fn test_through_xray(
+    socks_port: u16,
+    config: &AppConfig,
+    deadline: Instant,
+) -> Vec<ProbeEvent> {
     let client = match reqwest::Client::builder()
         .proxy(
             Proxy::all(format!("socks5h://127.0.0.1:{socks_port}"))
@@ -327,8 +352,16 @@ async fn test_through_xray(socks_port: u16, config: &AppConfig) -> Vec<ProbeEven
     let mut endpoint_failure_count = 0;
     for endpoint in endpoints.iter().take(3) {
         let started = Instant::now();
-        match client.get(endpoint).send().await {
-            Ok(response)
+        let Some(remaining) = remaining_budget(deadline) else {
+            return vec![event(
+                TestStage::Relay,
+                FailureClass::RelayTimeout,
+                Some(started.elapsed()),
+                serde_json::json!({"error":"global probe deadline exceeded"}),
+            )];
+        };
+        match tokio::time::timeout(remaining, client.get(endpoint).send()).await {
+            Ok(Ok(response))
                 if response.status().is_success() || response.status().is_redirection() =>
             {
                 let mut events = vec![ProbeEvent {
@@ -354,11 +387,11 @@ async fn test_through_xray(socks_port: u16, config: &AppConfig) -> Vec<ProbeEven
                     detail: serde_json::json!({"status":response.status().as_u16()}),
                 });
                 if config.download_test.enabled {
-                    events.push(download(&client, config).await);
+                    events.push(download(&client, config, deadline).await);
                 }
                 return events;
             }
-            Ok(response) => {
+            Ok(Ok(response)) => {
                 endpoint_failure_count += 1;
                 if response.status().is_server_error() {
                     continue;
@@ -370,7 +403,7 @@ async fn test_through_xray(socks_port: u16, config: &AppConfig) -> Vec<ProbeEven
                     serde_json::json!({"status":response.status().as_u16()}),
                 )];
             }
-            Err(error) if error.is_timeout() => {
+            Ok(Err(error)) if error.is_timeout() => {
                 endpoint_failure_count += 1;
                 if endpoint_failure_count >= 2 {
                     return vec![event(
@@ -381,7 +414,7 @@ async fn test_through_xray(socks_port: u16, config: &AppConfig) -> Vec<ProbeEven
                     )];
                 }
             }
-            Err(error) => {
+            Ok(Err(error)) => {
                 endpoint_failure_count += 1;
                 if endpoint_failure_count >= 2 {
                     return vec![event(
@@ -391,6 +424,14 @@ async fn test_through_xray(socks_port: u16, config: &AppConfig) -> Vec<ProbeEven
                         serde_json::json!({"error":error.to_string()}),
                     )];
                 }
+            }
+            Err(_) => {
+                return vec![event(
+                    TestStage::Relay,
+                    FailureClass::RelayTimeout,
+                    Some(started.elapsed()),
+                    serde_json::json!({"error":"global probe deadline exceeded"}),
+                )];
             }
         }
     }
@@ -402,11 +443,19 @@ async fn test_through_xray(socks_port: u16, config: &AppConfig) -> Vec<ProbeEven
     )]
 }
 
-async fn download(client: &reqwest::Client, config: &AppConfig) -> ProbeEvent {
+async fn download(client: &reqwest::Client, config: &AppConfig, deadline: Instant) -> ProbeEvent {
     let endpoint = config.download_test.test_url.clone();
     let started = Instant::now();
+    let Some(remaining) = remaining_budget(deadline) else {
+        return event(
+            TestStage::Download,
+            FailureClass::DownloadTimeout,
+            Some(started.elapsed()),
+            serde_json::json!({"error":"global probe deadline exceeded"}),
+        );
+    };
     let response = match tokio::time::timeout(
-        Duration::from_secs(config.download_test.timeout_seconds),
+        remaining.min(Duration::from_secs(config.download_test.timeout_seconds)),
         client.get(&endpoint).send(),
     )
     .await
@@ -449,8 +498,16 @@ async fn download(client: &reqwest::Client, config: &AppConfig) -> ProbeEvent {
     let mut bytes = 0_usize;
     let max_bytes = 1_000_000_usize;
     while bytes < max_bytes {
+        let Some(remaining) = remaining_budget(deadline) else {
+            return event(
+                TestStage::Download,
+                FailureClass::DownloadTimeout,
+                Some(started.elapsed()),
+                serde_json::json!({"error":"global probe deadline exceeded"}),
+            );
+        };
         match tokio::time::timeout(
-            Duration::from_secs(config.download_test.timeout_seconds),
+            remaining.min(Duration::from_secs(config.download_test.timeout_seconds)),
             stream.next(),
         )
         .await
@@ -496,6 +553,22 @@ async fn download(client: &reqwest::Client, config: &AppConfig) -> ProbeEvent {
     }
 }
 
+fn remaining_budget(deadline: Instant) -> Option<Duration> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    (!remaining.is_zero()).then_some(remaining)
+}
+
+fn probe_deadline(config: &AppConfig) -> Instant {
+    Instant::now()
+        + Duration::from_secs(
+            config
+                .health
+                .candidate_batch_timeout_seconds
+                .max(config.download_test.timeout_seconds)
+                .max(1),
+        )
+}
+
 fn event(
     stage: TestStage,
     class: FailureClass,
@@ -512,5 +585,18 @@ fn event(
         duration_ms: duration.map(|item| item.as_millis() as i64),
         endpoint: None,
         detail,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use super::remaining_budget;
+
+    #[test]
+    fn global_budget_never_returns_a_non_positive_timeout() {
+        assert!(remaining_budget(Instant::now() - Duration::from_millis(1)).is_none());
+        assert!(remaining_budget(Instant::now() + Duration::from_secs(1)).is_some());
     }
 }
