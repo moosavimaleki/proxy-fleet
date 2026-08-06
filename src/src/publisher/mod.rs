@@ -391,6 +391,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn empty_first_snapshot_never_replaces_the_existing_subscription() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let remote = init_remote(&temp);
+        let data = temp.path().join("data");
+        std::fs::create_dir_all(&data).expect("data directory");
+        let store = Store::connect(data.join("app.db")).await.expect("store");
+        store.migrate().await.expect("migration");
+        let config = PublishingConfig {
+            enabled: true,
+            git_remote: remote.to_string_lossy().to_string(),
+            ..PublishingConfig::default()
+        };
+
+        let result = publish(&store, &data.join("app.db").to_string_lossy(), &config)
+            .await
+            .expect("empty publication is a safe no-op");
+        assert!(!result.changed && !result.committed && !result.pushed);
+        let raw = git(
+            temp.path(),
+            &[
+                "--git-dir",
+                remote.to_str().expect("remote path"),
+                "show",
+                "main:subscriptions/active-raw.txt",
+            ],
+        );
+        assert_eq!(raw, "\n", "the seed subscription must remain intact");
+    }
+
+    #[tokio::test]
     async fn rejected_push_is_rebased_and_retried_without_resetting_publication() {
         let temp = tempfile::tempdir().expect("tempdir");
         let remote = init_remote(&temp);

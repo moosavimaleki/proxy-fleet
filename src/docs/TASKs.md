@@ -1015,7 +1015,7 @@ fieldهای جدید node:
 - [x] image قبلی Python با tag immutable حفظ شود.
 - [x] snapshot pre-migration دیتابیس تا پایان rollback window حفظ شود.
 - [x] rollback script فقط این کارها را انجام دهد: توقف Rust، بازگردانی DB snapshot، اجرای image Python، health smoke.
-- [ ] subscription فایل سالم قبلی تا اولین publish موفق Rust overwrite نشود.
+- [x] subscription فایل سالم قبلی تا اولین publish موفق Rust overwrite نشود.
 - [x] اگر migration forward-only شد، rollback حتماً با snapshot باشد نه downgrade query خطرناک.
 - [x] triggerهای rollback: migration inconsistency، data loss، process leak، publisher خراب، API contract break یا افت شدید throughput.
 
