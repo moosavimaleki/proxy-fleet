@@ -968,6 +968,53 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn cancelling_a_download_releases_its_connection_without_a_worker_leak() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("download listener");
+        let address = listener.local_addr().expect("download address");
+        let (headers_sent, wait_headers) = tokio::sync::oneshot::channel();
+        let (closed, wait_closed) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("download client");
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).await.expect("download request");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\n\r\n")
+                .await
+                .expect("download headers");
+            let _ = headers_sent.send(());
+            let mut byte = [0_u8; 1];
+            let result = tokio::time::timeout(Duration::from_secs(2), stream.read(&mut byte))
+                .await
+                .expect("client close deadline")
+                .expect("read client close");
+            let _ = closed.send(result == 0);
+        });
+        let mut config = AppConfig::default();
+        config.download_test.per_url_timeout_seconds = 5.0;
+        let client = reqwest::Client::builder().build().expect("client");
+        let endpoint = format!("http://{address}/download");
+        let task = tokio::spawn(async move {
+            super::download_endpoint(
+                &client,
+                &config,
+                Instant::now() + Duration::from_secs(10),
+                &endpoint,
+            )
+            .await
+        });
+        wait_headers.await.expect("server wrote headers");
+        task.abort();
+        assert!(
+            task.await
+                .expect_err("download task must be cancelled")
+                .is_cancelled()
+        );
+        assert!(wait_closed.await.expect("server observed close"));
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn failed_batch_is_recursively_isolated_and_cleans_temp_xray_configs() {

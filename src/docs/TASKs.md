@@ -621,7 +621,7 @@ delay = random(0, min(cap, base * 2^failure_streak))
 - [x] محدودیت پیش‌فرض ۲ تا ۵ ثانیه یا ۱ تا ۲ مگابایت، هرکدام زودتر رخ داد.
 - [x] سرعت بر اساس byte واقعی و مدت steady window محاسبه شود.
 - [x] صفر byte با relay موفق failure قوی محسوب شود.
-- [ ] cancellation download باعث zombie connection/process نشود.
+- [x] cancellation download باعث zombie connection/process نشود.
 
 ### metadata
 
