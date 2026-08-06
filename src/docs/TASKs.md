@@ -1070,10 +1070,10 @@ fieldهای جدید node:
 - [ ] تمام parity itemها پاس شده باشند.
 - [ ] تمام قواعد `ALGORITHM.md` تست خودکار داشته باشند.
 - [ ] دیتابیس واقعی کپی‌شده بدون حذف داده مهاجرت کرده باشد.
-- [ ] ACTIVE با یک failure گذرا از انتشار حذف نشود.
-- [ ] INVALID و RETIRED اشتباهاً منتشر نشوند.
-- [ ] DORMANTها طبق backoff دوباره فرصت بگیرند.
-- [ ] outage محلی health جمعی proxyها را خراب نکند.
+- [x] ACTIVE با یک failure گذرا از انتشار حذف نشود.
+- [x] INVALID و RETIRED اشتباهاً منتشر نشوند.
+- [x] DORMANTها طبق backoff دوباره فرصت بگیرند.
+- [x] outage محلی health جمعی proxyها را خراب نکند.
 - [ ] API و UI با دادهٔ واقعی responsive بمانند.
 - [ ] Xray process/port/FD leak در soak test وجود نداشته باشد.
 - [ ] publisher خروجی unique و قابل‌مصرف تولید و push کند.
