@@ -809,7 +809,7 @@ fieldهای جدید node:
 - [ ] histogramها: stage latency، download speed، DB query و API latency.
 - [x] system eventهای مهم در SQLite با retention محدود ثبت شوند.
 - [ ] log storm ناشی از retry با sampling/rate-limit کنترل شود.
-- [ ] shutdown report تعداد job cancel‌شده و processهای پاک‌شده را ثبت کند.
+- [x] shutdown report تعداد job cancel‌شده و processهای پاک‌شده را ثبت کند.
 
 ## 24. تست‌ها
 

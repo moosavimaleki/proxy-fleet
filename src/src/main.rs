@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use proxy_fleet::{api, app::AppState, config::AppConfig, storage::Store};
@@ -76,8 +76,6 @@ async fn main() -> anyhow::Result<()> {
         restored_runtimes,
         failed_runtimes, "reconciled ACTIVE Xray runtimes"
     );
-    state.spawn_background_services();
-
     let app = api::router(state.clone())
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
@@ -86,15 +84,35 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&address)
         .await
         .with_context(|| format!("binding API on {address}"))?;
+    let background_services = state.spawn_background_services();
 
     info!(service = %config.service.name, version = proxy_fleet::SERVICE_VERSION, address = %address, "proxy fleet started");
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_shutdown(shutdown))
         .await;
+    let mut completed_jobs = 0_usize;
+    let mut aborted_jobs = 0_usize;
+    for mut handle in background_services {
+        match tokio::time::timeout(Duration::from_secs(45), &mut handle).await {
+            Ok(Ok(())) => completed_jobs += 1,
+            Ok(Err(error)) => warn!(%error, "background service ended with a join error"),
+            Err(_) => {
+                // A probe must have its own finite deadline.  A final abort is
+                // nevertheless required so service shutdown never leaks a
+                // scheduler task or indefinitely delays owned-Xray cleanup.
+                aborted_jobs += 1;
+                handle.abort();
+                let _ = handle.await;
+            }
+        }
+    }
     let (runtime_processes, vip_processes) = state.shutdown_runtimes().await;
     info!(
         runtime_processes,
-        vip_processes, "graceful shutdown cleaned owned Xray processes"
+        vip_processes,
+        completed_jobs,
+        aborted_jobs,
+        "graceful shutdown cleaned background jobs and owned Xray processes"
     );
     result.context("HTTP server failed")
 }
