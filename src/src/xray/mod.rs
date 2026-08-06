@@ -580,7 +580,7 @@ pub async fn allocate_ports(
 
 #[cfg(test)]
 mod tests {
-    use super::{ProcessLogs, allocate_port, owned_xray_command};
+    use super::{ProcessLogs, XraySession, allocate_port, owned_xray_command};
 
     #[tokio::test]
     async fn concurrent_allocations_do_not_reserve_the_same_port() {
@@ -611,5 +611,47 @@ mod tests {
         assert!(!owned_xray_command(
             b"/usr/local/bin/xray\0run\0-config\0/tmp/another-service.json\0"
         ));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn failed_start_terminates_and_reaps_an_uncooperative_owned_process() {
+        use std::{os::unix::fs::PermissionsExt, path::Path};
+
+        let temp = tempfile::tempdir().expect("temporary script directory");
+        let pid_path = temp.path().join("owned-xray.pid");
+        let script = temp.path().join("uncooperative-xray");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\necho $$ > {}\ntrap '' TERM\nwhile :; do sleep 1; done\n",
+                pid_path.display()
+            ),
+        )
+        .expect("write fake Xray");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+            .expect("make fake Xray executable");
+        let proxy = crate::parser::parse_share_url(
+            "vless://123e4567-e89b-12d3-a456-426614174000@example.test:443?security=tls&sni=example.test#fixture",
+            "test",
+        )
+        .expect("proxy");
+        let reservation = allocate_port(47_000..=47_100).await.expect("test port");
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(8),
+            XraySession::start(&script.to_string_lossy(), &proxy, reservation),
+        )
+        .await
+        .expect("startup cleanup deadline");
+        assert!(result.is_err(), "fake Xray must not become ready");
+        let pid: i32 = std::fs::read_to_string(&pid_path)
+            .expect("fake Xray wrote its PID")
+            .trim()
+            .parse()
+            .expect("PID is numeric");
+        assert!(
+            !Path::new(&format!("/proc/{pid}")).exists(),
+            "owned process {pid} survived failed startup"
+        );
     }
 }

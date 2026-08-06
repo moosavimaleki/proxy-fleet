@@ -838,8 +838,8 @@ fieldهای جدید node:
 - [x] SQLite migration از fixture schema فعلی.
 - [x] API compatibility snapshot.
 - [x] mock SOCKS/HTTP endpoint برای success/timeout/refused/TLS failure.
-- [ ] Xray batch startup، recursive split و cleanup.
-- [ ] process cancellation و نبود zombie.
+- [x] Xray batch startup، recursive split و cleanup.
+- [x] process cancellation و نبود zombie.
 - [x] upstream complete/incomplete generation.
 - [ ] publisher no-op/change/push failure/retry.
 - [x] network incident بدون demotion.

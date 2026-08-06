@@ -968,6 +968,62 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn failed_batch_is_recursively_isolated_and_cleans_temp_xray_configs() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("temporary Xray script directory");
+        let binary = temp.path().join("failing-xray");
+        tokio::fs::write(&binary, "#!/bin/sh\nexit 1\n")
+            .await
+            .expect("write Xray failure script");
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))
+            .expect("make Xray failure script executable");
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("relay preflight listener");
+        let port = listener.local_addr().expect("relay address").port();
+        let mut config = AppConfig {
+            xray_bin: binary.to_string_lossy().to_string(),
+            ..AppConfig::default()
+        };
+        config.download_test.enabled = false;
+        let raw = |id: u8| {
+            format!(
+                "vless://123e4567-e89b-12d3-a456-4266141740{id:02}@127.0.0.1:{port}?security=tls&sni=example.test#fixture"
+            )
+        };
+        let reports = super::test_batch(
+            vec![
+                ("one".to_owned(), raw(1), false),
+                ("two".to_owned(), raw(2), false),
+                ("three".to_owned(), raw(3), false),
+            ],
+            "test",
+            &config,
+            1,
+        )
+        .await;
+        assert_eq!(reports.len(), 3);
+        assert!(reports.iter().all(|(_, report)| {
+            report.events.len() == 1
+                && report.events[0].class == crate::domain::failure::FailureClass::XrayStartFailed
+        }));
+        let leftovers = std::fs::read_dir(std::env::temp_dir())
+            .expect("temporary directory")
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("proxy-fleet-xray-batch-")
+            })
+            .count();
+        assert_eq!(leftovers, 0, "failed batch leaked a temporary Xray config");
+        drop(listener);
+    }
+
     #[test]
     fn global_budget_never_returns_a_non_positive_timeout() {
         assert!(remaining_budget(Instant::now() - Duration::from_millis(1)).is_none());
