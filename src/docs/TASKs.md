@@ -804,7 +804,7 @@ fieldهای جدید node:
 
 - [x] logها structured با timestamp، component، proxy id، run id و failure class باشند.
 - [x] raw config و credential در log mask شوند.
-- [ ] counterها: parsed، deduped، invalid، tested، stage pass/fail، transitions و published.
+- [x] counterها: parsed، deduped، invalid، tested، stage pass/fail، transitions و published.
 - [x] gaugeها: queue depth، concurrency، child process، FD، active/probation/dormant و lease count.
 - [ ] histogramها: stage latency، download speed، DB query و API latency.
 - [x] system eventهای مهم در SQLite با retention محدود ثبت شوند.

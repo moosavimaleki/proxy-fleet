@@ -606,6 +606,60 @@ impl Store {
         }))
     }
 
+    /// Bounded, credential-free counters for operational dashboards.  These
+    /// are derived from the append-only event stream rather than a mutable
+    /// in-memory accumulator, so a restart cannot silently reset them.
+    pub async fn observability_snapshot(&self) -> anyhow::Result<serde_json::Value> {
+        let parsed = sqlx::query_scalar::<_, i64>(
+            "SELECT COALESCE(SUM(parsed_count), 0) FROM upstream_refresh_runs WHERE status = 'COMPLETE'",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        let invalid = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM nodes WHERE lifecycle_state = 'INVALID'",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        let deduped = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM nodes")
+            .fetch_one(&self.pool)
+            .await?;
+        let tested = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM proxy_test_events")
+            .fetch_one(&self.pool)
+            .await?;
+        let transitions = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM test_history WHERE status_before <> '' AND status_before <> status_after",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        let stage_rows = sqlx::query(
+            "SELECT stage, result, COUNT(*) AS count FROM proxy_test_events GROUP BY stage, result ORDER BY stage, result",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let stages = stage_rows
+            .into_iter()
+            .map(|row| {
+                serde_json::json!({
+                    "stage": row.get::<String, _>("stage"),
+                    "result": row.get::<String, _>("result"),
+                    "count": row.get::<i64, _>("count"),
+                })
+            })
+            .collect::<Vec<_>>();
+        let published = self.service_state("last_publisher").await?;
+        Ok(serde_json::json!({
+            "counters": {
+                "parsed": parsed,
+                "deduped": deduped,
+                "invalid": invalid,
+                "tested": tested,
+                "transitions": transitions,
+                "published": published.as_ref().and_then(|value| value.pointer("/result/active_count")).and_then(serde_json::Value::as_i64).unwrap_or_default(),
+            },
+            "stage_results": stages,
+        }))
+    }
+
     pub async fn apply_test_event(
         &self,
         event: TestEventInput,

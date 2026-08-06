@@ -40,6 +40,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/network", get(network))
         .route("/api/v1/vip", get(vip))
         .route("/api/v1/scheduler", get(scheduler))
+        .route("/api/v1/metrics", get(metrics))
         .route("/api/v1/health-model", get(health_model))
         .route("/api/v1/upstream", get(upstream_status))
         .route("/api/v1/incidents", get(incidents))
@@ -287,6 +288,12 @@ async fn scheduler(State(state): State<AppState>) -> impl IntoResponse {
             json!({"runtime":runtime,"policy":{"new":40,"successful_probation":30,"recoverable_dormant":20,"exploration":10},"concurrency":{"xray_current":runtime.xray_concurrency,"download_current":runtime.download_concurrency},"snapshot":snapshot}),
         )
         .into_response(),
+        Err(error) => api_error(error),
+    }
+}
+async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
+    match state.store.observability_snapshot().await {
+        Ok(snapshot) => Json(snapshot).into_response(),
         Err(error) => api_error(error),
     }
 }
