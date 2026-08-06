@@ -1038,30 +1038,30 @@ fieldهای جدید node:
 
 ## 30. چک‌لیست نهایی parity
 
-- [ ] subscription ingest
-- [ ] manual import
-- [ ] remark-insensitive dedup
-- [ ] VMess/VLESS/Trojan/SS/SOCKS
-- [ ] تمام transport/securityهای فعلی
-- [ ] static validation
-- [ ] batch relay و recursive isolation
-- [ ] real HTTP و bounded download
-- [ ] retry/revival/quarantine
-- [ ] persistent active runtime
-- [ ] port pools و waiting state
-- [ ] exit metadata
-- [ ] network sentinel
-- [ ] weighted selection/fairness
-- [ ] client feedback/circuit breaker
-- [ ] VIP/hot port/hysteresis
-- [ ] SQLite persistence و history
-- [ ] تمام API routeهای فعلی
-- [ ] تمام صفحه‌های UI فعلی
-- [ ] logs/diagnostics/manual actions
-- [ ] active.txt و active-raw.txt
-- [ ] Git commit/push خودکار
-- [ ] Docker host network/volumes/SSH/healthcheck
-- [ ] graceful startup/shutdown/recovery
+- [x] subscription ingest
+- [x] manual import
+- [x] remark-insensitive dedup
+- [x] VMess/VLESS/Trojan/SS/SOCKS
+- [x] تمام transport/securityهای فعلی
+- [x] static validation
+- [x] batch relay و recursive isolation
+- [x] real HTTP و bounded download
+- [x] retry/revival/quarantine
+- [x] persistent active runtime
+- [x] port pools و waiting state
+- [x] exit metadata
+- [x] network sentinel
+- [x] weighted selection/fairness
+- [x] client feedback/circuit breaker
+- [x] VIP/hot port/hysteresis
+- [x] SQLite persistence و history
+- [x] تمام API routeهای فعلی
+- [x] تمام صفحه‌های UI فعلی
+- [x] logs/diagnostics/manual actions
+- [x] active.txt و active-raw.txt
+- [x] Git commit/push خودکار
+- [x] Docker host network/volumes/SSH/healthcheck
+- [x] graceful startup/shutdown/recovery
 
 ## 31. تعریف Done
 
