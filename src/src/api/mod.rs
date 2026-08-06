@@ -430,6 +430,13 @@ async fn manual_import(
     Json(payload): Json<ManualImportRequest>,
 ) -> impl IntoResponse {
     let report = parse_subscription(&payload.configs, "manual");
+    if let Err(error) = state
+        .store
+        .record_invalid_config_rejections("manual", &report.rejected)
+        .await
+    {
+        return api_error(error);
+    }
     let mut inserted = 0_u64;
     for proxy in &report.accepted {
         match state.store.ingest_proxy(proxy, 0).await {

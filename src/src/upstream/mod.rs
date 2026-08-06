@@ -104,6 +104,9 @@ pub async fn refresh(store: &Store, config: Arc<AppConfig>) -> anyhow::Result<Re
                 let report = parse_subscription(&body, &source.name);
                 accepted += report.accepted.len();
                 rejected += report.rejected.len();
+                store
+                    .record_invalid_config_rejections(&source.name, &report.rejected)
+                    .await?;
                 parsed.extend(report.accepted);
             }
             Ok(FetchResult::NotModified) => {

@@ -328,8 +328,11 @@ impl Store {
             sqlx::query(index).execute(&mut *transaction).await?;
         }
 
+        // Do this from legacy `status` regardless of the additive column's
+        // default. Otherwise a newly-added `lifecycle_state` of CANDIDATE
+        // would hide a legacy DEAD/REMOVED value before it can be migrated.
         sqlx::query(
-            "UPDATE nodes SET lifecycle_state = CASE status WHEN 'DEAD' THEN 'DORMANT' WHEN 'REMOVED' THEN 'RETIRED' ELSE status END WHERE lifecycle_state IS NULL OR lifecycle_state = ''"
+            "UPDATE nodes SET lifecycle_state = CASE status WHEN 'DEAD' THEN 'DORMANT' WHEN 'REMOVED' THEN 'RETIRED' ELSE lifecycle_state END WHERE status IN ('DEAD', 'REMOVED') OR lifecycle_state IS NULL OR lifecycle_state = ''"
         ).execute(&mut *transaction).await?;
         sqlx::query("UPDATE nodes SET status = lifecycle_state WHERE lifecycle_state IN ('DORMANT', 'RETIRED', 'INVALID') AND status IN ('DEAD', 'REMOVED')").execute(&mut *transaction).await?;
         sqlx::query(
@@ -1109,6 +1112,31 @@ impl Store {
         Ok(())
     }
 
+    /// Parser failures have no safe technical identity (and therefore must
+    /// not become fake nodes). Keep an aggregate, redacted audit event so an
+    /// operator can distinguish a bad upstream line from a failed proxy.
+    pub async fn record_invalid_config_rejections(
+        &self,
+        source: &str,
+        rejected: &[String],
+    ) -> anyhow::Result<()> {
+        if rejected.is_empty() {
+            return Ok(());
+        }
+        let samples: Vec<_> = rejected.iter().take(5).cloned().collect();
+        self.record_system_event(
+            "WARN",
+            "parser",
+            "INVALID_CONFIG",
+            &format!(
+                "{} invalid configuration line(s) from {source}",
+                rejected.len()
+            ),
+            serde_json::json!({"source":source, "count":rejected.len(), "samples":samples}),
+        )
+        .await
+    }
+
     pub async fn revive_dormant(&self) -> anyhow::Result<u64> {
         let now = Utc::now().to_rfc3339();
         Ok(sqlx::query("UPDATE nodes SET lifecycle_state = 'PROBATION', status = 'PROBATION', next_test_at = ?, updated_at = ? WHERE lifecycle_state = 'DORMANT' AND structurally_valid = 1")
@@ -1434,12 +1462,12 @@ const NODE_ADDITIONS: &[(&str, &str)] = &[
     // `next_test_at` existed in the last Python schema, but making it
     // additive here keeps migration safe for older production snapshots too.
     ("next_test_at", "TEXT"),
-    ("lifecycle_state", "TEXT"),
+    ("lifecycle_state", "TEXT NOT NULL DEFAULT 'CANDIDATE'"),
     ("state_entered_at", "TEXT"),
-    ("structurally_valid", "INTEGER"),
-    ("health_alpha", "REAL"),
-    ("health_beta", "REAL"),
-    ("health_score", "REAL"),
+    ("structurally_valid", "INTEGER NOT NULL DEFAULT 1"),
+    ("health_alpha", "REAL NOT NULL DEFAULT 1"),
+    ("health_beta", "REAL NOT NULL DEFAULT 1"),
+    ("health_score", "REAL NOT NULL DEFAULT 0.5"),
     ("evidence_updated_at", "TEXT"),
     ("testing_from_state", "TEXT"),
     ("waiting_from_state", "TEXT"),
@@ -1696,6 +1724,27 @@ mod tests {
             .await
             .expect("count");
         assert_eq!(remaining, 100);
+    }
+
+    #[tokio::test]
+    async fn invalid_parse_lines_are_audited_without_creating_a_proxy_node() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        store
+            .record_invalid_config_rejections(
+                "fixture",
+                &["unsupported protocol: ftp://<redacted>".to_owned()],
+            )
+            .await
+            .expect("audit rejection");
+        assert_eq!(store.counts().await.expect("counts").total, 0);
+        let logs = store.logs(10, Some("parser"), None).await.expect("logs");
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0]["event"], "INVALID_CONFIG");
+        assert_eq!(logs[0]["details"]["source"], "fixture");
     }
 
     #[tokio::test]

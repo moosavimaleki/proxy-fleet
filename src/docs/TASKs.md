@@ -215,18 +215,18 @@ routeهای زیر باید با همان path باقی بمانند:
 
 ### 5.2 دادهٔ مستقل هر proxy
 
-- [ ] هویت فنی canonical و hash پایدار.
-- [ ] raw config و normalized config.
-- [ ] مجموعهٔ sourceها و آخرین generation مشاهده‌شده.
-- [ ] state فعلی و زمان ورود به state.
-- [ ] `alpha`، `beta` و `health_score`.
-- [ ] `next_test_at` و test lease برای جلوگیری از duplicate work.
-- [ ] `publication_lease_until` و دلیل آخرین تمدید.
-- [ ] آخرین success/failure و failure class.
+- [x] هویت فنی canonical و hash پایدار.
+- [x] raw config و normalized config.
+- [x] مجموعهٔ sourceها و آخرین generation مشاهده‌شده.
+- [x] state فعلی و زمان ورود به state.
+- [x] `alpha`، `beta` و `health_score`.
+- [x] `next_test_at` و test lease برای جلوگیری از duplicate work.
+- [x] `publication_lease_until` و دلیل آخرین تمدید.
+- [x] آخرین success/failure و failure class.
 - [ ] consecutive failure/success و تعداد failure مستقل.
-- [ ] آخرین latency، download speed و endpoint.
+- [x] آخرین latency، download speed و endpoint.
 - [x] exit metadata.
-- [ ] main port/runtime ownership.
+- [x] main port/runtime ownership.
 
 ### 5.3 failure classهای canonical
 
@@ -390,59 +390,59 @@ src/
 
 ستون‌های فعلی حفظ و ستون‌های زیر افزوده شوند:
 
-- [ ] `lifecycle_state TEXT NOT NULL`
-- [ ] `state_entered_at INTEGER`
-- [ ] `structurally_valid INTEGER NOT NULL DEFAULT 1`
-- [ ] `health_alpha REAL NOT NULL DEFAULT 1`
-- [ ] `health_beta REAL NOT NULL DEFAULT 1`
-- [ ] `health_score REAL NOT NULL DEFAULT 0.5`
-- [ ] `evidence_updated_at INTEGER`
-- [ ] `next_test_at INTEGER`
-- [ ] `test_lease_until INTEGER`
-- [ ] `publication_lease_until INTEGER`
-- [ ] `publication_lease_kind TEXT`
-- [ ] `activated_at INTEGER`
-- [ ] `last_success_at INTEGER`
-- [ ] `last_failure_at INTEGER`
-- [ ] `last_failure_class TEXT`
-- [ ] `failure_streak INTEGER NOT NULL DEFAULT 0`
-- [ ] `independent_failure_count INTEGER NOT NULL DEFAULT 0`
-- [ ] `last_test_endpoint TEXT`
-- [ ] `last_seen_generation INTEGER`
-- [ ] `upstream_missing_generations INTEGER NOT NULL DEFAULT 0`
-- [ ] `retired_at INTEGER`
-- [ ] `tombstone_until INTEGER`
+- [x] `lifecycle_state TEXT NOT NULL`
+- [x] `state_entered_at TEXT (RFC3339)`
+- [x] `structurally_valid INTEGER NOT NULL DEFAULT 1`
+- [x] `health_alpha REAL NOT NULL DEFAULT 1`
+- [x] `health_beta REAL NOT NULL DEFAULT 1`
+- [x] `health_score REAL NOT NULL DEFAULT 0.5`
+- [x] `evidence_updated_at TEXT (RFC3339)`
+- [x] `next_test_at TEXT (RFC3339)`
+- [x] `test_lease_until TEXT (RFC3339)`
+- [x] `publication_lease_until TEXT (RFC3339)`
+- [x] `publication_lease_kind TEXT`
+- [x] `activated_at TEXT (RFC3339)`
+- [x] `last_success_at TEXT (RFC3339)`
+- [x] `last_failure_at TEXT (RFC3339)`
+- [x] `last_failure_class TEXT`
+- [x] `failure_streak INTEGER NOT NULL DEFAULT 0`
+- [x] `independent_failure_count INTEGER NOT NULL DEFAULT 0`
+- [x] `last_test_endpoint TEXT`
+- [x] `last_seen_generation INTEGER`
+- [x] `upstream_missing_generations INTEGER NOT NULL DEFAULT 0`
+- [x] `retired_at TEXT (RFC3339)`
+- [x] `tombstone_until TEXT (RFC3339)`
 
 indexهای لازم:
 
-- [ ] `(lifecycle_state, next_test_at)`
-- [ ] `(publication_lease_until, structurally_valid)`
-- [ ] `(test_lease_until)`
-- [ ] `(last_seen_generation, upstream_missing_generations)`
-- [ ] `(config_hash)` unique فعلی حفظ شود.
+- [x] `(lifecycle_state, next_test_at)`
+- [x] `(publication_lease_until, structurally_valid)`
+- [x] `(test_lease_until)`
+- [x] `(last_seen_generation, upstream_missing_generations)`
+- [x] `(config_hash)` unique فعلی حفظ شود.
 
 ### 8.3 جدول append-only `proxy_test_events`
 
 هر stage یک event مستقل دارد:
 
-- [ ] `id INTEGER PRIMARY KEY`
-- [ ] `proxy_id TEXT NOT NULL`
-- [ ] `run_id TEXT NOT NULL`
-- [ ] `occurred_at INTEGER NOT NULL`
-- [ ] `stage TEXT NOT NULL`
-- [ ] `result TEXT NOT NULL`
-- [ ] `failure_class TEXT NOT NULL`
-- [ ] `evidence_alpha REAL NOT NULL DEFAULT 0`
-- [ ] `evidence_beta REAL NOT NULL DEFAULT 0`
-- [ ] `latency_ms REAL`
-- [ ] `download_bps REAL`
-- [ ] `bytes_transferred INTEGER`
-- [ ] `duration_ms INTEGER`
-- [ ] `endpoint TEXT`
-- [ ] `system_pressure REAL`
-- [ ] `incident_id TEXT`
-- [ ] `detail_json TEXT`
-- [ ] index روی `(proxy_id, occurred_at DESC)` و `(run_id)`.
+- [x] `id INTEGER PRIMARY KEY`
+- [x] `proxy_id TEXT NOT NULL`
+- [x] `run_id TEXT NOT NULL`
+- [x] `occurred_at TEXT NOT NULL (RFC3339)`
+- [x] `stage TEXT NOT NULL`
+- [x] `result TEXT NOT NULL`
+- [x] `failure_class TEXT NOT NULL`
+- [x] `evidence_alpha REAL NOT NULL DEFAULT 0`
+- [x] `evidence_beta REAL NOT NULL DEFAULT 0`
+- [x] `latency_ms REAL`
+- [x] `download_bps REAL`
+- [x] `bytes_transferred INTEGER`
+- [x] `duration_ms INTEGER`
+- [x] `endpoint TEXT`
+- [x] `system_pressure REAL`
+- [x] `incident_id TEXT`
+- [x] `detail_json TEXT`
+- [x] index روی `(proxy_id, occurred_at DESC)` و `(run_id)`.
 
 eventها update نشوند؛ aggregate health در `nodes` cache شود و از eventها قابل‌بازسازی باشد.
 
@@ -474,16 +474,16 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 
 ## 9. parser و هویت فنی
 
-- [ ] decoder subscription بتواند plain، base64 و خطوط مخلوط را تشخیص دهد.
-- [ ] parserهای VMess/VLESS/Trojan/SS/SOCKS با fixtureهای واقعی منتقل شوند.
-- [ ] transportها و securityهای فعلی بدون regression منتقل شوند.
-- [ ] config canonical با ترتیب field ثابت ساخته شود.
-- [ ] fragment/remark، نام subscription و metadata نمایشی از technical hash حذف شود.
+- [x] decoder subscription بتواند plain، base64 و خطوط مخلوط را تشخیص دهد.
+- [x] parserهای VMess/VLESS/Trojan/SS/SOCKS با fixtureهای واقعی منتقل شوند.
+- [x] transportها و securityهای فعلی بدون regression منتقل شوند.
+- [x] config canonical با ترتیب field ثابت ساخته شود.
+- [x] fragment/remark، نام subscription و metadata نمایشی از technical hash حذف شود.
 - [ ] IPv4، IPv6، hostname، port، UUID/custom ID، SNI، ALPN، REALITY key/short-id و cipher validate شوند.
-- [ ] deprecated optionها به ساختار Xray جاری normalize شوند.
-- [ ] duplicateهای هم‌هویت sourceهای خود را merge کنند و آخرین remark مفید صرفاً برای نمایش حفظ شود.
-- [ ] parse failure با `INVALID_CONFIG` ثبت شود و process Xray برای آن ساخته نشود.
-- [ ] parser هیچ panic روی ورودی خراب یا بسیار بزرگ نداشته باشد.
+- [x] deprecated optionها به ساختار Xray جاری normalize شوند.
+- [x] duplicateهای هم‌هویت sourceهای خود را merge کنند و آخرین remark مفید صرفاً برای نمایش حفظ شود.
+- [x] parse failure با `INVALID_CONFIG` ثبت شود و process Xray برای آن ساخته نشود.
+- [x] parser هیچ panic روی ورودی خراب یا بسیار بزرگ نداشته باشد.
 
 ## 10. مدل evidence و محاسبهٔ health
 

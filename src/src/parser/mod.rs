@@ -653,4 +653,12 @@ mod tests {
             prop_assert!(result.is_ok());
         }
     }
+
+    #[test]
+    fn oversized_malformed_input_is_rejected_without_panicking() {
+        let input = format!("vless://{}", "x".repeat(1_000_000));
+        let result = std::panic::catch_unwind(|| parse_subscription(&input, "fixture"));
+        assert!(result.is_ok());
+        assert!(result.expect("report").accepted.is_empty());
+    }
 }
