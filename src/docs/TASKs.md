@@ -195,10 +195,10 @@ routeهای زیر باید با همان path باقی بمانند:
 
 ### 4.3 payloadهای فعلی
 
-- [ ] کلیدهای فعلی response حذف یا rename نشوند.
-- [ ] fieldهای قدیمی EWMA/streak در دورهٔ migration از مدل جدید derive شوند.
+- [x] کلیدهای فعلی response حذف یا rename نشوند.
+- [x] fieldهای قدیمی EWMA/streak در دورهٔ migration از مدل جدید derive شوند.
 - [x] pagination/filter/search/status/country فعلی حفظ شود.
-- [ ] fieldهای جدید فقط به payload افزوده شوند.
+- [x] fieldهای جدید فقط به payload افزوده شوند.
 
 ## 5. مدل دامنهٔ جدید
 
@@ -835,12 +835,12 @@ fieldهای جدید node:
 
 ### 24.3 integration test
 
-- [ ] SQLite migration از fixture schema فعلی.
-- [ ] API compatibility snapshot.
+- [x] SQLite migration از fixture schema فعلی.
+- [x] API compatibility snapshot.
 - [ ] mock SOCKS/HTTP endpoint برای success/timeout/refused/TLS failure.
 - [ ] Xray batch startup، recursive split و cleanup.
 - [ ] process cancellation و نبود zombie.
-- [ ] upstream complete/incomplete generation.
+- [x] upstream complete/incomplete generation.
 - [ ] publisher no-op/change/push failure/retry.
 - [ ] network incident بدون demotion.
 

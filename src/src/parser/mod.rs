@@ -1,6 +1,6 @@
 //! Subscription decoding, strict structural validation, and remark-independent identity.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, net::IpAddr, str::FromStr};
 
 use anyhow::Context;
 use base64::{
@@ -60,6 +60,7 @@ pub fn parse_share_url(raw: &str, source: &str) -> anyhow::Result<ParsedProxy> {
         "unsupported protocol {protocol}"
     );
     anyhow::ensure!(!address.is_empty(), "proxy address is empty");
+    validate_address(&address)?;
     anyhow::ensure!(port > 0, "proxy port is invalid");
     let canonical = serde_json::to_vec(&normalized_config)?;
     let config_hash = format!("{:x}", Sha256::digest(canonical));
@@ -327,6 +328,26 @@ fn validate_user_id(value: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_address(address: &str) -> anyhow::Result<()> {
+    if IpAddr::from_str(address).is_ok() {
+        return Ok(());
+    }
+    anyhow::ensure!(address.len() <= 253, "proxy hostname is too long");
+    anyhow::ensure!(
+        address.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .chars()
+                    .all(|item| item.is_ascii_alphanumeric() || item == '-')
+        }),
+        "proxy hostname is invalid"
+    );
+    Ok(())
+}
+
 fn subscription_lines(payload: &str) -> Vec<String> {
     let trimmed = payload.trim();
     let decoded = if trimmed.contains("://") {
@@ -350,7 +371,11 @@ fn parse_url_proxy(raw: &str) -> anyhow::Result<(String, String, u16, String, se
         matches!(protocol.as_str(), "vless" | "trojan" | "socks" | "socks5"),
         "unsupported URL proxy scheme"
     );
-    let address = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    let address = url
+        .host_str()
+        .unwrap_or_default()
+        .trim_matches(['[', ']'])
+        .to_ascii_lowercase();
     let port = url.port().context("proxy URL has no port")?;
     let remark = url.fragment().unwrap_or_default().to_owned();
     let user = if url.username().is_empty() {
@@ -361,6 +386,9 @@ fn parse_url_proxy(raw: &str) -> anyhow::Result<(String, String, u16, String, se
     let password = percent_decode(url.password().unwrap_or_default());
     if matches!(protocol.as_str(), "vless" | "trojan") {
         anyhow::ensure!(!user.is_empty(), "proxy URL has no credential");
+    }
+    if protocol == "vless" {
+        validate_user_id(&user)?;
     }
     let params = canonical_query(&url);
     let normalized = serde_json::json!({"protocol":protocol,"address":address,"port":port,"user":user,"password":password,"path":url.path(),"params":params});
@@ -453,7 +481,11 @@ fn parse_shadowsocks(
         )?
     };
     let parsed = Url::parse(&format!("ss://placeholder@{server}"))?;
-    let address = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
+    let address = parsed
+        .host_str()
+        .unwrap_or_default()
+        .trim_matches(['[', ']'])
+        .to_ascii_lowercase();
     let port = parsed.port().context("shadowsocks URL has no port")?;
     let (method, password) = credential
         .split_once(':')
@@ -589,6 +621,35 @@ mod tests {
         assert_eq!(parsed.protocol, "ss");
         assert_eq!(parsed.port, 443);
         assert_eq!(parsed.normalized_config["method"], "chacha20-ietf-poly1305");
+    }
+
+    #[test]
+    fn validates_ip_literals_hostnames_and_required_proxy_fields() {
+        for address in ["198.51.100.10", "2001:db8::1", "proxy.example-test.com"] {
+            let authority = if address.contains(':') {
+                format!("[{address}]")
+            } else {
+                address.to_owned()
+            };
+            let raw = format!(
+                "vless://123e4567-e89b-12d3-a456-426614174000@{authority}:443?security=tls"
+            );
+            assert!(parse_share_url(&raw, "fixture").is_ok(), "{address}");
+        }
+        assert!(
+            parse_share_url(
+                "vless://123e4567-e89b-12d3-a456-426614174000@bad_host!:443?security=tls",
+                "fixture"
+            )
+            .is_err()
+        );
+        assert!(
+            parse_share_url(
+                "vless://this-custom-user-id-is-deliberately-too-long@example.com:443?security=tls",
+                "fixture"
+            )
+            .is_err()
+        );
     }
 
     #[test]

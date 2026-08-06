@@ -623,6 +623,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn compatibility_payload_shapes_keep_legacy_keys_and_only_add_fields() {
+        let (_temp, app) = test_router().await;
+        for (uri, required) in [
+            ("/health", &["status", "service", "version", "counts"][..]),
+            (
+                "/api/v1/nodes?page=1&page_size=1",
+                &["nodes", "page", "page_size", "pagination", "filtered_total"][..],
+            ),
+            ("/api/v1/clients", &["clients"][..]),
+            ("/api/v1/network", &["enabled", "status", "message"][..]),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::OK, "{uri}");
+            let bytes = response
+                .into_body()
+                .collect()
+                .await
+                .expect("body")
+                .to_bytes();
+            let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("JSON");
+            for key in required {
+                assert!(payload.get(*key).is_some(), "{uri} is missing {key}");
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn manual_import_and_head_health_follow_contract() {
         let (_temp, app) = test_router().await;
         let request = Request::builder()
