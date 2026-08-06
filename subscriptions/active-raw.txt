@@ -30,7 +30,6 @@ vless://1b25e81f-98d6-4c69-b9db-3df6c58a7500@rhn.codmaxx.ir:8181?encryption=none
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA1YzQ@r3mrcg001287h3p.cybervena.com:50099#🇹🇼 Join+Telegram:@Farah_VPN 🇹🇼
 vless://81e09a82-fe8d-4393-aefb-747322b20795@104.21.88.174:2052?path=/wss&security=none&encryption=none&host=nexo.xelviro.ir&type=httpupgrade#🇨🇦134931 | ⚡️Telegram = t.me/SOSkeyNET
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpUbVhTcGNSQmJodkhEZzY2Ym8ydzg5YlRveFFzYk1vYQ==@31.76.30.79:10808#@confiig_hub
-vless://97ea73b6-2043-4238-903c-a1e3d4a43c96@172.67.74.10:2087?path=/download.php&security=tls&encryption=none&insecure=0&host=amphetamine.adaspoloandco.com&fp=chrome&type=ws&allowInsecure=0&sni=amphetamine.adaspoloandco.com#@tootffarangi🍓-10
 vless://1ee1f28d-4975-4d7c-95c7-76172c20eed5@185.143.234.238:2086?path=/&security=&encryption=none&host=parsi.parsi.sbs&type=ws#🇮🇷IR-🚀@VPNine1
 vless://8728958d-cd6a-443f-bf6d-d13f25dc073b@65.49.234.130:29898?security=none&encryption=none&headerType=none&type=tcp#@Begoo_VPN ²⁴⁹
 vless://0481cdac-8ccc-4694-b4c8-74a1b01a16c9@104.16.174.106:2096?mode=multi&security=tls&alpn=h2,http/1.1&encryption=none&insecure=0&fp=chrome&type=grpc&serviceName=slips.stepson.ir&allowInsecure=0&sni=slips.stepson.ir#🇨🇦135332 | ⚡️Telegram = t.me/SOSkeyNET
