@@ -355,7 +355,7 @@ src/
 - [x] scheduler فقط job انتخاب کند؛ اجرای probe در worker باشد.
 - [x] probe نتیجهٔ خام تولید کند؛ classifier آن را به failure class تبدیل کند.
 - [x] publisher فقط snapshot transactionally خوانده‌شده از proxyهای دارای lease معتبر را ببیند.
-- [ ] API مستقیماً business rule تغییر ندهد و از service layer استفاده کند.
+- [x] API مستقیماً business rule تغییر ندهد و از service layer استفاده کند.
 - [x] processهای Xray owner مشخص، cancellation token و cleanup قطعی داشته باشند.
 
 ## 7. dependencyهای برنامه‌ریزی‌شده

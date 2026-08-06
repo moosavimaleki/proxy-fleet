@@ -20,7 +20,11 @@ use serde::Deserialize;
 use serde_json::json;
 use tower_http::timeout::TimeoutLayer;
 
-use crate::{SERVICE_VERSION, app::AppState, parser::parse_subscription, selection, upstream};
+use crate::{SERVICE_VERSION, app::AppState, service::FleetService, upstream};
+
+fn service(state: &AppState) -> FleetService {
+    FleetService::new(state.store.clone(), state.config.clone())
+}
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -236,7 +240,7 @@ async fn node_history(
 }
 
 async fn node_test(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    match state.store.schedule_manual_test(&id).await {
+    match service(&state).schedule_manual_test(&id).await {
         Ok(()) => (
             StatusCode::OK,
             Json(json!({"ok":true,"node_id":id,"scheduled":true})),
@@ -248,7 +252,7 @@ async fn node_test(State(state): State<AppState>, Path(id): Path<String>) -> imp
 }
 
 async fn node_revive(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    match state.store.revive_node(&id).await {
+    match service(&state).revive_node(&id).await {
         Ok(()) => (
             StatusCode::OK,
             Json(json!({"ok":true,"node_id":id,"state":"PROBATION"})),
@@ -392,7 +396,7 @@ async fn best(
     if client.is_empty() {
         return bad_request("INVALID_CLIENT");
     }
-    match selection::best(&state.store, &state.config, client).await {
+    match service(&state).best_for_client(client).await {
         Ok(Some(decision)) => Json(json!({"node_id":decision.node_id,"port":decision.port,"client":client,"assignment_id":decision.assignment_id,"relay_delay_ms":decision.relay_delay_ms,"expires_in_seconds":decision.expires_in_seconds})).into_response(),
         Ok(None) => (StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error":"NO_AVAILABLE_NODE","message":"No healthy node is currently available for this client."}))).into_response(),
         Err(error) => api_error(error),
@@ -411,14 +415,13 @@ async fn feedback(
     if payload.client.trim().is_empty() || payload.node_id.trim().is_empty() {
         return bad_request("INVALID_FEEDBACK");
     }
-    match selection::feedback(
-        &state.store,
-        &state.config,
-        payload.client.trim(),
-        payload.node_id.trim(),
-        payload.status.trim(),
-    )
-    .await
+    match service(&state)
+        .record_client_feedback(
+            payload.client.trim(),
+            payload.node_id.trim(),
+            payload.status.trim(),
+        )
+        .await
     {
         Ok(()) => Json(json!({"ok":true})).into_response(),
         Err(error) if error.to_string().contains("invalid feedback") => {
@@ -436,26 +439,13 @@ async fn manual_import(
     State(state): State<AppState>,
     Json(payload): Json<ManualImportRequest>,
 ) -> impl IntoResponse {
-    let report = parse_subscription(&payload.configs, "manual");
-    if let Err(error) = state
-        .store
-        .record_invalid_config_rejections("manual", &report.rejected)
-        .await
-    {
-        return api_error(error);
+    match service(&state).manual_import(&payload.configs).await {
+        Ok(report) => Json(json!({"ok":true,"accepted":report.accepted,"rejected":report.rejected,"inserted":report.inserted,"errors":report.errors})).into_response(),
+        Err(error) => api_error(error),
     }
-    let mut inserted = 0_u64;
-    for proxy in &report.accepted {
-        match state.store.ingest_proxy(proxy, 0).await {
-            Ok(true) => inserted += 1,
-            Ok(false) => {}
-            Err(error) => return api_error(error),
-        }
-    }
-    Json(json!({"ok":true,"accepted":report.accepted.len(),"rejected":report.rejected.len(),"inserted":inserted,"errors":report.rejected})).into_response()
 }
 async fn revive_dormant(State(state): State<AppState>) -> impl IntoResponse {
-    match state.store.revive_dormant().await {
+    match service(&state).revive_dormant().await {
         Ok(count) => Json(json!({"ok":true,"revived":count})).into_response(),
         Err(error) => api_error(error),
     }

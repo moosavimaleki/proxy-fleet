@@ -9,6 +9,7 @@ pub mod probe;
 pub mod publisher;
 pub mod scheduler;
 pub mod selection;
+pub mod service;
 pub mod storage;
 pub mod upstream;
 pub mod xray;
