@@ -15,6 +15,9 @@ services:
         hard: 65535
     environment:
       HOME: /home/app
+      # A deliberate operator switch for maintenance/cutover.  It defaults to
+      # enabled, so the normal service behaviour is unchanged.
+      PROXY_FLEET_PUBLISHING_ENABLED: "${PROXY_FLEET_PUBLISHING_ENABLED:-true}"
       GIT_SSH_COMMAND: "ssh -i /run/secrets/github_ssh_key -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o Hostname=ssh.github.com -p 443"
     volumes:
       - ./data:/app/data

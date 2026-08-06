@@ -866,7 +866,7 @@ fieldهای جدید node:
 
 ## 25. budgetهای عملکرد و پذیرش
 
-- [ ] هیچ full-table scan در scheduler tick عادی وجود نداشته باشد.
+- [x] هیچ full-table scan در scheduler tick عادی وجود نداشته باشد.
 - [x] API list با pagination در اندازهٔ محدود باقی بماند.
 - [x] یک writer کند SQLite کل HTTP server را block نکند.
 - [x] تعداد process Xray از سقف config بالاتر نرود.
@@ -993,7 +993,7 @@ fieldهای جدید node:
 
 ### فاز 11: cutover امن
 
-- [ ] publisher موقتاً pause شود.
+- [x] publisher موقتاً pause شود.
 - [x] backup سازگار دیتابیس گرفته شود.
 - [x] container Python متوقف ولی image آن نگه داشته شود.
 - [x] container Rust روی DB واقعی migration و start شود.

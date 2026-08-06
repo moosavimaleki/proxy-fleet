@@ -1606,7 +1606,8 @@ CREATE TABLE IF NOT EXISTS scheduler_state (key TEXT PRIMARY KEY, value_json TEX
 CREATE TABLE IF NOT EXISTS service_state (key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at TEXT NOT NULL);
 "#;
 const INDEXES: &[&str] = &[
-    "CREATE INDEX IF NOT EXISTS idx_nodes_lifecycle_next_test ON nodes(lifecycle_state, next_test_at)",
+    "CREATE INDEX IF NOT EXISTS idx_nodes_lifecycle_due ON nodes(lifecycle_state, structurally_valid, next_test_at, test_lease_until)",
+    "CREATE INDEX IF NOT EXISTS idx_nodes_waiting_origin_due ON nodes(lifecycle_state, waiting_from_state, structurally_valid, next_test_at, test_lease_until)",
     "CREATE INDEX IF NOT EXISTS idx_nodes_publishable ON nodes(publication_lease_until, structurally_valid, lifecycle_state)",
     "CREATE INDEX IF NOT EXISTS idx_nodes_test_lease ON nodes(test_lease_until)",
     "CREATE INDEX IF NOT EXISTS idx_nodes_upstream_generation ON nodes(last_seen_generation, upstream_missing_generations)",

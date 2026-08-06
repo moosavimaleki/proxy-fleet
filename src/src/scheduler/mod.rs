@@ -391,23 +391,51 @@ async fn append_claims(
         return Ok(());
     }
     let remaining = params.queue_limit.min(total_limit - jobs.len());
-    // WAITING_FOR_PORT is an execution state. Its stored origin determines
-    // the fair queue it returns to once a real port can be reserved.
-    let effective_state = "CASE WHEN lifecycle_state = 'WAITING_FOR_PORT' THEN waiting_from_state ELSE lifecycle_state END";
-    let state_clause = if params.state.is_empty() {
-        "(CASE WHEN lifecycle_state = 'WAITING_FOR_PORT' THEN waiting_from_state ELSE lifecycle_state END) IN ('CANDIDATE', 'PROBATION', 'DORMANT', 'ACTIVE')"
-    } else {
-        "(CASE WHEN lifecycle_state = 'WAITING_FOR_PORT' THEN waiting_from_state ELSE lifecycle_state END) = ?"
-    };
-    let sql = format!(
-        "SELECT id, raw_config, {effective_state} AS effective_state, last_real_download_at FROM nodes WHERE {state_clause} AND structurally_valid = 1 AND (next_test_at IS NULL OR next_test_at <= ?) AND (test_lease_until IS NULL OR test_lease_until <= ?) ORDER BY CASE WHEN publication_lease_until IS NOT NULL AND publication_lease_until <= ? THEN 100 ELSE 0 END + CASE WHEN last_real_download_at IS NOT NULL THEN 80 ELSE 0 END + CASE WHEN last_failure_class = 'TLS_TIMEOUT' THEN 50 ELSE 0 END + CASE WHEN last_test_at IS NULL OR last_test_at <= ? THEN 40 ELSE 0 END + CASE WHEN last_seen_generation IS NOT NULL THEN 30 ELSE 0 END - CASE WHEN last_real_download_at IS NULL AND failure_streak >= 5 THEN 80 ELSE 0 END - CASE WHEN ? >= 0.75 AND last_real_download_at IS NULL THEN 100 ELSE 0 END DESC, ((unicode(substr(config_hash, 1, 1)) * 31 + unicode(substr(config_hash, 2, 1))) % 17) ASC, config_hash ASC, next_test_at ASC LIMIT ?"
-    );
-    let mut query = sqlx::query(&sql);
-    if !params.state.is_empty() {
-        query = query.bind(params.state);
-    }
+    // WAITING_FOR_PORT is an execution state whose saved origin determines
+    // its fair queue. Keep it as a separate indexed branch instead of using
+    // CASE in WHERE: CASE prevents SQLite from seeking on lifecycle_state.
+    // The scheduler always claims a concrete queue, so one bind is enough.
+    let sql = "WITH eligible AS (
+            SELECT id, raw_config, lifecycle_state AS effective_state,
+                   last_real_download_at, publication_lease_until,
+                   last_failure_class, last_test_at, last_seen_generation,
+                   failure_streak, config_hash, next_test_at
+              FROM nodes
+             WHERE lifecycle_state = ?
+               AND structurally_valid = 1
+               AND (next_test_at IS NULL OR next_test_at <= ?)
+               AND (test_lease_until IS NULL OR test_lease_until <= ?)
+            UNION ALL
+            SELECT id, raw_config, waiting_from_state AS effective_state,
+                   last_real_download_at, publication_lease_until,
+                   last_failure_class, last_test_at, last_seen_generation,
+                   failure_streak, config_hash, next_test_at
+              FROM nodes
+             WHERE lifecycle_state = 'WAITING_FOR_PORT'
+               AND waiting_from_state = ?
+               AND structurally_valid = 1
+               AND (next_test_at IS NULL OR next_test_at <= ?)
+               AND (test_lease_until IS NULL OR test_lease_until <= ?)
+        )
+        SELECT id, raw_config, effective_state, last_real_download_at
+          FROM eligible
+         ORDER BY CASE WHEN publication_lease_until IS NOT NULL AND publication_lease_until <= ? THEN 100 ELSE 0 END
+                + CASE WHEN last_real_download_at IS NOT NULL THEN 80 ELSE 0 END
+                + CASE WHEN last_failure_class = 'TLS_TIMEOUT' THEN 50 ELSE 0 END
+                + CASE WHEN last_test_at IS NULL OR last_test_at <= ? THEN 40 ELSE 0 END
+                + CASE WHEN last_seen_generation IS NOT NULL THEN 30 ELSE 0 END
+                - CASE WHEN last_real_download_at IS NULL AND failure_streak >= 5 THEN 80 ELSE 0 END
+                - CASE WHEN ? >= 0.75 AND last_real_download_at IS NULL THEN 100 ELSE 0 END DESC,
+                  ((unicode(substr(config_hash, 1, 1)) * 31 + unicode(substr(config_hash, 2, 1))) % 17) ASC,
+                  config_hash ASC, next_test_at ASC
+         LIMIT ?";
+    let query = sqlx::query(sql);
     let stale = params.now - Duration::hours(1);
     let rows = query
+        .bind(params.state)
+        .bind(params.now.to_rfc3339())
+        .bind(params.now.to_rfc3339())
+        .bind(params.state)
         .bind(params.now.to_rfc3339())
         .bind(params.now.to_rfc3339())
         .bind((params.now + Duration::hours(1)).to_rfc3339())
@@ -444,6 +472,8 @@ async fn append_claims(
 
 #[cfg(test)]
 mod tests {
+    use sqlx::Row;
+
     use crate::{
         domain::{evidence::TestStage, failure::FailureClass},
         probe::{ProbeEvent, ProbeReport},
@@ -564,6 +594,40 @@ mod tests {
         .await
         .expect("claim");
         assert!(jobs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn normal_scheduler_queue_uses_due_index_not_a_table_scan() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        let plan = sqlx::query(
+            "EXPLAIN QUERY PLAN SELECT id FROM nodes
+              WHERE lifecycle_state = 'CANDIDATE' AND structurally_valid = 1
+                AND (next_test_at IS NULL OR next_test_at <= '2099-01-01T00:00:00+00:00')
+                AND (test_lease_until IS NULL OR test_lease_until <= '2099-01-01T00:00:00+00:00')",
+        )
+        .fetch_all(store.pool())
+        .await
+        .expect("query plan");
+        let details = plan
+            .iter()
+            .map(|row| row.get::<String, _>("detail"))
+            .collect::<Vec<_>>();
+        assert!(
+            details
+                .iter()
+                .any(|detail| detail.contains("idx_nodes_lifecycle_due")),
+            "scheduler queue must seek the due index, got {details:?}"
+        );
+        assert!(
+            !details
+                .iter()
+                .any(|detail| detail.starts_with("SCAN nodes")),
+            "normal queue may not perform a full nodes scan, got {details:?}"
+        );
     }
 
     #[tokio::test]
