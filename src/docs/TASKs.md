@@ -842,17 +842,17 @@ fieldهای جدید node:
 - [ ] process cancellation و نبود zombie.
 - [x] upstream complete/incomplete generation.
 - [ ] publisher no-op/change/push failure/retry.
-- [ ] network incident بدون demotion.
+- [x] network incident بدون demotion.
 
 ### 24.4 end-to-end
 
 - [x] Docker با DB کپی‌شده بالا بیاید.
-- [ ] manual import تا publication کامل طی شود.
-- [ ] proxy موفق وارد ACTIVE و خروجی شود.
-- [ ] یک timeout بعدی آن را فوراً حذف نکند.
-- [ ] lease expiry بدون success جدید آن را حذف کند.
-- [ ] proxy recovered از DORMANT دوباره ACTIVE شود.
-- [ ] تمام صفحات پنل و actionها smoke test شوند.
+- [x] manual import تا publication کامل طی شود.
+- [x] proxy موفق وارد ACTIVE و خروجی شود.
+- [x] یک timeout بعدی آن را فوراً حذف نکند.
+- [x] lease expiry بدون success جدید آن را حذف کند.
+- [x] proxy recovered از DORMANT دوباره ACTIVE شود.
+- [x] تمام صفحات پنل و actionها smoke test شوند.
 
 ### 24.5 benchmark
 

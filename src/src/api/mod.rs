@@ -534,7 +534,7 @@ mod tests {
 
     use crate::{app::AppState, config::AppConfig, parser::parse_share_url, storage::Store};
 
-    async fn test_router() -> (tempfile::TempDir, axum::Router) {
+    async fn test_router_with_store() -> (tempfile::TempDir, Store, axum::Router) {
         let temp = tempfile::tempdir().expect("tempdir");
         let store = Store::connect(temp.path().join("fleet.db"))
             .await
@@ -542,10 +542,15 @@ mod tests {
         store.migrate().await.expect("migrate");
         let state = AppState::new(
             Arc::new(AppConfig::default()),
-            store,
+            store.clone(),
             tokio_util::sync::CancellationToken::new(),
         );
-        (temp, super::router(state))
+        (temp, store, super::router(state))
+    }
+
+    async fn test_router() -> (tempfile::TempDir, axum::Router) {
+        let (temp, _store, app) = test_router_with_store().await;
+        (temp, app)
     }
 
     #[tokio::test]
@@ -692,6 +697,54 @@ mod tests {
             .unwrap();
         let response = app.oneshot(request).await.expect("import response");
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn manual_import_success_flows_to_active_publication_snapshot() {
+        let (_temp, store, app) = test_router_with_store().await;
+        let raw = "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?security=tls#e2e";
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/manual-import")
+                    .header("content-type", "application/json")
+                    .body(Body::from(serde_json::json!({"configs":raw}).to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("import response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let id = sqlx::query_scalar::<_, String>("SELECT id FROM nodes WHERE raw_config = ?")
+            .bind(raw)
+            .fetch_one(store.pool())
+            .await
+            .expect("imported node");
+        store
+            .apply_test_event(
+                crate::storage::TestEventInput {
+                    proxy_id: id,
+                    run_id: "e2e-download".to_owned(),
+                    stage: crate::domain::evidence::TestStage::Download,
+                    class: crate::domain::failure::FailureClass::Success,
+                    fast_download: true,
+                    latency_ms: Some(10.0),
+                    download_bps: Some(1_000_000.0),
+                    bytes_transferred: Some(1_000_000),
+                    duration_ms: Some(1_000),
+                    endpoint: Some("https://example.test".to_owned()),
+                    system_pressure: Some(0.1),
+                    incident_id: None,
+                    detail_json: serde_json::json!({"test":"e2e"}),
+                },
+                std::time::Duration::from_secs(10),
+                std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(1800),
+            )
+            .await
+            .expect("download success");
+        let snapshot = store.publication_snapshot().await.expect("snapshot");
+        assert_eq!(snapshot.raw_configs, vec![raw.to_owned()]);
     }
 
     #[tokio::test]
