@@ -223,7 +223,7 @@ routeهای زیر باید با همان path باقی بمانند:
 - [x] `next_test_at` و test lease برای جلوگیری از duplicate work.
 - [x] `publication_lease_until` و دلیل آخرین تمدید.
 - [x] آخرین success/failure و failure class.
-- [ ] consecutive failure/success و تعداد failure مستقل.
+- [x] consecutive failure/success و تعداد failure مستقل.
 - [x] آخرین latency، download speed و endpoint.
 - [x] exit metadata.
 - [x] main port/runtime ownership.

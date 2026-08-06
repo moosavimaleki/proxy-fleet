@@ -690,11 +690,11 @@ impl Store {
         } else {
             None
         };
-        sqlx::query("UPDATE nodes SET status = ?, lifecycle_state = ?, testing_from_state = NULL, test_lease_until = NULL, state_entered_at = COALESCE(?, state_entered_at), structurally_valid = CASE WHEN ? = 'INVALID_CONFIG' THEN 0 ELSE COALESCE(structurally_valid, 1) END, health_alpha = ?, health_beta = ?, health_score = ?, evidence_updated_at = ?, publication_lease_until = ?, publication_lease_kind = CASE WHEN ? IS NOT NULL THEN ? ELSE publication_lease_kind END, activated_at = ?, last_success_at = ?, last_real_download_at = ?, last_failure_at = COALESCE(?, last_failure_at), last_failure_class = CASE WHEN ? IN ('SUCCESS', 'LOCAL_OVERLOAD', 'ENDPOINT_FAILURE') THEN last_failure_class ELSE ? END, last_failure_run_id = CASE WHEN ? IN ('SUCCESS', 'LOCAL_OVERLOAD', 'ENDPOINT_FAILURE') THEN last_failure_run_id ELSE ? END, failure_streak = ?, independent_failure_count = ?, next_test_at = ?, last_test_at = ?, last_test_endpoint = COALESCE(?, last_test_endpoint), relay_delay_ms = COALESCE(?, relay_delay_ms), download_kbps = COALESCE(?, download_kbps), updated_at = ? WHERE id = ?")
+        sqlx::query("UPDATE nodes SET status = ?, lifecycle_state = ?, testing_from_state = NULL, test_lease_until = NULL, state_entered_at = COALESCE(?, state_entered_at), structurally_valid = CASE WHEN ? = 'INVALID_CONFIG' THEN 0 ELSE COALESCE(structurally_valid, 1) END, health_alpha = ?, health_beta = ?, health_score = ?, evidence_updated_at = ?, publication_lease_until = ?, publication_lease_kind = CASE WHEN ? IS NOT NULL THEN ? ELSE publication_lease_kind END, activated_at = ?, last_success_at = ?, last_real_download_at = ?, last_failure_at = COALESCE(?, last_failure_at), last_failure_class = CASE WHEN ? IN ('SUCCESS', 'LOCAL_OVERLOAD', 'ENDPOINT_FAILURE') THEN last_failure_class ELSE ? END, last_failure_run_id = CASE WHEN ? IN ('SUCCESS', 'LOCAL_OVERLOAD', 'ENDPOINT_FAILURE') THEN last_failure_run_id ELSE ? END, success_streak = CASE WHEN ? = 'SUCCESS' THEN success_streak + 1 WHEN ? IN ('LOCAL_OVERLOAD', 'ENDPOINT_FAILURE') THEN success_streak ELSE 0 END, failure_streak = ?, independent_failure_count = ?, next_test_at = ?, last_test_at = ?, last_test_endpoint = COALESCE(?, last_test_endpoint), relay_delay_ms = COALESCE(?, relay_delay_ms), download_kbps = COALESCE(?, download_kbps), updated_at = ? WHERE id = ?")
             .bind(decision.lifecycle.as_str()).bind(decision.lifecycle.as_str()).bind(state_entered_at.map(|time| time.to_rfc3339())).bind(event.class.as_str())
             .bind(alpha).bind(beta).bind(decision.score).bind(now.to_rfc3339()).bind(decision.lease_until.map(|time| time.to_rfc3339())).bind(decision.lease_until.map(|_| "lease".to_owned())).bind(event.stage.as_str())
             .bind(activated_at.map(|time| time.to_rfc3339())).bind(last_success_at.map(|time| time.to_rfc3339())).bind(last_real_download_at.map(|time| time.to_rfc3339())).bind(last_failure_at.map(|time| time.to_rfc3339())).bind(event.class.as_str()).bind(event.class.as_str()).bind(event.class.as_str()).bind(&event.run_id)
-            .bind(decision.failure_streak as i64).bind(decision.independent_failures as i64).bind(decision.next_test_at.to_rfc3339()).bind(now.to_rfc3339()).bind(event.endpoint).bind(event.latency_ms.map(|value| value.round() as i64)).bind(event.download_bps.map(|value| (value / 1024.0).round() as i64)).bind(now.to_rfc3339()).bind(&event.proxy_id)
+            .bind(event.class.as_str()).bind(event.class.as_str()).bind(decision.failure_streak as i64).bind(decision.independent_failures as i64).bind(decision.next_test_at.to_rfc3339()).bind(now.to_rfc3339()).bind(event.endpoint).bind(event.latency_ms.map(|value| value.round() as i64)).bind(event.download_bps.map(|value| (value / 1024.0).round() as i64)).bind(now.to_rfc3339()).bind(&event.proxy_id)
             .execute(&mut *transaction).await?;
         transaction.commit().await?;
         Ok(TestEventApplied {
@@ -1480,6 +1480,7 @@ const NODE_ADDITIONS: &[(&str, &str)] = &[
     ("last_failure_at", "TEXT"),
     ("last_failure_class", "TEXT"),
     ("last_failure_run_id", "TEXT"),
+    ("success_streak", "INTEGER NOT NULL DEFAULT 0"),
     ("last_download_test_at", "TEXT"),
     ("failure_streak", "INTEGER NOT NULL DEFAULT 0"),
     ("independent_failure_count", "INTEGER NOT NULL DEFAULT 0"),
@@ -2115,6 +2116,43 @@ mod tests {
         let candidates = store.active_runtime_candidates().await.expect("candidates");
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].id, id);
+    }
+
+    #[tokio::test]
+    async fn success_streak_increments_only_for_success_and_failure_resets_it() {
+        let (_temp, store, id) = test_store().await;
+        for run_id in ["success-one", "success-two"] {
+            store
+                .apply_test_event(
+                    event(&id, run_id, TestStage::Relay, FailureClass::Success),
+                    std::time::Duration::from_secs(10),
+                    std::time::Duration::from_secs(300),
+                    std::time::Duration::from_secs(1800),
+                )
+                .await
+                .expect("success event");
+        }
+        let streak = sqlx::query_scalar::<_, i64>("SELECT success_streak FROM nodes WHERE id = ?")
+            .bind(&id)
+            .fetch_one(store.pool())
+            .await
+            .expect("success streak");
+        assert_eq!(streak, 2);
+        store
+            .apply_test_event(
+                event(&id, "failure", TestStage::Relay, FailureClass::TcpTimeout),
+                std::time::Duration::from_secs(10),
+                std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(1800),
+            )
+            .await
+            .expect("failure event");
+        let streak = sqlx::query_scalar::<_, i64>("SELECT success_streak FROM nodes WHERE id = ?")
+            .bind(id)
+            .fetch_one(store.pool())
+            .await
+            .expect("reset streak");
+        assert_eq!(streak, 0);
     }
 
     #[tokio::test]
