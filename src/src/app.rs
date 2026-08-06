@@ -1,4 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -37,6 +43,9 @@ pub struct AppState {
     pub shutdown: CancellationToken,
     pub runtime: Arc<RwLock<RuntimeStatus>>,
     pub xray_runtimes: crate::xray::runtime::RuntimeManager,
+    /// Manual and periodic refreshes share this process-local operation lease.
+    /// The refresh itself is generation-based and must never overlap.
+    pub upstream_refresh_in_progress: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -67,6 +76,7 @@ impl AppState {
                 network_message: "baseline pending".to_owned(),
             })),
             xray_runtimes: crate::xray::runtime::RuntimeManager::default(),
+            upstream_refresh_in_progress: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -223,6 +233,9 @@ impl AppState {
                 tokio::select! {
                     _ = state.shutdown.cancelled() => return,
                     _ = interval.tick() => {
+                        if state.upstream_refresh_in_progress.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+                            continue;
+                        }
                         match crate::upstream::refresh(&state.store, state.config.clone()).await {
                             Ok(report) => {
                                 let value = serde_json::json!({"at": chrono::Utc::now(), "status": "ok", "report": report});
@@ -238,6 +251,7 @@ impl AppState {
                                 warn!(%error, "upstream refresh loop failed");
                             }
                         }
+                        state.upstream_refresh_in_progress.store(false, Ordering::Release);
                     }
                 }
             }
@@ -517,9 +531,15 @@ impl AppState {
             if !state.config.publishing.enabled {
                 return;
             }
-            let mut interval = tokio::time::interval(Duration::from_secs(
-                state.config.publishing.reconcile_interval_seconds,
-            ));
+            // A reconciliation period is also the publication debounce
+            // window: state changes inside it become one immutable snapshot.
+            let debounce_seconds = state.config.publishing.debounce_seconds.ceil() as u64;
+            let interval_seconds = state
+                .config
+                .publishing
+                .reconcile_interval_seconds
+                .max(debounce_seconds.max(1));
+            let mut interval = tokio::time::interval(Duration::from_secs(interval_seconds));
             loop {
                 tokio::select! {
                     _ = state.shutdown.cancelled() => return,

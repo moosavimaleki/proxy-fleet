@@ -1,7 +1,8 @@
-use std::{fs, path::Path};
+use std::{env, fs, path::Path};
 
 use anyhow::Context;
 use serde::Deserialize;
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -28,9 +29,59 @@ impl AppConfig {
     pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let raw = fs::read_to_string(path.as_ref())
             .with_context(|| format!("reading {}", path.as_ref().display()))?;
-        let config: Self = yaml_serde::from_str(&raw).context("parsing YAML configuration")?;
+        warn_unknown_keys(&raw)?;
+        let mut config: Self = yaml_serde::from_str(&raw).context("parsing YAML configuration")?;
+        config.apply_environment()?;
         config.validate()?;
+        config.log_migration_report();
         Ok(config)
+    }
+
+    /// Small, explicit environment override surface for containers.  Secrets
+    /// deliberately do not belong here and no environment value is logged.
+    fn apply_environment(&mut self) -> anyhow::Result<()> {
+        if let Ok(value) = env::var("PROXY_FLEET_API_HOST") {
+            self.api.host = value;
+        }
+        if let Some(value) = env_number::<u16>("PROXY_FLEET_API_PORT")? {
+            self.api.port = value;
+        }
+        if let Ok(value) = env::var("PROXY_FLEET_DATABASE_PATH") {
+            self.database.path = value;
+        }
+        if let Ok(value) = env::var("PROXY_FLEET_XRAY_BIN") {
+            self.xray_bin = value;
+        }
+        if let Some(value) = env_bool("PROXY_FLEET_PUBLISHING_ENABLED")? {
+            self.publishing.enabled = value;
+        }
+        Ok(())
+    }
+
+    fn log_migration_report(&self) {
+        let retired_snapshot_setting = self.publishing.retained_snapshots.is_some();
+        let requested_prune = self.subscriptions.prune_missing_after_cycles;
+        info!(
+            subscriptions = self.subscriptions.urls.len(),
+            refresh_seconds = self.subscriptions.refresh_interval_seconds,
+            requested_prune_cycles = requested_prune,
+            effective_minimum_generations = self.subscriptions.complete_generations_before_retire(),
+            retained_snapshots_ignored = retired_snapshot_setting,
+            recent_success_retention_hours = self.health.recent_success_retention_hours,
+            "configuration migration report: preserved, converted, and deprecated keys"
+        );
+        if requested_prune < 3 {
+            warn!(
+                requested_prune,
+                effective = 3,
+                "deprecated prune_missing_after_cycles is raised to three complete generations"
+            );
+        }
+        if retired_snapshot_setting {
+            warn!(
+                "deprecated publishing.retained_snapshots is ignored; publication leases control retention"
+            );
+        }
     }
 
     fn validate(&self) -> anyhow::Result<()> {
@@ -88,6 +139,231 @@ impl AppConfig {
             "selection sample size must be at least 2"
         );
         Ok(())
+    }
+}
+
+fn env_number<T>(name: &str) -> anyhow::Result<Option<T>>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    env::var(name)
+        .ok()
+        .map(|value| {
+            value
+                .parse::<T>()
+                .map_err(|error| anyhow::anyhow!("{name} must be a valid number: {error}"))
+        })
+        .transpose()
+}
+
+fn env_bool(name: &str) -> anyhow::Result<Option<bool>> {
+    env::var(name)
+        .ok()
+        .map(|value| match value.as_str() {
+            "1" | "true" | "TRUE" | "yes" | "YES" => Ok(true),
+            "0" | "false" | "FALSE" | "no" | "NO" => Ok(false),
+            _ => anyhow::bail!("{name} must be a boolean"),
+        })
+        .transpose()
+}
+
+fn warn_unknown_keys(raw: &str) -> anyhow::Result<()> {
+    let value: yaml_serde::Value =
+        yaml_serde::from_str(raw).context("parsing YAML configuration")?;
+    inspect_mapping(&value, "")
+}
+
+fn inspect_mapping(value: &yaml_serde::Value, path: &str) -> anyhow::Result<()> {
+    let yaml_serde::Value::Mapping(mapping) = value else {
+        anyhow::bail!(
+            "configuration section {} must be a YAML mapping",
+            if path.is_empty() { "<root>" } else { path }
+        );
+    };
+    let known = known_keys(path).unwrap_or(&[]);
+    for (key, _) in mapping.iter() {
+        match key.as_str() {
+            Some(name) if known.contains(&name) => {}
+            Some(name) => warn!(path, key = name, "unknown configuration key is ignored"),
+            None => warn!(path, "non-string configuration key is ignored"),
+        }
+    }
+    for key in nested_mapping_keys(path) {
+        if let Some(value) = mapping.get(*key) {
+            let child_path = if path.is_empty() {
+                (*key).to_owned()
+            } else {
+                format!("{path}.{key}")
+            };
+            inspect_mapping(value, &child_path)?;
+        }
+    }
+    for (key, item_path) in nested_sequence_keys(path) {
+        if let Some(yaml_serde::Value::Sequence(values)) = mapping.get(*key) {
+            for value in values {
+                inspect_mapping(value, item_path)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn nested_mapping_keys(path: &str) -> &'static [&'static str] {
+    match path {
+        "" => &[
+            "service",
+            "publishing",
+            "subscriptions",
+            "ports",
+            "database",
+            "health",
+            "metadata",
+            "download_test",
+            "dead_pool",
+            "client_penalty",
+            "selection",
+            "api",
+            "vip_port",
+            "network_guard",
+        ],
+        "ports" => &["main", "test"],
+        "client_penalty" => &["broken", "rate_limited"],
+        "selection" => &["weights"],
+        _ => &[],
+    }
+}
+
+fn nested_sequence_keys(path: &str) -> &'static [(&'static str, &'static str)] {
+    match path {
+        "subscriptions" => &[("urls", "subscriptions.urls[]")],
+        "network_guard" => &[("sentinel_targets", "network_guard.sentinel_targets[]")],
+        _ => &[],
+    }
+}
+
+fn known_keys(path: &str) -> Option<&'static [&'static str]> {
+    match path {
+        "" => Some(&[
+            "service",
+            "publishing",
+            "subscriptions",
+            "ports",
+            "database",
+            "health",
+            "metadata",
+            "download_test",
+            "dead_pool",
+            "client_penalty",
+            "selection",
+            "api",
+            "vip_port",
+            "network_guard",
+            "assignment_ttl_seconds",
+            "xray_bin",
+        ]),
+        "service" => Some(&["name", "environment"]),
+        "publishing" => Some(&[
+            "enabled",
+            "git_remote",
+            "git_branch",
+            "debounce_seconds",
+            "reconcile_interval_seconds",
+            "retained_snapshots",
+            "author_name",
+            "author_email",
+        ]),
+        "subscriptions" => Some(&[
+            "refresh_interval_seconds",
+            "prune_missing_after_cycles",
+            "urls",
+        ]),
+        "subscriptions.urls[]" => Some(&["name", "url"]),
+        "ports" => Some(&["main", "test"]),
+        "ports.main" | "ports.test" => Some(&["start", "end"]),
+        "database" => Some(&["type", "path"]),
+        "health" => Some(&[
+            "active_min_residence_seconds",
+            "active_pool_relay_check_interval_seconds",
+            "active_pool_download_check_interval_seconds",
+            "active_relay_failure_threshold",
+            "probation_recheck_interval_seconds",
+            "probation_failure_threshold",
+            "probation_success_threshold",
+            "candidate_recheck_interval_seconds",
+            "candidate_max_failures",
+            "candidate_retry_backoff_seconds",
+            "candidate_batch_size",
+            "candidate_cycle_limit",
+            "candidate_batch_concurrency",
+            "candidate_parallel_batches",
+            "candidate_batch_timeout_seconds",
+            "xray_concurrency_min",
+            "xray_concurrency_max",
+            "download_concurrency_min",
+            "download_concurrency_max",
+            "recent_success_retention_hours",
+            "dead_recheck_batch_size",
+            "dead_retry_recent_seconds",
+            "dead_retry_unverified_seconds",
+            "relay_timeout_ms",
+            "max_relay_delay_ms",
+            "http_probe_body_limit_bytes",
+            "http_probe_max_endpoints",
+            "http_probe_success_quorum",
+            "test_url",
+            "fallback_urls",
+        ]),
+        "metadata" => Some(&[
+            "enabled",
+            "endpoint",
+            "timeout_seconds",
+            "cache_ttl_seconds",
+        ]),
+        "download_test" => Some(&[
+            "enabled",
+            "timeout_seconds",
+            "per_url_timeout_seconds",
+            "min_download_kbps",
+            "target_download_kbps",
+            "test_url",
+            "fallback_urls",
+        ]),
+        "dead_pool" => Some(&["ttl_hours", "invalid_ttl_hours"]),
+        "client_penalty" => Some(&["broken", "rate_limited"]),
+        "client_penalty.broken" | "client_penalty.rate_limited" => Some(&[
+            "base_cooldown_seconds",
+            "max_cooldown_seconds",
+            "jitter_ratio",
+        ]),
+        "selection" => Some(&["strategy", "sample_size", "weights"]),
+        "selection.weights" => Some(&[
+            "latency",
+            "download",
+            "availability",
+            "fairness",
+            "client_history",
+        ]),
+        "api" => Some(&["host", "port", "auth_enabled"]),
+        "vip_port" => Some(&[
+            "enabled",
+            "port",
+            "check_interval_seconds",
+            "min_switch_interval_seconds",
+            "switch_threshold_score_diff",
+        ]),
+        "network_guard" => Some(&[
+            "enabled",
+            "check_interval_seconds",
+            "failure_threshold",
+            "recovery_threshold",
+            "minimum_successful_targets",
+            "require_http_success",
+            "mass_failure_threshold_percent",
+            "sentinel_targets",
+        ]),
+        "network_guard.sentinel_targets[]" => Some(&["type", "host", "port", "url"]),
+        _ => None,
     }
 }
 
@@ -515,5 +791,29 @@ impl Default for SentinelTarget {
             port: 0,
             url: String::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_unknown_top_level_keys_without_silently_rejecting_valid_config() {
+        let temp = tempfile::NamedTempFile::new().expect("temporary config");
+        std::fs::write(
+            temp.path(),
+            "subscriptions:\n  refresh_interval_seconds: 60\n  urls:\n    - name: fixture\n      url: https://example.invalid/sub\nhealth:\n  active_min_residence_seconds: 900\nunknown_typo: true\n",
+        )
+        .expect("write config");
+        let config = AppConfig::load(temp.path()).expect("config remains loadable");
+        assert_eq!(config.subscriptions.urls.len(), 1);
+    }
+
+    #[test]
+    fn rejects_non_mapping_configuration_root() {
+        let temp = tempfile::NamedTempFile::new().expect("temporary config");
+        std::fs::write(temp.path(), "- invalid\n").expect("write config");
+        assert!(AppConfig::load(temp.path()).is_err());
     }
 }

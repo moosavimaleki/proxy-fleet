@@ -4,7 +4,10 @@
 //! SQLite.  This lets the scheduler and state machine change without breaking
 //! v2rayN-facing tools or the dashboard.
 
-use std::sync::Arc;
+use std::{
+    sync::{Arc, atomic::Ordering},
+    time::Duration,
+};
 
 use axum::{
     Json, Router,
@@ -15,6 +18,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::json;
+use tower_http::timeout::TimeoutLayer;
 
 use crate::{SERVICE_VERSION, app::AppState, parser::parse_subscription, selection, upstream};
 
@@ -39,6 +43,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/health-model", get(health_model))
         .route("/api/v1/upstream", get(upstream_status))
         .route("/api/v1/incidents", get(incidents))
+        .route("/api/v1/publisher", get(publisher_status))
         .route("/api/v1/clients", get(clients))
         .route("/api/v1/client-status", get(client_status))
         .route("/api/v1/logs", get(logs))
@@ -48,6 +53,12 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/nodes/dead/clear", post(revive_dormant))
         .route("/api/v1/subscriptions/reload", post(reload_subscriptions))
         .route("/api/v1/db/cleanup", post(cleanup_database))
+        // An HTTP request must have its own deadline; probe/Xray workers use
+        // separate cancellation and timeout ownership.
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(20),
+        ))
         .with_state(state)
 }
 
@@ -299,6 +310,14 @@ async fn incidents(State(state): State<AppState>) -> impl IntoResponse {
         Err(error) => api_error(error),
     }
 }
+async fn publisher_status(State(state): State<AppState>) -> impl IntoResponse {
+    match state.store.service_state("last_publisher").await {
+        Ok(status) => {
+            Json(json!({"enabled":state.config.publishing.enabled,"status":status})).into_response()
+        }
+        Err(error) => api_error(error),
+    }
+}
 
 async fn clients(State(state): State<AppState>) -> impl IntoResponse {
     match state.store.list_clients().await {
@@ -428,16 +447,29 @@ async fn revive_dormant(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 async fn reload_subscriptions(State(state): State<AppState>) -> impl IntoResponse {
+    const OPERATION_ID: &str = "upstream-refresh";
+    if state
+        .upstream_refresh_in_progress
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return (
+            StatusCode::ACCEPTED,
+            Json(json!({"ok":true,"scheduled":false,"operation_id":OPERATION_ID,"message":"already running"})),
+        ).into_response();
+    }
     let store = state.store.clone();
     let config: Arc<crate::config::AppConfig> = state.config.clone();
+    let in_progress = state.upstream_refresh_in_progress.clone();
     tokio::spawn(async move {
         if let Err(error) = upstream::refresh(&store, config).await {
             tracing::warn!(%error, "manual upstream refresh failed");
         }
+        in_progress.store(false, Ordering::Release);
     });
     (
         StatusCode::ACCEPTED,
-        Json(json!({"ok":true,"scheduled":true})),
+        Json(json!({"ok":true,"scheduled":true,"operation_id":OPERATION_ID})),
     )
         .into_response()
 }
@@ -563,6 +595,7 @@ mod tests {
             "/api/v1/health-model",
             "/api/v1/upstream",
             "/api/v1/incidents",
+            "/api/v1/publisher",
             "/api/v1/clients",
             "/api/v1/logs",
             "/",

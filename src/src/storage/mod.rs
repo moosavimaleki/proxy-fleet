@@ -26,6 +26,14 @@ pub struct Store {
     database_path: PathBuf,
 }
 
+/// One immutable publication input.  Both generation and node set originate
+/// from the same SQLite read transaction.
+#[derive(Debug, Clone)]
+pub struct PublicationSnapshot {
+    pub generation: i64,
+    pub raw_configs: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct FleetCounts {
     pub total: i64,
@@ -665,9 +673,27 @@ impl Store {
         })
     }
 
+    pub async fn publication_snapshot(&self) -> anyhow::Result<PublicationSnapshot> {
+        let mut transaction = self.pool.begin().await?;
+        let raw_configs = sqlx::query_scalar("SELECT raw_config FROM nodes WHERE structurally_valid = 1 AND publication_lease_until > ? AND lifecycle_state NOT IN ('INVALID', 'RETIRED') ORDER BY health_score DESC, config_hash ASC")
+            .bind(Utc::now().to_rfc3339())
+            .fetch_all(&mut *transaction)
+            .await?;
+        let generation = sqlx::query_scalar::<_, Option<i64>>(
+            "SELECT MAX(generation) FROM upstream_refresh_runs WHERE status = 'COMPLETE'",
+        )
+        .fetch_one(&mut *transaction)
+        .await?
+        .unwrap_or(0);
+        transaction.commit().await?;
+        Ok(PublicationSnapshot {
+            generation,
+            raw_configs,
+        })
+    }
+
     pub async fn list_publishable_raw_configs(&self) -> anyhow::Result<Vec<String>> {
-        Ok(sqlx::query_scalar("SELECT raw_config FROM nodes WHERE structurally_valid = 1 AND publication_lease_until > ? AND lifecycle_state NOT IN ('INVALID', 'RETIRED') ORDER BY health_score DESC, config_hash ASC")
-            .bind(Utc::now().to_rfc3339()).fetch_all(&self.pool).await?)
+        Ok(self.publication_snapshot().await?.raw_configs)
     }
 
     pub async fn ingest_proxy(&self, proxy: &ParsedProxy, generation: i64) -> anyhow::Result<bool> {
@@ -944,9 +970,9 @@ impl Store {
             .fetch_one(&self.pool)
             .await?;
         anyhow::ensure!(exists > 0, "node not found");
-        let event_rows = sqlx::query("SELECT occurred_at, stage, result, failure_class, latency_ms, download_bps, bytes_transferred, duration_ms, endpoint, system_pressure, detail_json FROM proxy_test_events WHERE proxy_id = ? ORDER BY occurred_at DESC LIMIT ?")
+        let event_rows = sqlx::query("SELECT occurred_at, stage, result, failure_class, evidence_alpha, evidence_beta, latency_ms, download_bps, bytes_transferred, duration_ms, endpoint, system_pressure, detail_json FROM proxy_test_events WHERE proxy_id = ? ORDER BY occurred_at DESC LIMIT ?")
             .bind(proxy_id).bind(limit.min(200) as i64).fetch_all(&self.pool).await?;
-        let mut values: Vec<_> = event_rows.into_iter().map(|row| serde_json::json!({"kind":"event","finished_at":row.get::<String,_>("occurred_at"),"test_kind":row.get::<String,_>("stage"),"result":row.get::<String,_>("result"),"failure_class":row.get::<String,_>("failure_class"),"latency_ms":row.get::<Option<f64>,_>("latency_ms"),"download_bps":row.get::<Option<f64>,_>("download_bps"),"bytes_transferred":row.get::<Option<i64>,_>("bytes_transferred"),"duration_ms":row.get::<Option<i64>,_>("duration_ms"),"endpoint":row.get::<Option<String>,_>("endpoint"),"system_pressure":row.get::<Option<f64>,_>("system_pressure"),"details":serde_json::from_str::<serde_json::Value>(&row.get::<String,_>("detail_json")).unwrap_or(serde_json::json!({}))})).collect();
+        let mut values: Vec<_> = event_rows.into_iter().map(|row| serde_json::json!({"kind":"event","finished_at":row.get::<String,_>("occurred_at"),"test_kind":row.get::<String,_>("stage"),"result":row.get::<String,_>("result"),"failure_class":row.get::<String,_>("failure_class"),"evidence_delta":{"alpha":row.get::<f64,_>("evidence_alpha"),"beta":row.get::<f64,_>("evidence_beta")},"latency_ms":row.get::<Option<f64>,_>("latency_ms"),"download_bps":row.get::<Option<f64>,_>("download_bps"),"bytes_transferred":row.get::<Option<i64>,_>("bytes_transferred"),"duration_ms":row.get::<Option<i64>,_>("duration_ms"),"endpoint":row.get::<Option<String>,_>("endpoint"),"system_pressure":row.get::<Option<f64>,_>("system_pressure"),"details":serde_json::from_str::<serde_json::Value>(&row.get::<String,_>("detail_json")).unwrap_or(serde_json::json!({}))})).collect();
         if values.len() < limit as usize {
             let remaining = limit.min(200) as usize - values.len();
             let old_rows = sqlx::query("SELECT finished_at, test_kind, trigger, ok, latency_ms, download_kbps, error, status_before, status_after, details_json FROM test_history WHERE node_id = ? ORDER BY finished_at DESC LIMIT ?")
@@ -1465,6 +1491,34 @@ mod tests {
         assert!(names.contains("publication_lease_until"));
         assert!(names.contains("last_failure_run_id"));
         assert_eq!(store.counts().await.expect("counts").total, 0);
+    }
+
+    #[tokio::test]
+    async fn publication_snapshot_reads_generation_and_leased_configs_together() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        let proxy = parse_share_url(
+            "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?security=tls#fixture",
+            "fixture",
+        )
+        .expect("parse proxy");
+        store.ingest_proxy(&proxy, 7).await.expect("ingest");
+        sqlx::query("UPDATE nodes SET lifecycle_state = 'ACTIVE', publication_lease_until = ?")
+            .bind((Utc::now() + chrono::Duration::hours(1)).to_rfc3339())
+            .execute(store.pool())
+            .await
+            .expect("lease");
+        let (run_id, generation) = store.begin_refresh(1).await.expect("refresh");
+        store
+            .finish_refresh(&run_id, generation, 1, 1, 1, 3)
+            .await
+            .expect("finish");
+        let snapshot = store.publication_snapshot().await.expect("snapshot");
+        assert_eq!(snapshot.generation, generation);
+        assert_eq!(snapshot.raw_configs, vec![proxy.raw_config]);
     }
 
     #[tokio::test]

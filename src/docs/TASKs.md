@@ -706,19 +706,19 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 ## 19. publisher و Git
 
-- [ ] publisher از snapshot transactionally-consistent استفاده کند.
-- [ ] فقط proxyهای دارای publication lease معتبر render شوند.
-- [ ] raw configها بر اساس technical identity unique شوند.
-- [ ] remark مناسب نمایش بدون تغییر identity تولید شود.
-- [ ] `active-raw.txt` plain و `active.txt` با format فعلی سازگار باشد.
-- [ ] اگر محتوا تغییر نکرده commit ساخته نشود.
-- [ ] چند تغییر نزدیک با debounce به یک commit تبدیل شود.
-- [ ] commit message شامل تعداد active و generation باشد.
-- [ ] push با SSH mount فعلی و known_hosts انجام شود.
-- [ ] non-fast-forward با fetch/rebase کنترل‌شده retry شود؛ reset مخرب ممنوع باشد.
-- [ ] failure Git هیچ اثر منفی روی proxy health نداشته باشد.
-- [ ] آخرین commit/push status در API و UI diagnostics دیده شود.
-- [ ] publisher بعد از startup تا کامل‌شدن migration و اولین snapshot معتبر صبر کند.
+- [x] publisher از snapshot transactionally-consistent استفاده کند.
+- [x] فقط proxyهای دارای publication lease معتبر render شوند.
+- [x] raw configها بر اساس technical identity unique شوند.
+- [x] remark مناسب نمایش بدون تغییر identity تولید شود.
+- [x] `active-raw.txt` plain و `active.txt` با format فعلی سازگار باشد.
+- [x] اگر محتوا تغییر نکرده commit ساخته نشود.
+- [x] چند تغییر نزدیک با debounce به یک commit تبدیل شود.
+- [x] commit message شامل تعداد active و generation باشد.
+- [x] push با SSH mount فعلی و known_hosts انجام شود.
+- [x] non-fast-forward با fetch/rebase کنترل‌شده retry شود؛ reset مخرب ممنوع باشد.
+- [x] failure Git هیچ اثر منفی روی proxy health نداشته باشد.
+- [x] آخرین commit/push status در API و UI diagnostics دیده شود.
+- [x] publisher بعد از startup تا کامل‌شدن migration و اولین snapshot معتبر صبر کند.
 
 ## 20. API جدید و توسعهٔ diagnostics
 
@@ -748,8 +748,8 @@ fieldهای جدید node:
 
 - [x] queryهای list همیشه pagination و سقف page size داشته باشند.
 - [x] response حجیم history به‌صورت محدود و newest-first باشد.
-- [ ] command endpointها idempotent یا دارای operation id باشند.
-- [ ] timeout HTTP مستقل از timeout worker باشد.
+- [x] command endpointها idempotent یا دارای operation id باشند.
+- [x] timeout HTTP مستقل از timeout worker باشد.
 - [x] خطاها JSON استاندارد با code/message/details داشته باشند.
 - [x] endpoint health بدون query سنگین پاسخ دهد.
 
@@ -760,18 +760,18 @@ fieldهای جدید node:
 - [x] dashboard state، score، lease، next test و failure class را نشان دهد.
 - [x] badge مجزا برای inconclusive/local incident نمایش داده شود.
 - [x] filterهای state/country/source/protocol/failure class اضافه شوند.
-- [ ] history timeline stage، endpoint، latency، speed، pressure و evidence delta را نشان دهد.
+- [x] history timeline stage، endpoint، latency، speed، pressure و evidence delta را نشان دهد.
 - [x] diagnostics queueها، AIMD، FD/process، upstream generation، publisher و incident را نشان دهد.
-- [ ] manual test/revive/reload/import/cleanup با confirm و نتیجهٔ قابل‌مشاهده باشد.
+- [x] manual test/revive/reload/import/cleanup با confirm و نتیجهٔ قابل‌مشاهده باشد.
 - [x] صفحهٔ clients رفتار circuit فعلی را حفظ کند.
 - [x] payload صفحهٔ nodes حتی با ده‌ها هزار node bounded بماند.
 
 ## 22. config و environment
 
-- [ ] config فعلی YAML/ENV خوانده و به schema جدید map شود.
-- [ ] unknown field با warning مشخص شود؛ typoهای مهم silent نباشند.
-- [ ] env secretها هیچ‌وقت log نشوند.
-- [ ] گروه‌های config:
+- [x] config فعلی YAML/ENV خوانده و به schema جدید map شود.
+- [x] unknown field با warning مشخص شود؛ typoهای مهم silent نباشند.
+- [x] env secretها هیچ‌وقت log نشوند.
+- [x] گروه‌های config:
   - server/API؛
   - SQLite؛
   - upstream sources/refresh؛
@@ -784,20 +784,20 @@ fieldهای جدید node:
   - VIP/selection/feedback؛
   - publisher/Git؛
   - retention/cleanup.
-- [ ] startup config validation قبل از migration و spawn process انجام شود.
-- [ ] defaultها general باشند و به ISP یا LAN فعلی وابسته نباشند.
+- [x] startup config validation قبل از migration و spawn process انجام شود.
+- [x] defaultها general باشند و به ISP یا LAN فعلی وابسته نباشند.
 
 ### 22.1 نگاشت config فعلی
 
-- [ ] هشت منبع `Sub1.txt` تا `Sub8.txt` فعلی barry-far از همان `subscriptions.urls` خوانده شوند و در کد hard-code نشوند.
-- [ ] `subscriptions.refresh_interval_seconds` به refresh service نسل‌دار منتقل شود.
-- [ ] `subscriptions.prune_missing_after_cycles: 2` به policy جدید حداقل سه generation کامل migrate و deprecated warning داده شود.
-- [ ] `publishing.retained_snapshots: 3` پس از migration نادیده گرفته و با publication lease جایگزین شود.
+- [x] هشت منبع `Sub1.txt` تا `Sub8.txt` فعلی barry-far از همان `subscriptions.urls` خوانده شوند و در کد hard-code نشوند.
+- [x] `subscriptions.refresh_interval_seconds` به refresh service نسل‌دار منتقل شود.
+- [x] `subscriptions.prune_missing_after_cycles: 2` به policy جدید حداقل سه generation کامل migrate و deprecated warning داده شود.
+- [x] `publishing.retained_snapshots: 3` پس از migration نادیده گرفته و با publication lease جایگزین شود.
 - [ ] `health.recent_success_retention_hours` فقط برای seed migration قدیمی استفاده و سپس با leaseهای stage-specific جایگزین شود.
-- [ ] interval/thresholdهای candidate/probation/dead قدیمی به defaultهای scheduler/backoff جدید map شوند و keyهای منسوخ warning روشن بدهند.
-- [ ] `network_guard` فعلی بدون تغییر اولیه load شود و سپس ورودی global incident detector باشد.
-- [ ] weightهای `selection`، cooldownهای client، VIP port و port rangeهای فعلی حفظ شوند.
-- [ ] remote فعلی `git@github.com:moosavimaleki/proxy-fleet.git` از config خوانده شود؛ داخل binary ثابت نباشد.
+- [x] interval/thresholdهای candidate/probation/dead قدیمی به defaultهای scheduler/backoff جدید map شوند و keyهای منسوخ warning روشن بدهند.
+- [x] `network_guard` فعلی بدون تغییر اولیه load شود و سپس ورودی global incident detector باشد.
+- [x] weightهای `selection`، cooldownهای client، VIP port و port rangeهای فعلی حفظ شوند.
+- [x] remote فعلی `git@github.com:moosavimaleki/proxy-fleet.git` از config خوانده شود؛ داخل binary ثابت نباشد.
 - [ ] config migration report در startup دقیقاً نشان دهد کدام key حفظ، تبدیل یا منسوخ شده است.
 
 ## 23. observability

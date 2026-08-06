@@ -32,7 +32,8 @@ pub async fn publish(
             commit: String::new(),
         });
     }
-    let configs = store.list_publishable_raw_configs().await?;
+    let snapshot = store.publication_snapshot().await?;
+    let configs = snapshot.raw_configs;
     // Do not replace a public feed during initial migration before any valid lease exists.
     if configs.is_empty() {
         return Ok(PublishResult {
@@ -75,8 +76,9 @@ pub async fn publish(
                 "commit",
                 "-m",
                 &format!(
-                    "chore(subscription): publish {} leased proxies",
-                    configs.len()
+                    "chore(subscription): publish {} leased proxies (generation {})",
+                    configs.len(),
+                    snapshot.generation,
                 ),
             ],
         )

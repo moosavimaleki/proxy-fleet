@@ -23,7 +23,8 @@ sysinfo = "0.33"
 thiserror = "2.0"
 tokio = { version = "1.43", features = ["fs", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-tower-http = { version = "0.6", features = ["compression-full", "cors", "trace"] }
+tower = { version = "0.5", features = ["timeout"] }
+tower-http = { version = "0.6", features = ["compression-full", "cors", "timeout", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 url = "2.5"
