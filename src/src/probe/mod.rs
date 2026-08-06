@@ -449,11 +449,7 @@ async fn download(client: &reqwest::Client, config: &AppConfig, deadline: Instan
     // evidence when independent endpoints time out.  An HTTP/status failure
     // from every mirror is explicitly inconclusive: it is usually a mirror or
     // route policy issue, not a property of the proxy.
-    let mut endpoints = Vec::with_capacity(1 + config.download_test.fallback_urls.len());
-    endpoints.push(config.download_test.test_url.clone());
-    endpoints.extend(config.download_test.fallback_urls.iter().cloned());
-    let mut seen = std::collections::HashSet::new();
-    endpoints.retain(|endpoint| seen.insert(endpoint.clone()));
+    let endpoints = download_endpoints(config);
 
     let mut failures = Vec::new();
     for endpoint in endpoints.into_iter().take(3) {
@@ -501,6 +497,15 @@ async fn download(client: &reqwest::Client, config: &AppConfig, deadline: Instan
         endpoint: None,
         detail: serde_json::json!({"attempts":details}),
     }
+}
+
+fn download_endpoints(config: &AppConfig) -> Vec<String> {
+    let mut endpoints = Vec::with_capacity(1 + config.download_test.fallback_urls.len());
+    endpoints.push(config.download_test.test_url.clone());
+    endpoints.extend(config.download_test.fallback_urls.iter().cloned());
+    let mut seen = std::collections::HashSet::new();
+    endpoints.retain(|endpoint| seen.insert(endpoint.clone()));
+    endpoints
 }
 
 async fn download_endpoint(
@@ -677,11 +682,30 @@ fn event(
 mod tests {
     use std::time::{Duration, Instant};
 
-    use super::remaining_budget;
+    use crate::config::AppConfig;
+
+    use super::{download_endpoints, remaining_budget};
 
     #[test]
     fn global_budget_never_returns_a_non_positive_timeout() {
         assert!(remaining_budget(Instant::now() - Duration::from_millis(1)).is_none());
         assert!(remaining_budget(Instant::now() + Duration::from_secs(1)).is_some());
+    }
+
+    #[test]
+    fn download_mirrors_preserve_primary_order_and_deduplicate() {
+        let mut config = AppConfig::default();
+        config.download_test.test_url = "https://primary.example/file".to_owned();
+        config.download_test.fallback_urls = vec![
+            "https://fallback.example/file".to_owned(),
+            "https://primary.example/file".to_owned(),
+        ];
+        assert_eq!(
+            download_endpoints(&config),
+            vec![
+                "https://primary.example/file".to_owned(),
+                "https://fallback.example/file".to_owned(),
+            ]
+        );
     }
 }

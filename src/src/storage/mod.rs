@@ -1523,6 +1523,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn paged_nodes_never_serialize_the_raw_proxy_credential() {
+        let (_temp, store, _id) = test_store().await;
+        let page = store
+            .list_nodes(1, 1, None, None, None)
+            .await
+            .expect("page");
+        let value = serde_json::to_value(&page.nodes[0]).expect("node JSON");
+        assert!(value.get("raw_config").is_none());
+        assert_eq!(value["server"], "example.com");
+    }
+
+    #[tokio::test]
     async fn recently_downloaded_active_is_reconciled_as_runtime_candidate() {
         let (_temp, store, id) = test_store().await;
         store
