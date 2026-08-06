@@ -448,11 +448,11 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 
 ### 8.4 جدول‌های upstream generation
 
-- [ ] `upstream_refresh_runs`: id، زمان شروع/پایان، status، source count، fetch count، parsed count، error و generation.
-- [ ] `upstream_sources`: URL، enabled، آخرین success، ETag/Last-Modified، failure streak.
-- [ ] `upstream_generation_members`: generation، source، config hash و seen_at.
-- [ ] فقط refresh کامل و سالم، missing counter را افزایش دهد.
-- [ ] refresh ناقص یا outage منبع هیچ proxy را retired نکند.
+- [x] `upstream_refresh_runs`: id، زمان شروع/پایان، status، source count، fetch count، parsed count، error و generation.
+- [x] `upstream_sources`: URL، enabled، آخرین success، ETag/Last-Modified، failure streak.
+- [x] `upstream_generation_members`: generation، source، config hash و seen_at.
+- [x] فقط refresh کامل و سالم، missing counter را افزایش دهد.
+- [x] refresh ناقص یا outage منبع هیچ proxy را retired نکند.
 
 ### 8.5 جدول‌های runtime/scheduler
 
@@ -462,15 +462,15 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 
 ### 8.6 تبدیل دادهٔ قدیمی
 
-- [ ] `CANDIDATE`، `TESTING`، `ACTIVE`، `PROBATION` و `WAITING_FOR_PORT` مستقیم نگاشت شوند.
+- [x] `CANDIDATE`، `TESTING`، `ACTIVE`، `PROBATION` و `WAITING_FOR_PORT` مستقیم نگاشت شوند.
 - [x] `DEAD` به `DORMANT` نگاشت شود.
 - [x] `REMOVED` به `RETIRED` نگاشت شود.
-- [ ] ACTIVEهایی که download معتبر دارند با prior مثبت و lease اولیه محافظت شوند.
-- [ ] PROBATIONهایی که سابقهٔ download دارند prior ضعیف‌تر ولی مثبت بگیرند.
-- [ ] node بدون سابقه prior خنثی `Beta(1,1)` بگیرد.
-- [ ] از کل `test_history` backfill کامل انجام نشود؛ فقط آخرین evidence محدود یا aggregateهای موجود برای seed استفاده شود.
-- [ ] جدول‌های `test_history` و `system_events` قدیمی read-only-compatible باقی بمانند.
-- [ ] history API در دورهٔ انتقال union مرتب‌شدهٔ تاریخچهٔ قدیمی و eventهای جدید را نشان دهد.
+- [x] ACTIVEهایی که download معتبر دارند با prior مثبت و lease اولیه محافظت شوند.
+- [x] PROBATIONهایی که سابقهٔ download دارند prior ضعیف‌تر ولی مثبت بگیرند.
+- [x] node بدون سابقه prior خنثی `Beta(1,1)` بگیرد.
+- [x] از کل `test_history` backfill کامل انجام نشود؛ فقط آخرین evidence محدود یا aggregateهای موجود برای seed استفاده شود.
+- [x] جدول‌های `test_history` و `system_events` قدیمی read-only-compatible باقی بمانند.
+- [x] history API در دورهٔ انتقال union مرتب‌شدهٔ تاریخچهٔ قدیمی و eventهای جدید را نشان دهد.
 
 ## 9. parser و هویت فنی
 
