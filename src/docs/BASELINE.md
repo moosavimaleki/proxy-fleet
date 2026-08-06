@@ -90,3 +90,13 @@ reported `enabled: false`. It was then stopped and removed; the production
 container remained healthy throughout. The copied shadow DB and its WAL/SHM
 files were removed after this successful rehearsal; the named pre-Rust rollback
 snapshot remains retained separately.
+
+## Python rollback rehearsal
+
+The retained Python image was also run against a second fresh copy of the
+pre-Rust snapshot on mapped port 18081 with publishing disabled. `/health`
+returned `{"ok": true}` and `PRAGMA integrity_check` passed. The conservative
+rollback profile prevented the earlier upstream-prune discrepancy: node count
+remained `2281` and test history grew only from `19118` to `19122` due to four
+startup observations, with no deletion. The container and its copied DB/WAL
+files were then removed; the production Rust service stayed healthy.

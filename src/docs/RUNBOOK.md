@@ -79,3 +79,9 @@ For a non-publishing rehearsal, use `config/config.shadow.yml` with a copied
 database. It binds API port 18080, uses separate Xray ranges, allows one
 long-lived and one test Xray process, and has publishing/VIP/network guard
 disabled. It must never mount the production database read-write.
+
+`config/config.python-shadow.yml` is the rollback-rehearsal companion for the
+old image. It deliberately defers upstream refresh and all health mutations
+for 24 hours so the restored snapshot is first served intact; an operator must
+explicitly switch it back to the regular configuration only after deciding to
+resume legacy behaviour.

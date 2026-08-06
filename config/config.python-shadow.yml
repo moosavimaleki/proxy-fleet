@@ -1,0 +1,40 @@
+# Compatibility profile for a rollback rehearsal of the retained Python image.
+# It is intentionally minimal because the Python loader rejects Rust-only keys.
+service: { name: config-orchestrator-python-shadow, environment: staging }
+publishing: { enabled: false }
+subscriptions:
+  # A rollback must first serve the restored snapshot without reconciliation
+  # or upstream pruning changing it under the old implementation.
+  refresh_interval_seconds: 86400
+  prune_missing_after_cycles: 2
+  urls:
+    - { name: rollback_hold, url: "http://127.0.0.1:9/disabled" }
+ports:
+  main: { start: 40200, end: 40263 }
+  test: { start: 40300, end: 40363 }
+database: { type: sqlite, path: /app/data/app.db }
+health:
+  active_pool_relay_check_interval_seconds: 86400
+  active_pool_download_check_interval_seconds: 86400
+  probation_recheck_interval_seconds: 86400
+  candidate_recheck_interval_seconds: 86400
+  dead_retry_recent_seconds: 86400
+  dead_retry_unverified_seconds: 86400
+  candidate_cycle_limit: 1
+  candidate_batch_size: 1
+  candidate_batch_concurrency: 1
+  candidate_parallel_batches: 1
+  candidate_batch_timeout_seconds: 5
+download_test: { enabled: false }
+dead_pool: { ttl_hours: 24, invalid_ttl_hours: 720 }
+client_penalty:
+  broken: { base_cooldown_seconds: 300, max_cooldown_seconds: 21600, jitter_ratio: 0.2 }
+  rate_limited: { base_cooldown_seconds: 900, max_cooldown_seconds: 43200, jitter_ratio: 0.2 }
+selection:
+  strategy: weighted_power_of_choices
+  sample_size: 5
+api: { host: 0.0.0.0, port: 8080, auth_enabled: false }
+vip_port: { enabled: false, port: 5050, check_interval_seconds: 10, min_switch_interval_seconds: 60, switch_threshold_score_diff: 0.15 }
+network_guard: { enabled: false }
+assignment_ttl_seconds: 60
+xray_bin: /usr/local/bin/xray

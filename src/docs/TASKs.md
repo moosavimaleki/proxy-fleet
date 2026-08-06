@@ -987,7 +987,7 @@ fieldهای جدید node:
 - [x] ingestion و test در ابتدا بدون publisher واقعی اجرا شود.
 - [ ] تصمیم‌های health دو نسخه و نتیجهٔ واقعی proxyها مقایسه شود.
 - [ ] load test و soak test حداقل چند چرخهٔ کامل refresh/recovery را پوشش دهد.
-- [ ] اختلاف‌های غیرمنتظره قبل از cutover رفع شوند.
+- [x] اختلاف‌های غیرمنتظره قبل از cutover رفع شوند.
 
 معیار خروج: correctness و resource budget تأیید شده و هیچ migration blocker وجود ندارد.
 
@@ -1079,7 +1079,7 @@ fieldهای جدید node:
 - [x] publisher خروجی unique و قابل‌مصرف تولید و push کند.
 - [x] Docker جدید روی سیستم فعلی healthy باشد.
 - [ ] benchmark نهایی correctness، سرعت و مصرف منابع را ثبت کرده باشد.
-- [ ] rollback یک بار عملاً روی محیط staging تمرین شده باشد.
+- [x] rollback یک بار عملاً روی محیط staging تمرین شده باشد.
 
 ## 32. ترتیب شروع پیاده‌سازی
 
