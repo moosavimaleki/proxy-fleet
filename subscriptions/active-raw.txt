@@ -15,6 +15,7 @@ vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.25.245.126:443?encryption=none&
 vless://8a6729c4-81d4-4b05-8747-3fffc17b6a64@meshbuzz.bond:443?path=/mashdi&security=tls&encryption=none&insecure=0&host=OhPwIlJo8.RoBoRoCkS.Ir&type=ws&allowInsecure=0&sni=OhPwIlJo8.RoBoRoCkS.Ir#@tootffarangi🍓-1
 trojan://UO36402987@definite-ladybird.rooster465.autos:443#💫82@oneclickvpnkeys
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.2.228:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-7
+vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.152.129:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@icv2ray
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.176:8080#@hex_proxy ¹
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.244:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 trojan://ND91608427@star-kiwi.rooster465.autos:443#🤖27@SHAHSERVER1
@@ -25,7 +26,6 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.218:8
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.212:8080#@Shh_Proxy-New⁴
 trojan://ND91608427@13.36.175.151:443?security=tls&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&sni=classic-gator.rooster465.autos#@hex_proxy ³
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5dHFoTWRJclRrZ1E0NlB2aHlBdE1I@92.112.126.90:443#@filembad
-vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.152.129:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@icv2ray
 trojan://QV31589740@great-krill.rooster465.autos:443?type=tcp&security=tls&sni=great-krill.rooster465.autos#🇫🇷134720 | ⚡️Telegram = t.me/SOSkeyNET
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@198.41.209.43:443?encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&security=tls&sni=support.zoom.us.yxls.eu.cc&type=ws#👁️‍🗨️28@SHAHSERVER1
 ss://YWVzLTI1Ni1nY206UmV4bkJnVTdFVjVBRHhH@156.244.32.9:7002#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
@@ -57,6 +57,7 @@ vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.26.2.173:443?path=/sg-melbi&sec
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.137.54:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@hex_proxy ⁷
 vless://0c6b632a-cd96-4b74-9b51-151e3b5697db@using.neobo-tooth.ru:2083?encryption=none&fp=chrome&security=tls&serviceName=grpc&sni=using.neobo-tooth.ru&type=grpc#🛰️75@SHAHSERVER1
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@170.114.46.6:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@icv2ray
+vless://81e09a82-fe8d-4393-aefb-747322b20795@104.21.88.174:2052?path=/wss&security=none&encryption=none&host=nexo.xelviro.ir&type=httpupgrade#🇨🇦134931 | ⚡️Telegram = t.me/SOSkeyNET
 vless://SoonTeam@ge.imsoon.org:2443?mode=auto&path=/x0netBot&security=reality&encryption=none&extra={"mode":"auto","xPaddingBytes":"100-1000"}&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&fp=chrome&spx=/446d13373223738&type=xhttp&sni=weatherunderground.com&sid=32ac365b183c88#@meliproxyy
 vless://a18f7c2d-9e45-4b8a-af3c-1d5e7f9c8b2a@83.168.71.216:443?security=reality&encryption=none&pbk=8h8t5eBWL9oERK7xWHQLFJE5j6sZdgNDQAs3EGnNbho&headerType=none&fp=chrome&type=tcp&sni=ads.x5.ru&sid=2f49bccf11150ef2# @MTMVPN 1
 vless://219f9fec-8983-4f6f-af8c-31bd0c6dbf19@45.155.52.231:443/?type=tcp&encryption=none&flow=&sni=ru2.skydrgn-online.online&fp=chrome&security=reality&pbk=6p0aVCkOgd-xaxqSMANYABL6O4Tdbftnxjiy5qcmISQ&sid=0b&packetEncoding=xudp#US
@@ -84,7 +85,6 @@ vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?security=none&
 vless://1b25e81f-98d6-4c69-b9db-3df6c58a7500@rhn.codmaxx.ir:8181?encryption=none&type=ws&security=tls&path=live&host=vip.dokhtaroune.ir&sni=vip.dokhtaroune.ir&insecure=1&allowInsecure=1#🇮🇷134896 | ⚡️Telegram = t.me/SOSkeyNET
 trojan://ND91608427@15.237.49.244:443?fp=chrome&sni=star-kiwi.rooster465.autos#💫34@oneclickvpnkeys
 vless://2a6b708e-6799-473e-85e9-d4b116c5eedc@83.143.112.140.cdn-one.org:443/?type=ws&encryption=none&flow=&host=83.143.112.140.cdn-one.org&path=/29378/wQYeoLE7LS&security=tls&sni=83.143.112.140.cdn-one.org&packetEncoding=xudp#🇫🇮FI
-vless://81e09a82-fe8d-4393-aefb-747322b20795@104.21.88.174:2052?path=/wss&security=none&encryption=none&host=nexo.xelviro.ir&type=httpupgrade#🇨🇦134931 | ⚡️Telegram = t.me/SOSkeyNET
 trojan://humanity@2.144.21.112:40443?host=www.ignitelimit.com&path=/assignment&sni=www.ignitelimit.com&type=ws#🇮🇷133803 | ⚡️Telegram = t.me/SOSkeyNET
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.3:8080#@Ap_Ir6
 vless://@MAconnectt@interchange.proxy.rlwy.net:40904?mode=auto&path=/&security=reality&encryption=none&extra={"mode":"auto","xPaddingBytes":"100-1000"}&pbk=Db-jocGNp1JEGSESSw52u37-6-eC2LRwyBMigrKwSSY&fp=chrome&spx=/&type=xhttp&sni=is1-ssl.mzstatic.com&sid=1393fbc2#@MAconnectt
