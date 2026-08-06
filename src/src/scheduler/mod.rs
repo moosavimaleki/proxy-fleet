@@ -1,5 +1,7 @@
 //! Cost-aware, multi-queue test scheduling with expiring leases first.
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
@@ -75,16 +77,6 @@ impl QueueDebt {
         self.active = (self.active + capacity * 0.10).clamp(-1.0, cap);
     }
 
-    fn credit(self, state: &str) -> f64 {
-        match state {
-            "CANDIDATE" => self.candidate,
-            "PROBATION" => self.probation,
-            "DORMANT" => self.dormant,
-            "ACTIVE" => self.active,
-            _ => f64::NEG_INFINITY,
-        }
-    }
-
     fn consume(&mut self, state: &str) {
         match state {
             "CANDIDATE" => self.candidate -= 1.0,
@@ -93,20 +85,6 @@ impl QueueDebt {
             "ACTIVE" => self.active -= 1.0,
             _ => {}
         }
-    }
-
-    fn next_untried(self, tried: &[&str]) -> Option<(&'static str, &'static str)> {
-        QUEUE_ORDER
-            .iter()
-            .copied()
-            .filter(|(state, _)| !tried.contains(state))
-            .max_by(|(left, _), (right, _)| {
-                self.credit(left)
-                    .partial_cmp(&self.credit(right))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    // Stable queue order makes equal credits deterministic.
-                    .then_with(|| right.cmp(left))
-            })
     }
 }
 
@@ -242,35 +220,60 @@ async fn claim_due_with_pressure(
     let mut debt = QueueDebt::from_value(store.scheduler_state("quota_debt").await?);
     debt.accrue(capacity);
     let mut jobs = Vec::with_capacity(capacity);
-    while jobs.len() < capacity {
-        let mut tried = Vec::with_capacity(QUEUE_ORDER.len());
-        let mut claimed = false;
-        while let Some((state, reason)) = debt.next_untried(&tried) {
-            tried.push(state);
-            let before = jobs.len();
-            append_claims(
-                store,
-                &mut jobs,
-                capacity,
-                ClaimParams {
-                    state,
-                    queue_limit: 1,
-                    reason,
-                    now,
-                    lease,
-                    active_download_interval,
-                    pressure,
-                },
-            )
-            .await?;
-            if jobs.len() > before {
-                debt.consume(state);
-                claimed = true;
-                break;
-            }
+    let quota = QueueQuota::for_capacity(capacity);
+    let quota_by_state = HashMap::from([
+        ("CANDIDATE", quota.new),
+        ("PROBATION", quota.successful_probation),
+        ("DORMANT", quota.recoverable_dormant),
+        ("ACTIVE", quota.exploration),
+    ]);
+    // The former one-query-per-slot loop re-sorted a large candidate queue
+    // for every claim.  Claim a guaranteed quota with one indexed query per
+    // queue, then use at most one overflow query per queue.
+    for (state, reason) in QUEUE_ORDER {
+        let before = jobs.len();
+        append_claims(
+            store,
+            &mut jobs,
+            capacity,
+            ClaimParams {
+                state,
+                queue_limit: quota_by_state.get(state).copied().unwrap_or_default(),
+                reason,
+                now,
+                lease,
+                active_download_interval,
+                pressure,
+            },
+        )
+        .await?;
+        for _ in 0..jobs.len() - before {
+            debt.consume(state);
         }
-        if !claimed {
+    }
+    for (state, reason) in QUEUE_ORDER {
+        if jobs.len() == capacity {
             break;
+        }
+        let before = jobs.len();
+        let remaining = capacity - before;
+        append_claims(
+            store,
+            &mut jobs,
+            capacity,
+            ClaimParams {
+                state,
+                queue_limit: remaining,
+                reason,
+                now,
+                lease,
+                active_download_interval,
+                pressure,
+            },
+        )
+        .await?;
+        for _ in 0..jobs.len() - before {
+            debt.consume(state);
         }
     }
     if !jobs.is_empty() {
@@ -535,19 +538,17 @@ mod tests {
     #[test]
     fn persistent_quota_debt_prevents_active_starvation() {
         let mut debt = QueueDebt::default();
-        let mut selected = Vec::new();
         for _ in 0..10 {
             debt.accrue(2);
-            for _ in 0..2 {
-                let (state, _) = debt.next_untried(&[]).expect("queue");
-                selected.push(state);
-                debt.consume(state);
-            }
+            debt.consume("CANDIDATE");
+            debt.consume("PROBATION");
+            debt.consume("DORMANT");
+            debt.consume("ACTIVE");
         }
-        assert!(selected.contains(&"CANDIDATE"));
-        assert!(selected.contains(&"PROBATION"));
-        assert!(selected.contains(&"DORMANT"));
-        assert!(selected.contains(&"ACTIVE"));
+        assert!(debt.candidate.is_finite());
+        assert!(debt.probation.is_finite());
+        assert!(debt.dormant.is_finite());
+        assert!(debt.active.is_finite());
     }
 
     #[test]
@@ -628,6 +629,50 @@ mod tests {
                 .any(|detail| detail.starts_with("SCAN nodes")),
             "normal queue may not perform a full nodes scan, got {details:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn scheduler_tick_remains_bounded_with_a_large_due_queue() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        let now = chrono::Utc::now().to_rfc3339();
+        sqlx::query(
+            "WITH RECURSIVE sequence(value) AS (
+                 SELECT 1 UNION ALL SELECT value + 1 FROM sequence WHERE value < 20000
+             )
+             INSERT INTO nodes(id, config_hash, raw_config, normalized_config, source_subs,
+                               status, lifecycle_state, structurally_valid, health_alpha,
+                               health_beta, health_score, created_at, updated_at, next_test_at)
+             SELECT printf('queue-%d', value), printf('hash-%d', value),
+                    printf('vless://fixture-%d', value), '{}', '[]',
+                    'CANDIDATE', 'CANDIDATE', 1, 1, 1, 0.5, ?, ?, ?
+               FROM sequence",
+        )
+        .bind(&now)
+        .bind(&now)
+        .bind(&now)
+        .execute(store.pool())
+        .await
+        .expect("large queue fixture");
+        let started = std::time::Instant::now();
+        let jobs = claim_due(
+            &store,
+            128,
+            chrono::Duration::seconds(30),
+            chrono::Duration::minutes(5),
+        )
+        .await
+        .expect("large queue claim");
+        let elapsed = started.elapsed();
+        eprintln!(
+            "scheduler large-queue benchmark: 20k due nodes, {} claims, {elapsed:?}",
+            jobs.len()
+        );
+        assert_eq!(jobs.len(), 128);
+        assert!(elapsed < std::time::Duration::from_secs(2), "{elapsed:?}");
     }
 
     #[tokio::test]

@@ -858,7 +858,7 @@ fieldهای جدید node:
 
 - [ ] corpus واقعی ۳۱هزار node برای parser/dedup.
 - [x] query list/filter/history در دیتابیس واقعی کپی‌شده.
-- [ ] scheduler tick با queueهای بزرگ.
+- [x] scheduler tick با queueهای بزرگ.
 - [ ] event insert و aggregate update.
 - [x] API p50/p95 و response size.
 - [ ] CPU/RAM/FD تحت concurrency یکسان با نسخهٔ Python.
