@@ -334,16 +334,13 @@ fn validate_address(address: &str) -> anyhow::Result<()> {
         return Ok(());
     }
     anyhow::ensure!(address.len() <= 253, "proxy hostname is too long");
+    // Xray accepts service-discovery style names with underscores, which are
+    // common in subscription feeds even though they are not browser URL
+    // hostnames. Reject only values that cannot be a safe authority at all.
     anyhow::ensure!(
-        address.split('.').all(|label| {
-            !label.is_empty()
-                && label.len() <= 63
-                && !label.starts_with('-')
-                && !label.ends_with('-')
-                && label
-                    .chars()
-                    .all(|item| item.is_ascii_alphanumeric() || item == '-')
-        }),
+        address
+            .bytes()
+            .all(|item| item.is_ascii_alphanumeric() || matches!(item, b'.' | b'-' | b'_')),
         "proxy hostname is invalid"
     );
     Ok(())
