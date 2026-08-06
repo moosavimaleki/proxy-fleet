@@ -2,9 +2,9 @@ vless://8c00ea88-31f7-445a-8f74-f6e7f03a1553@82.115.6.93:443?encryption=none&sec
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.244:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 trojan://ND91608427@54.93.65.133:443?security=tls&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&sni=next-turkey.rooster465.autos#@hex_proxy ¹
 trojan://ND91608427@13.36.175.151:443?security=tls&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&sni=classic-gator.rooster465.autos#@hex_proxy ³
-vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.16.253.69:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&insecure=0&allowInsecure=0#@meliproxyy
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.208:8080#TEL;Father_vpn
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.216:8080#T.me/Vpn_Mafia 🇳🇱
+vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.16.253.69:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&insecure=0&allowInsecure=0#@meliproxyy
 vless://7e8f7489-e65f-4be6-93ed-867a74ec6759@95.85.228.161:8443/?type=grpc&encryption=none&flow=&serviceName=grpc#channel_@networld_vpn
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@51.91.251.198:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&fp=chrome&insecure=0&allowInsecure=0#@EVAY_VPN 7
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.164:8080#@EXPRESSVPN_420  👈🏻 کانال تلگرام
@@ -18,8 +18,8 @@ vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.25.245.126:443?encryption=none&
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@172.66.44.97:443?path=/sg-melbi?ed=2048&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#𝗝𝗼𝗶𝗻 ➠ @sil3nt_network
 vless://8a6729c4-81d4-4b05-8747-3fffc17b6a64@meshbuzz.bond:443?path=/mashdi&security=tls&encryption=none&insecure=0&host=OhPwIlJo8.RoBoRoCkS.Ir&type=ws&allowInsecure=0&sni=OhPwIlJo8.RoBoRoCkS.Ir#@tootffarangi🍓-1
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.2.228:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-7
-trojan://UO36402987@definite-ladybird.rooster465.autos:443#💫82@oneclickvpnkeys
 vless://74be4eff-bd4a-40ae-9991-92421bfdf074@172.64.145.202:8443?encryption=none&security=tls&sni=se.jey.cc.cd&alpn=h2,http/1.1&fp=chrome&type=xhttp&host=se.jey.cc.cd&path=/Telegram@vpnjeyTelegram@vpnjeyTelegram@vpnjeyTelegram@vpnjey&mode=auto&extra={"scMaxEachPostBytes":"1000000","scMinPostsIntervalMs":"30","xPaddingBytes":"100-1000"}#Telegram@vpnjey
+trojan://UO36402987@definite-ladybird.rooster465.autos:443#💫82@oneclickvpnkeys
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@172.64.146.86:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&fp=chrome&insecure=0&allowInsecure=0#@meliproxyy
 vless://518a99df-54f6-4f42-819d-b60abd880edf@176.96.138.122:443?security=reality&encryption=none&pbk=O_YZOJVON0LE1U01hAtNUOVRy7z6fkBUXbMtpCGoGEg&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=kind-vortex.cdn.cachefleet.com#@mtmvpn 5
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.15:443#Tel-@ProxyMtAlpha🍔 3
@@ -46,11 +46,11 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5dHFoTWRJclRrZ1E0NlB2aHlBdE1I@92.112.126.90:
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771/?type=tcp&encryption=none&flow=#channel_@networld_vpn
 vless://219f9fec-8983-4f6f-af8c-31bd0c6dbf19@45.155.52.231:443/?type=tcp&encryption=none&flow=&sni=ru2.skydrgn-online.online&fp=chrome&security=reality&pbk=6p0aVCkOgd-xaxqSMANYABL6O4Tdbftnxjiy5qcmISQ&sid=0b&packetEncoding=xudp#US
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvOTE3dXZwM2pXSU1reTV1@20.123.9.48:443#@filembad
+vless://4d10c997-4781-4cd9-82c3-15453523e12c@198.41.209.43:443?encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&security=tls&sni=support.zoom.us.yxls.eu.cc&type=ws#🇨🇦135232 | ⚡️Telegram = t.me/SOSkeyNET
 vless://2af30aff-de7a-44b9-b929-158081b4f3e6@45.144.174.171:40149?security=reality&encryption=none&pbk=9rx7JwMO-KRZZEM9TQBO19BOAmmGjJyjN86ll2J7uVc&headerType=none&fp=chrome&type=tcp&sni=www.speedtest.org#@filembad
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.26.2.173:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-11
 vless://1b92d620-add7-42bd-ac1b-93ee4dfacee0@api.univesalsrv.com:443?encryption=none&fp=&pbk=eU2IqYoHVYNfFqNlTNEAGooWqL2WqKbbQwxAPRu_7wc&security=reality&serviceName=rpc.v2.FeedService&sid=93762a4ddf178703&sni=api.univesalsrv.com&type=grpc#💫100@oneclickvpnkeys
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.137.54:443?encryption=none&security=tls&sni=support.zoom.us.yxls.eu.cc&insecure=0&allowInsecure=0&type=ws&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi#✅  @vistav2ray  👈👈کانال ما ✅
-vless://4d10c997-4781-4cd9-82c3-15453523e12c@198.41.209.43:443?encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&security=tls&sni=support.zoom.us.yxls.eu.cc&type=ws#🇨🇦135232 | ⚡️Telegram = t.me/SOSkeyNET
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.20.39.109:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@hex_proxy ³
 ss://YWVzLTI1Ni1nY206UmV4bkJnVTdFVjVBRHhH@156.244.32.9:7002#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
 trojan://ND91608427@15.237.49.244:443?fp=chrome&sni=star-kiwi.rooster465.autos#💫34@oneclickvpnkeys
@@ -100,7 +100,6 @@ trojan://humanity@2.144.21.112:40443?host=www.ignitelimit.com&path=/assignment&s
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.42:8080#@hex_proxy ²
 vless://SoonTeam@ge.imsoon.org:8443?encryption=none&type=grpc&security=reality&sni=wxug.com&fp=chrome&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&sid=ce77fcf457&spx=/HesarWeb#• 🇩🇪 | 𝗚𝗲𝗿𝗺𝗮𝗻𝘆 - @HesarWeb
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFQkRSbzlUSHg0Q3FpRlU3aDVnZm92NzZvTnd6WlVSQWgwWndiV2pCS2RkdFVodno@103.120.178.193:31348#@Tasiyanc 🇮🇳
-vless://a18f7c2d-9e45-4b8a-af3c-1d5e7f9c8b2a@tg.riotvpn.eu:443?encryption=none&type=tcp&security=reality&headerType=none&sni=ads.x5.ru&fp=chrome&insecure=1&allowInsecure=1&pbk=8h8t5eBWL9oERK7xWHQLFJE5j6sZdgNDQAs3EGnNbho&sid=2f49bccf11150ef2#@meliproxyy
 vless://1b25e81f-98d6-4c69-b9db-3df6c58a7500@rhn.codmaxx.ir:8181?encryption=none&type=ws&security=tls&path=live&host=vip.dokhtaroune.ir&sni=vip.dokhtaroune.ir&insecure=1&allowInsecure=1#🇮🇷134896 | ⚡️Telegram = t.me/SOSkeyNET
 vless://1b25e81f-98d6-4c69-b9db-3df6c58a7500@rhn.codmaxx.ir:8282?encryption=none&type=ws&security=tls&path=live&host=vip.dokhtaroune.ir&sni=vip.dokhtaroune.ir&insecure=1&allowInsecure=1#🇮🇷134897 | ⚡️Telegram = t.me/SOSkeyNET
 ss://YWVzLTI1Ni1nY206NzI1NTMzMjBhZTZiY2M4Zg@212.192.15.33:10910#🇭🇰HK-🚀@VPNine1
