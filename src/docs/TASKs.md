@@ -378,10 +378,10 @@ src/
 
 ### 8.1 اصول ایمنی
 
-- [ ] قبل از migration از `app.db` و فایل‌های `-wal/-shm` snapshot سازگار تهیه شود.
-- [ ] migrationها idempotent و داخل transaction باشند.
-- [ ] WAL، busy timeout و foreign key فعال شوند.
-- [ ] pool نوشتن کوچک و bounded باشد تا writer contention ایجاد نشود.
+- [x] قبل از migration از `app.db` و فایل‌های `-wal/-shm` snapshot سازگار تهیه شود.
+- [x] migrationها idempotent و داخل transaction باشند.
+- [x] WAL، busy timeout و foreign key فعال شوند.
+- [x] pool نوشتن کوچک و bounded باشد تا writer contention ایجاد نشود.
 - [ ] تاریخچهٔ فعلی حدود ۷۰۰ مگابایت کپی یا rewrite نشود.
 - [ ] هیچ node id، config hash، feedback، assignment یا usage حذف نشود.
 - [x] schema version و binary version ثبت شود.
@@ -458,13 +458,13 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 
 - [x] `scheduler_state`: quota debt، concurrency جاری، آخرین pressure و recovery timestamps.
 - [x] `service_state`: آخرین publisher commit، آخرین refresh، incident و schema metadata.
-- [ ] process/port ownership persistent فقط در حد لازم ثبت شود؛ process واقعی پس از restart دوباره reconcile شود.
+- [x] process/port ownership persistent فقط در حد لازم ثبت شود؛ process واقعی پس از restart دوباره reconcile شود.
 
 ### 8.6 تبدیل دادهٔ قدیمی
 
 - [ ] `CANDIDATE`، `TESTING`، `ACTIVE`، `PROBATION` و `WAITING_FOR_PORT` مستقیم نگاشت شوند.
-- [ ] `DEAD` به `DORMANT` نگاشت شود.
-- [ ] `REMOVED` به `RETIRED` نگاشت شود.
+- [x] `DEAD` به `DORMANT` نگاشت شود.
+- [x] `REMOVED` به `RETIRED` نگاشت شود.
 - [ ] ACTIVEهایی که download معتبر دارند با prior مثبت و lease اولیه محافظت شوند.
 - [ ] PROBATIONهایی که سابقهٔ download دارند prior ضعیف‌تر ولی مثبت بگیرند.
 - [ ] node بدون سابقه prior خنثی `Beta(1,1)` بگیرد.

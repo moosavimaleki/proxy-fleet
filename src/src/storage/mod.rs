@@ -265,14 +265,16 @@ impl Store {
                 .and_then(|name| name.to_str())
                 .unwrap_or("app.db")
         ));
-        tokio::fs::copy(&self.database_path, &backup).await?;
-        for suffix in ["-wal", "-shm"] {
-            let sidecar = PathBuf::from(format!("{}{}", self.database_path.display(), suffix));
-            if sidecar.exists() {
-                let backup_sidecar = PathBuf::from(format!("{}{}", backup.display(), suffix));
-                tokio::fs::copy(sidecar, backup_sidecar).await?;
-            }
-        }
+        // Copying app.db together with `-wal`/`-shm` is not a consistent
+        // SQLite snapshot: a commit can land between the individual copies.
+        // `VACUUM INTO` asks SQLite itself to materialize one transactional
+        // image, including all committed WAL pages, at the destination.
+        let backup_sql_path = backup.to_string_lossy().into_owned();
+        sqlx::query("VACUUM INTO ?")
+            .bind(backup_sql_path)
+            .execute(&self.pool)
+            .await
+            .context("creating consistent pre-migration SQLite snapshot")?;
         Ok(Some(backup))
     }
 
@@ -1429,6 +1431,9 @@ fn row_to_summary(row: sqlx::sqlite::SqliteRow) -> NodeSummary {
 }
 
 const NODE_ADDITIONS: &[(&str, &str)] = &[
+    // `next_test_at` existed in the last Python schema, but making it
+    // additive here keeps migration safe for older production snapshots too.
+    ("next_test_at", "TEXT"),
     ("lifecycle_state", "TEXT"),
     ("state_entered_at", "TEXT"),
     ("structurally_valid", "INTEGER"),
@@ -1532,6 +1537,86 @@ mod tests {
         assert!(names.contains("publication_lease_until"));
         assert!(names.contains("last_failure_run_id"));
         assert_eq!(store.counts().await.expect("counts").total, 0);
+    }
+
+    #[tokio::test]
+    async fn legacy_migration_is_idempotent_and_preserves_identity_and_state() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("legacy.db"))
+            .await
+            .expect("connect");
+        // This deliberately mirrors the minimum shape of a pre-Rust node
+        // table.  Migration must only add data, never rewrite its identity.
+        sqlx::query(
+            "CREATE TABLE nodes (id TEXT PRIMARY KEY, config_hash TEXT UNIQUE NOT NULL, raw_config TEXT NOT NULL, normalized_config TEXT NOT NULL, source_subs TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        )
+        .execute(store.pool())
+        .await
+        .expect("legacy schema");
+        sqlx::query("INSERT INTO nodes(id, config_hash, raw_config, normalized_config, source_subs, status, created_at, updated_at) VALUES ('dead-id', 'stable-hash', 'vless://fixture', '{}', '[]', 'DEAD', ?, ?)")
+            .bind(Utc::now().to_rfc3339())
+            .bind(Utc::now().to_rfc3339())
+            .execute(store.pool())
+            .await
+            .expect("legacy node");
+
+        store.migrate().await.expect("first migration");
+        store.migrate().await.expect("idempotent migration");
+        let row = sqlx::query("SELECT id, config_hash, lifecycle_state, status, health_alpha, health_beta FROM nodes WHERE id = 'dead-id'")
+            .fetch_one(store.pool())
+            .await
+            .expect("migrated row");
+        assert_eq!(row.get::<String, _>("id"), "dead-id");
+        assert_eq!(row.get::<String, _>("config_hash"), "stable-hash");
+        assert_eq!(row.get::<String, _>("lifecycle_state"), "DORMANT");
+        assert_eq!(row.get::<String, _>("status"), "DORMANT");
+        assert_eq!(row.get::<f64, _>("health_alpha"), 1.0);
+        assert_eq!(row.get::<f64, _>("health_beta"), 1.0);
+        let marker_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM schema_migrations WHERE version = 'rust-evidence-v1'",
+        )
+        .fetch_one(store.pool())
+        .await
+        .expect("migration marker");
+        assert_eq!(marker_count, 1);
+    }
+
+    #[tokio::test]
+    async fn pre_migration_backup_is_a_queryable_consistent_sqlite_snapshot() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("legacy.db");
+        let store = Store::connect(&path).await.expect("connect");
+        sqlx::query("CREATE TABLE legacy_fixture (value TEXT NOT NULL)")
+            .execute(store.pool())
+            .await
+            .expect("legacy table");
+        sqlx::query("INSERT INTO legacy_fixture(value) VALUES ('committed')")
+            .execute(store.pool())
+            .await
+            .expect("legacy row");
+
+        let backup = store
+            .backup_before_migrate()
+            .await
+            .expect("backup")
+            .expect("backup path");
+        assert!(backup.exists());
+        let backup_url = format!("sqlite://{}", backup.display());
+        let snapshot = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(&backup_url)
+            .await
+            .expect("open snapshot");
+        let integrity = sqlx::query_scalar::<_, String>("PRAGMA integrity_check")
+            .fetch_one(&snapshot)
+            .await
+            .expect("integrity check");
+        assert_eq!(integrity, "ok");
+        let value = sqlx::query_scalar::<_, String>("SELECT value FROM legacy_fixture")
+            .fetch_one(&snapshot)
+            .await
+            .expect("snapshot row");
+        assert_eq!(value, "committed");
     }
 
     #[tokio::test]
