@@ -1,6 +1,8 @@
 use std::{
+    io::ErrorKind,
     path::{Path, PathBuf},
     str::FromStr,
+    time::{Duration, SystemTime},
 };
 
 use anyhow::Context;
@@ -9,6 +11,7 @@ use sqlx::{
     Row, SqlitePool,
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
 };
+use tokio::io::AsyncWriteExt;
 
 use crate::{
     domain::{
@@ -24,6 +27,21 @@ use crate::{
 pub struct Store {
     pool: SqlitePool,
     database_path: PathBuf,
+}
+
+/// A deliberately tiny cross-process startup lock. SQLite serializes writes,
+/// but this lock also makes the ownership of schema migration explicit and
+/// avoids two fresh instances both attempting bootstrap DDL. It is removed on
+/// normal shutdown; an abandoned lock is recoverable after a conservative
+/// timeout because migrations are additive and intentionally short.
+struct MigrationLeaderGuard {
+    path: PathBuf,
+}
+
+impl Drop for MigrationLeaderGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 /// One immutable publication input.  Both generation and node set originate
@@ -157,6 +175,59 @@ impl Store {
         &self.pool
     }
 
+    async fn acquire_migration_leader(&self) -> anyhow::Result<MigrationLeaderGuard> {
+        let filename = self
+            .database_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("app.db");
+        let lock_path = self
+            .database_path
+            .with_file_name(format!("{filename}.migration.lock"));
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
+        loop {
+            match tokio::fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&lock_path)
+                .await
+            {
+                Ok(mut file) => {
+                    file.write_all(
+                        format!("pid={} started_at={}\n", std::process::id(), Utc::now())
+                            .as_bytes(),
+                    )
+                    .await?;
+                    file.flush().await?;
+                    return Ok(MigrationLeaderGuard { path: lock_path });
+                }
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                    // A crashed instance cannot run an additive migration for
+                    // fifteen minutes. This recovery path prevents a stale
+                    // file from making the service permanently unavailable.
+                    let stale = tokio::fs::metadata(&lock_path)
+                        .await
+                        .ok()
+                        .and_then(|metadata| metadata.modified().ok())
+                        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                        .is_some_and(|age| age > Duration::from_secs(15 * 60));
+                    if stale {
+                        let _ = tokio::fs::remove_file(&lock_path).await;
+                        continue;
+                    }
+                    if tokio::time::Instant::now() >= deadline {
+                        anyhow::bail!(
+                            "timed out waiting for migration leader lock {}",
+                            lock_path.display()
+                        );
+                    }
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+
     pub async fn set_service_state(
         &self,
         key: &str,
@@ -279,6 +350,7 @@ impl Store {
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
+        let _leader = self.acquire_migration_leader().await?;
         let mut transaction = self.pool.begin().await?;
         sqlx::query("PRAGMA foreign_keys = ON")
             .execute(&mut *transaction)
@@ -1608,6 +1680,29 @@ mod tests {
         .await
         .expect("migration marker");
         assert_eq!(marker_count, 1);
+    }
+
+    #[tokio::test]
+    async fn migration_waits_for_the_single_startup_leader() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("fleet.db");
+        let first = Store::connect(&path).await.expect("first store");
+        let second = Store::connect(&path).await.expect("second store");
+        let leader = first
+            .acquire_migration_leader()
+            .await
+            .expect("first leader");
+        let waiter = tokio::spawn(async move { second.migrate().await });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert!(
+            !waiter.is_finished(),
+            "the second instance must not migrate concurrently"
+        );
+        drop(leader);
+        waiter
+            .await
+            .expect("waiter join")
+            .expect("migration after leader release");
     }
 
     #[tokio::test]

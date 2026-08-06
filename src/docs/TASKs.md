@@ -886,7 +886,7 @@ fieldهای جدید node:
 - [x] container name و API port فعلی حفظ شود.
 - [x] user داخل container تا حد ممکن non-root باشد؛ نیازهای Xray/port بررسی شود.
 - [x] data/config/subscription pathهای فعلی حفظ شوند.
-- [ ] startup migration فقط یک instance leader داشته باشد.
+- [x] startup migration فقط یک instance leader داشته باشد.
 - [x] healthcheck readiness را بعد از DB migration و worker startup اعلام کند.
 
 ## 27. مسیر اجرای مرحله‌ای
