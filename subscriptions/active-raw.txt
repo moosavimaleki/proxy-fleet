@@ -1,6 +1,5 @@
 vless://1b25e81f-98d6-4c69-b9db-3df6c58a7500@45.89.223.251:8383?encryption=none&type=ws&insecure=0&security=tls&allowInsecure=0&host=vip.dokhtaroune.ir&path=live&sni=vip.dokhtaroune.ir#🇮🇷IR-🚀@VPNine1
 trojan://ND91608427@54.93.65.133:443?security=tls&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&sni=next-turkey.rooster465.autos#@hex_proxy ¹
-vless://4d10c997-4781-4cd9-82c3-15453523e12c@172.66.44.97:443?path=/sg-melbi?ed=2048&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#𝗝𝗼𝗶𝗻 ➠ @sil3nt_network
 vless://7e8f7489-e65f-4be6-93ed-867a74ec6759@95.85.228.161:8443/?type=grpc&encryption=none&flow=&serviceName=grpc#channel_@networld_vpn
 vless://74be4eff-bd4a-40ae-9991-92421bfdf074@172.64.145.202:8443?encryption=none&security=tls&sni=se.jey.cc.cd&alpn=h2,http/1.1&fp=chrome&type=xhttp&host=se.jey.cc.cd&path=/Telegram@vpnjeyTelegram@vpnjeyTelegram@vpnjeyTelegram@vpnjey&mode=auto&extra={"scMaxEachPostBytes":"1000000","scMinPostsIntervalMs":"30","xPaddingBytes":"100-1000"}#Telegram@vpnjey
 vless://518a99df-54f6-4f42-819d-b60abd880edf@176.96.138.122:443?security=reality&encryption=none&pbk=O_YZOJVON0LE1U01hAtNUOVRy7z6fkBUXbMtpCGoGEg&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=kind-vortex.cdn.cachefleet.com#@meliproxyy
