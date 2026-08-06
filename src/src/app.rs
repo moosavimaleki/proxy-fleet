@@ -125,8 +125,8 @@ impl AppState {
         (started, failed)
     }
 
-    pub async fn shutdown_runtimes(&self) {
-        self.xray_runtimes.shutdown(&self.store).await;
+    pub async fn shutdown_runtimes(&self) -> (usize, usize) {
+        self.xray_runtimes.shutdown(&self.store).await
     }
 
     fn spawn_network_guard(&self) -> JoinHandle<()> {
@@ -215,6 +215,15 @@ impl AppState {
                             Err(error) => {
                                 runtime.last_error = error.to_string();
                                 warn!(%error, "storage heartbeat failed");
+                            }
+                        }
+                        let prune_events = runtime.scheduler_ticks % 720 == 0;
+                        drop(runtime);
+                        if prune_events {
+                            match state.store.prune_system_events(state.config.retention.system_event_max_rows).await {
+                                Ok(removed) if removed > 0 => info!(removed, "pruned retained system events"),
+                                Ok(_) => {},
+                                Err(error) => warn!(%error, "could not prune retained system events"),
                             }
                         }
                     }

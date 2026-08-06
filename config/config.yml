@@ -176,5 +176,8 @@ network_guard:
     - type: http
       url: "https://www.gstatic.com/generate_204"
 
+retention:
+  system_event_max_rows: 10000
+
 assignment_ttl_seconds: 60
 xray_bin: "/usr/local/bin/xray"

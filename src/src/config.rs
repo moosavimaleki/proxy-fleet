@@ -21,6 +21,7 @@ pub struct AppConfig {
     pub api: ApiConfig,
     pub vip_port: VipPortConfig,
     pub network_guard: NetworkGuardConfig,
+    pub retention: RetentionConfig,
     pub assignment_ttl_seconds: u64,
     pub xray_bin: String,
 }
@@ -103,6 +104,10 @@ impl AppConfig {
             "main/test port ranges must not overlap"
         );
         anyhow::ensure!(self.api.port > 0, "api.port must be positive");
+        anyhow::ensure!(
+            self.retention.system_event_max_rows >= 100,
+            "retention.system_event_max_rows must be at least 100"
+        );
         anyhow::ensure!(
             self.health.candidate_cycle_limit > 0,
             "candidate cycle limit must be positive"
@@ -226,6 +231,7 @@ fn nested_mapping_keys(path: &str) -> &'static [&'static str] {
             "api",
             "vip_port",
             "network_guard",
+            "retention",
         ],
         "ports" => &["main", "test"],
         "client_penalty" => &["broken", "rate_limited"],
@@ -259,6 +265,7 @@ fn known_keys(path: &str) -> Option<&'static [&'static str]> {
             "api",
             "vip_port",
             "network_guard",
+            "retention",
             "assignment_ttl_seconds",
             "xray_bin",
         ]),
@@ -363,6 +370,7 @@ fn known_keys(path: &str) -> Option<&'static [&'static str]> {
             "sentinel_targets",
         ]),
         "network_guard.sentinel_targets[]" => Some(&["type", "host", "port", "url"]),
+        "retention" => Some(&["system_event_max_rows"]),
         _ => None,
     }
 }
@@ -384,6 +392,7 @@ impl Default for AppConfig {
             api: ApiConfig::default(),
             vip_port: VipPortConfig::default(),
             network_guard: NetworkGuardConfig::default(),
+            retention: RetentionConfig::default(),
             assignment_ttl_seconds: 60,
             xray_bin: "/usr/local/bin/xray".to_owned(),
         }
@@ -759,6 +768,19 @@ pub struct NetworkGuardConfig {
     pub require_http_success: bool,
     pub mass_failure_threshold_percent: u8,
     pub sentinel_targets: Vec<SentinelTarget>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct RetentionConfig {
+    pub system_event_max_rows: u64,
+}
+impl Default for RetentionConfig {
+    fn default() -> Self {
+        Self {
+            system_event_max_rows: 10_000,
+        }
+    }
 }
 impl Default for NetworkGuardConfig {
     fn default() -> Self {

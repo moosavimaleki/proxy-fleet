@@ -807,7 +807,7 @@ fieldهای جدید node:
 - [ ] counterها: parsed، deduped، invalid، tested، stage pass/fail، transitions و published.
 - [ ] gaugeها: queue depth، concurrency، child process، FD، active/probation/dormant و lease count.
 - [ ] histogramها: stage latency، download speed، DB query و API latency.
-- [ ] system eventهای مهم در SQLite با retention محدود ثبت شوند.
+- [x] system eventهای مهم در SQLite با retention محدود ثبت شوند.
 - [ ] log storm ناشی از retry با sampling/rate-limit کنترل شود.
 - [ ] shutdown report تعداد job cancel‌شده و processهای پاک‌شده را ثبت کند.
 

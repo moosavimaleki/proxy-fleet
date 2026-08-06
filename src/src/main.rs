@@ -91,7 +91,11 @@ async fn main() -> anyhow::Result<()> {
     let result = axum::serve(listener, app)
         .with_graceful_shutdown(wait_for_shutdown(shutdown))
         .await;
-    state.shutdown_runtimes().await;
+    let (runtime_processes, vip_processes) = state.shutdown_runtimes().await;
+    info!(
+        runtime_processes,
+        vip_processes, "graceful shutdown cleaned owned Xray processes"
+    );
     result.context("HTTP server failed")
 }
 

@@ -1142,6 +1142,14 @@ impl Store {
             .bind(Utc::now().to_rfc3339()).execute(&self.pool).await?.rows_affected())
     }
 
+    pub async fn prune_system_events(&self, max_rows: u64) -> anyhow::Result<u64> {
+        Ok(sqlx::query("DELETE FROM system_events WHERE id NOT IN (SELECT id FROM system_events ORDER BY created_at DESC LIMIT ?)")
+            .bind(max_rows.max(100) as i64)
+            .execute(&self.pool)
+            .await?
+            .rows_affected())
+    }
+
     pub async fn candidates_for_client(
         &self,
         client: &str,
@@ -1576,6 +1584,33 @@ mod tests {
                 .expect("read state"),
             Some(serde_json::json!({"version":"two"}))
         );
+    }
+
+    #[tokio::test]
+    async fn system_event_retention_keeps_the_newest_bounded_window() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        for index in 0..105 {
+            store
+                .record_system_event(
+                    "INFO",
+                    "fixture",
+                    "EVENT",
+                    &format!("{index}"),
+                    serde_json::json!({"index":index}),
+                )
+                .await
+                .expect("event");
+        }
+        assert_eq!(store.prune_system_events(100).await.expect("prune"), 5);
+        let remaining = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM system_events")
+            .fetch_one(store.pool())
+            .await
+            .expect("count");
+        assert_eq!(remaining, 100);
     }
 
     #[tokio::test]
