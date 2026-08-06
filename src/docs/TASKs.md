@@ -996,9 +996,9 @@ fieldهای جدید node:
 - [ ] publisher موقتاً pause شود.
 - [ ] backup سازگار دیتابیس گرفته شود.
 - [ ] container Python متوقف ولی image آن نگه داشته شود.
-- [ ] container Rust روی DB واقعی migration و start شود.
-- [ ] health/API/UI/Xray/VIP/subscription smoke شوند.
-- [ ] اولین publish فقط بعد از snapshot معتبر انجام شود.
+- [x] container Rust روی DB واقعی migration و start شود.
+- [x] health/API/UI/Xray/VIP/subscription smoke شوند.
+- [x] اولین publish فقط بعد از snapshot معتبر انجام شود.
 - [ ] metrics و logها در چند چرخه بررسی شوند.
 
 معیار خروج: سرویس Rust تنها writer و publisher فعال است.
@@ -1074,10 +1074,10 @@ fieldهای جدید node:
 - [x] INVALID و RETIRED اشتباهاً منتشر نشوند.
 - [x] DORMANTها طبق backoff دوباره فرصت بگیرند.
 - [x] outage محلی health جمعی proxyها را خراب نکند.
-- [ ] API و UI با دادهٔ واقعی responsive بمانند.
+- [x] API و UI با دادهٔ واقعی responsive بمانند.
 - [ ] Xray process/port/FD leak در soak test وجود نداشته باشد.
-- [ ] publisher خروجی unique و قابل‌مصرف تولید و push کند.
-- [ ] Docker جدید روی سیستم فعلی healthy باشد.
+- [x] publisher خروجی unique و قابل‌مصرف تولید و push کند.
+- [x] Docker جدید روی سیستم فعلی healthy باشد.
 - [ ] benchmark نهایی correctness، سرعت و مصرف منابع را ثبت کرده باشد.
 - [ ] rollback یک بار عملاً روی محیط staging تمرین شده باشد.
 
