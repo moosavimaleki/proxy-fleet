@@ -857,10 +857,10 @@ fieldهای جدید node:
 ### 24.5 benchmark
 
 - [ ] corpus واقعی ۳۱هزار node برای parser/dedup.
-- [ ] query list/filter/history در دیتابیس واقعی کپی‌شده.
+- [x] query list/filter/history در دیتابیس واقعی کپی‌شده.
 - [ ] scheduler tick با queueهای بزرگ.
 - [ ] event insert و aggregate update.
-- [ ] API p50/p95 و response size.
+- [x] API p50/p95 و response size.
 - [ ] CPU/RAM/FD تحت concurrency یکسان با نسخهٔ Python.
 - [ ] publisher render برای تعداد زیاد config.
 

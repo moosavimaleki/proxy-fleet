@@ -63,3 +63,18 @@ diagnostics response exposed bounded queue depths, 4 Xray test slots, 2
 download slots, 88 owned child processes and 280 open FDs; the publisher
 reported a successful changed commit/push. Structured probe logs contained the
 component, proxy id, run id, stage and failure class fields.
+
+## Live API query sample
+
+On the same host and migrated live DB, 25 sequential local samples produced:
+
+| Request | Response bytes | p50 | p95 |
+|---|---:|---:|---:|
+| `nodes?page=1&page_size=100` | 138,974 | 7.676 ms | 9.086 ms |
+| `nodes?status=CANDIDATE&page_size=50` | 68,261 | 5.380 ms | 6.482 ms |
+| `nodes/{id}/history?limit=50` | 34,472 | 0.929 ms | 1.149 ms |
+| `scheduler` | 1,094 | 0.800 ms | 0.968 ms |
+
+These are local samples, not an internet-proxy throughput comparison. The
+repeatable command and the remaining comparison/soak work stay in the task
+list until a matching Python/corpus run exists.
