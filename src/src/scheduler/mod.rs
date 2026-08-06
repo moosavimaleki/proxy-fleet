@@ -27,6 +27,15 @@ pub struct QueueQuota {
     pub exploration: usize,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SystemMetrics {
+    pub pressure: f64,
+    pub load_pressure: f64,
+    pub memory_pressure: f64,
+    pub open_fds: usize,
+    pub child_processes: usize,
+}
+
 const QUEUE_ORDER: [(&str, &str); 4] = [
     ("CANDIDATE", "new"),
     ("PROBATION", "successful_probation"),
@@ -205,6 +214,11 @@ pub async fn claim_due(
 /// A portable, dependency-free pressure signal. Linux values are read from procfs;
 /// non-Linux hosts get a neutral signal rather than a false overload verdict.
 pub fn system_pressure() -> f64 {
+    let (load, memory) = system_pressure_components();
+    load.max(memory)
+}
+
+fn system_pressure_components() -> (f64, f64) {
     let cores = std::thread::available_parallelism()
         .map(|value| value.get() as f64)
         .unwrap_or(1.0);
@@ -237,7 +251,51 @@ pub fn system_pressure() -> f64 {
             (total > 0.0).then(|| (1.0 - available / total).clamp(0.0, 1.0))
         })
         .unwrap_or(0.0);
-    load.max(memory)
+    (load, memory)
+}
+
+/// Expensive process details are deliberately sampled by the heartbeat, not
+/// by each two-second scheduler tick. This makes a growing FD/process count
+/// visible before it becomes a local-overload false negative.
+pub fn system_metrics() -> SystemMetrics {
+    let (load_pressure, memory_pressure) = system_pressure_components();
+    let own_pid = std::process::id().to_string();
+    let child_processes = std::fs::read_dir("/proc")
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .chars()
+                .all(|item| item.is_ascii_digit())
+        })
+        .filter(|entry| {
+            std::fs::read_to_string(entry.path().join("status"))
+                .ok()
+                .and_then(|status| {
+                    status.lines().find_map(|line| {
+                        line.strip_prefix("PPid:")
+                            .and_then(|value| value.split_whitespace().next())
+                            .map(str::to_owned)
+                    })
+                })
+                .as_deref()
+                == Some(own_pid.as_str())
+        })
+        .count();
+    let open_fds = std::fs::read_dir("/proc/self/fd")
+        .map(|entries| entries.filter_map(Result::ok).count())
+        .unwrap_or_default();
+    SystemMetrics {
+        pressure: load_pressure.max(memory_pressure),
+        load_pressure,
+        memory_pressure,
+        open_fds,
+        child_processes,
+    }
 }
 
 struct ClaimParams<'a> {
@@ -313,7 +371,7 @@ mod tests {
         probe::{ProbeEvent, ProbeReport},
     };
 
-    use super::{QueueDebt, QueueQuota, is_mass_failure};
+    use super::{QueueDebt, QueueQuota, is_mass_failure, system_metrics};
 
     fn report(class: FailureClass) -> ProbeReport {
         ProbeReport {
@@ -390,5 +448,13 @@ mod tests {
         ];
         assert!(is_mass_failure(&reports, 60));
         assert!(!is_mass_failure(&reports[..2], 40));
+    }
+
+    #[test]
+    fn sampled_system_metrics_are_bounded() {
+        let metrics = system_metrics();
+        assert!((0.0..=1.0).contains(&metrics.pressure));
+        assert!((0.0..=1.0).contains(&metrics.load_pressure));
+        assert!((0.0..=1.0).contains(&metrics.memory_pressure));
     }
 }

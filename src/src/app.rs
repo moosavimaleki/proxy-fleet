@@ -15,6 +15,11 @@ pub struct RuntimeStatus {
     pub xray_concurrency: usize,
     pub download_concurrency: usize,
     pub system_pressure: f64,
+    pub system_load_pressure: f64,
+    pub system_memory_pressure: f64,
+    pub open_fds: usize,
+    pub child_processes: usize,
+    pub event_loop_lag_ms: i64,
     pub last_scheduler_jobs: usize,
     pub network_incident: bool,
     pub network_message: String,
@@ -43,6 +48,11 @@ impl AppState {
                 xray_concurrency: 4,
                 download_concurrency: 2,
                 system_pressure: 0.0,
+                system_load_pressure: 0.0,
+                system_memory_pressure: 0.0,
+                open_fds: 0,
+                child_processes: 0,
+                event_loop_lag_ms: 0,
                 last_scheduler_jobs: 0,
                 network_incident: false,
                 network_message: "baseline pending".to_owned(),
@@ -160,14 +170,27 @@ impl AppState {
         let state = self.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
+            let mut expected = tokio::time::Instant::now();
             loop {
                 tokio::select! {
                     _ = state.shutdown.cancelled() => { info!("background services stopped"); return; }
                     _ = interval.tick() => {
+                        expected += Duration::from_secs(5);
+                        let lag_ms = tokio::time::Instant::now()
+                            .saturating_duration_since(expected)
+                            .as_millis()
+                            .min(i64::MAX as u128) as i64;
                         let result = state.store.counts().await;
+                        let metrics = crate::scheduler::system_metrics();
                         let mut runtime = state.runtime.write().await;
                         runtime.scheduler_ticks = runtime.scheduler_ticks.saturating_add(1);
                         runtime.last_tick_at = Some(chrono::Utc::now());
+                        runtime.system_pressure = metrics.pressure;
+                        runtime.system_load_pressure = metrics.load_pressure;
+                        runtime.system_memory_pressure = metrics.memory_pressure;
+                        runtime.open_fds = metrics.open_fds;
+                        runtime.child_processes = metrics.child_processes;
+                        runtime.event_loop_lag_ms = lag_ms;
                         if let Err(error) = result { runtime.last_error = error.to_string(); warn!(%error, "storage heartbeat failed"); }
                     }
                 }
