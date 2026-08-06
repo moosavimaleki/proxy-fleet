@@ -78,3 +78,13 @@ On the same host and migrated live DB, 25 sequential local samples produced:
 These are local samples, not an internet-proxy throughput comparison. The
 repeatable command and the remaining comparison/soak work stay in the task
 list until a matching Python/corpus run exists.
+
+## Isolated shadow rehearsal
+
+The Rust image was started against a SQLite backup in `data/shadow/app.db` on
+API port 18080, using `config/config.shadow.yml`.  It passed health and DB
+integrity checks with the same `6937` node and `19118` legacy-history counts.
+The shadow used independent Xray ranges, ran one bounded test worker, and
+completed an upstream ingestion/test cycle while its publisher endpoint
+reported `enabled: false`. It was then stopped and removed; the production
+container remained healthy throughout.

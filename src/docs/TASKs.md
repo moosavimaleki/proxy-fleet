@@ -983,8 +983,8 @@ fieldهای جدید node:
 
 ### فاز 10: shadow validation
 
-- [ ] نسخهٔ Rust روی copy دیتابیس و port جدا اجرا شود.
-- [ ] ingestion و test در ابتدا بدون publisher واقعی اجرا شود.
+- [x] نسخهٔ Rust روی copy دیتابیس و port جدا اجرا شود.
+- [x] ingestion و test در ابتدا بدون publisher واقعی اجرا شود.
 - [ ] تصمیم‌های health دو نسخه و نتیجهٔ واقعی proxyها مقایسه شود.
 - [ ] load test و soak test حداقل چند چرخهٔ کامل refresh/recovery را پوشش دهد.
 - [ ] اختلاف‌های غیرمنتظره قبل از cutover رفع شوند.

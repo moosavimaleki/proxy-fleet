@@ -123,6 +123,7 @@ impl AppState {
                 return (0, 0);
             }
         };
+        let total = candidates.len();
         let mut started = 0;
         let mut failed = 0;
         for candidate in candidates {
@@ -138,6 +139,17 @@ impl AppState {
             {
                 Ok(_) => started += 1,
                 Err(error) => {
+                    if error.to_string().contains("persistent Xray runtime cap") {
+                        // A configured cap is normal capacity control, not a
+                        // separate failure for every remaining ACTIVE node.
+                        failed = total.saturating_sub(started);
+                        warn!(
+                            started,
+                            deferred = failed,
+                            "persistent Xray runtime cap reached during reconciliation"
+                        );
+                        break;
+                    }
                     failed += 1;
                     warn!(node = %candidate.id, %error, "could not reconcile ACTIVE runtime");
                 }

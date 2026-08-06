@@ -1,0 +1,33 @@
+# Isolated cutover/rollback rehearsal profile.  It intentionally has no
+# publisher and separate API/Xray port ranges; use only with a copied DB.
+service:
+  name: config-orchestrator-shadow
+publishing:
+  enabled: false
+subscriptions:
+  refresh_interval_seconds: 3600
+  urls:
+    - name: shadow_source
+      url: "https://raw.githubusercontent.com/barry-far/V2ray-config/main/Sub1.txt"
+ports:
+  main: { start: 40000, end: 40063 }
+  test: { start: 40100, end: 40163 }
+database:
+  path: /app/data/app.db
+health:
+  max_active_runtimes: 1
+  xray_concurrency_min: 1
+  xray_concurrency_max: 1
+  download_concurrency_min: 1
+  download_concurrency_max: 1
+  candidate_cycle_limit: 1
+  candidate_batch_timeout_seconds: 5
+download_test:
+  enabled: false
+vip_port:
+  enabled: false
+network_guard:
+  enabled: false
+api:
+  host: 127.0.0.1
+  port: 18080

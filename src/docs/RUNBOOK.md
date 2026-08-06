@@ -74,3 +74,8 @@ then health-smoke it.  It refuses to run without `--confirm` and the explicit
 snapshot path.  Roll back on migration inconsistency, verified data loss,
 process/port/FD leak, a broken publisher, an API contract break, or a severe
 measured throughput regression.
+
+For a non-publishing rehearsal, use `config/config.shadow.yml` with a copied
+database. It binds API port 18080, uses separate Xray ranges, allows one
+long-lived and one test Xray process, and has publishing/VIP/network guard
+disabled. It must never mount the production database read-write.
