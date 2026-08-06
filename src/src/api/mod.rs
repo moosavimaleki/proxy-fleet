@@ -80,18 +80,124 @@ struct NodeQuery {
 }
 
 async fn nodes(State(state): State<AppState>, Query(query): Query<NodeQuery>) -> impl IntoResponse {
+    let page = query.page.unwrap_or(1);
+    let page_size = query.page_size.unwrap_or(50);
     match state
         .store
         .list_nodes(
-            query.page.unwrap_or(1),
-            query.page_size.unwrap_or(50),
-            query.status.as_deref(),
-            query.country.as_deref(),
-            query.search.as_deref(),
+            page,
+            page_size,
+            query
+                .status
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty()),
+            query
+                .country
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty()),
+            query
+                .search
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty()),
         )
         .await
     {
-        Ok(result) => Json(json!({"service": state.config.service.name, "generated_at": chrono::Utc::now(), "pagination":{"page":result.page,"page_size":result.page_size,"total":result.total}, "nodes":result.nodes})).into_response(),
+        Ok(result) => {
+            let counts = match state.store.counts().await {
+                Ok(counts) => counts,
+                Err(error) => return api_error(error),
+            };
+            let countries = match state.store.list_exit_countries().await {
+                Ok(countries) => countries,
+                Err(error) => return api_error(error),
+            };
+            let vip = state.xray_runtimes.vip_status().await;
+            let vip_id = vip.as_ref().map(|(id, _, _)| id.as_str());
+            let mut nodes = Vec::with_capacity(result.nodes.len());
+            for node in result.nodes {
+                let port = state.xray_runtimes.port_for(&node.id).await;
+                let mut value = match serde_json::to_value(node) {
+                    Ok(serde_json::Value::Object(value)) => value,
+                    Ok(_) => unreachable!("node summary must serialize as an object"),
+                    Err(error) => return api_error(anyhow::Error::from(error)),
+                };
+                value.insert("runtime_running".to_owned(), json!(port.is_some()));
+                value.insert("runtime_port".to_owned(), json!(port));
+                value.insert(
+                    "is_vip".to_owned(),
+                    json!(vip_id == value.get("id").and_then(|id| id.as_str())),
+                );
+                // Compatibility keys of the Python dashboard. Values without
+                // an equivalent historical source remain explicit zero/null;
+                // clients never need to infer a missing field from a Rust
+                // response.
+                for key in [
+                    "open_assignments",
+                    "total_assignments",
+                    "used_count",
+                    "broken_count",
+                    "rate_limited_count",
+                    "total_clients",
+                    "open_clients",
+                    "half_open_clients",
+                    "closed_clients",
+                    "consecutive_relay_failures",
+                ] {
+                    value.insert(key.to_owned(), json!(0));
+                }
+                nodes.push(serde_json::Value::Object(value));
+            }
+            let total_pages = (result.total.max(1) as u64)
+                .div_ceil(result.page_size)
+                .max(1);
+            let status_counts = json!({
+                "ACTIVE": counts.active,
+                "PROBATION": counts.probation,
+                "CANDIDATE": counts.candidate,
+                "TESTING": counts.testing,
+                "DORMANT": counts.dormant,
+                "DEAD": counts.dormant,
+                "INVALID": counts.invalid,
+                "RETIRED": counts.retired,
+                "REMOVED": counts.retired,
+                "WAITING_FOR_PORT": counts.waiting_for_port,
+            });
+            let runtime = state.runtime.read().await;
+            let network = json!({
+                "enabled": state.config.network_guard.enabled,
+                "online": !runtime.network_incident,
+                "status": if runtime.network_incident { "INCIDENT" } else { "HEALTHY" },
+                "message": runtime.network_message,
+            });
+            let vip = match vip {
+                Some((node_id, score, started_at)) => {
+                    json!({"enabled":true,"running":true,"port":state.config.vip_port.port,"node_id":node_id,"score":score,"started_at":started_at})
+                }
+                None => {
+                    json!({"enabled":state.config.vip_port.enabled,"running":false,"port":state.config.vip_port.port,"node_id":null,"score":null})
+                }
+            };
+            Json(json!({
+                "service": state.config.service.name,
+                "environment": state.config.service.environment,
+                "generated_at": chrono::Utc::now(),
+                "total_nodes": counts.total,
+                "filtered_total": result.total,
+                "page": result.page,
+                "page_size": result.page_size,
+                "total_pages": total_pages,
+                "status_counts": status_counts,
+                "countries": countries,
+                "network": network,
+                "vip": vip,
+                "pagination":{"page":result.page,"page_size":result.page_size,"total":result.total},
+                "nodes":nodes,
+            }))
+            .into_response()
+        }
         Err(error) => api_error(error),
     }
 }

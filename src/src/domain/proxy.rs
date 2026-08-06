@@ -53,6 +53,9 @@ impl std::str::FromStr for LifecycleState {
 pub struct NodeSummary {
     pub id: String,
     pub config_hash: String,
+    /// Needed while reading a row to derive display metadata, but credentials
+    /// must only be returned by the explicit `/:id/config` endpoint.
+    #[serde(skip_serializing)]
     pub raw_config: String,
     pub protocol: String,
     pub server: String,

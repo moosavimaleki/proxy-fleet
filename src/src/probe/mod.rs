@@ -444,91 +444,176 @@ async fn test_through_xray(
 }
 
 async fn download(client: &reqwest::Client, config: &AppConfig, deadline: Instant) -> ProbeEvent {
-    let endpoint = config.download_test.test_url.clone();
+    // A single download mirror is not evidence that the proxy is bad.  Try
+    // the configured mirrors in order and only produce negative proxy
+    // evidence when independent endpoints time out.  An HTTP/status failure
+    // from every mirror is explicitly inconclusive: it is usually a mirror or
+    // route policy issue, not a property of the proxy.
+    let mut endpoints = Vec::with_capacity(1 + config.download_test.fallback_urls.len());
+    endpoints.push(config.download_test.test_url.clone());
+    endpoints.extend(config.download_test.fallback_urls.iter().cloned());
+    let mut seen = std::collections::HashSet::new();
+    endpoints.retain(|endpoint| seen.insert(endpoint.clone()));
+
+    let mut failures = Vec::new();
+    for endpoint in endpoints.into_iter().take(3) {
+        let probe = download_endpoint(client, config, deadline, &endpoint).await;
+        if probe.class == FailureClass::Success || probe.class == FailureClass::DownloadTooSlow {
+            return probe;
+        }
+        failures.push(probe);
+        if remaining_budget(deadline).is_none() {
+            break;
+        }
+    }
+
+    let all_timed_out = !failures.is_empty()
+        && failures
+            .iter()
+            .all(|item| item.class == FailureClass::DownloadTimeout);
+    let elapsed_ms = failures
+        .iter()
+        .filter_map(|item| item.duration_ms)
+        .max()
+        .unwrap_or_default();
+    let details = failures
+        .iter()
+        .map(|item| {
+            serde_json::json!({
+                "endpoint": item.endpoint,
+                "class": item.class.as_str(),
+                "detail": item.detail,
+            })
+        })
+        .collect::<Vec<_>>();
+    ProbeEvent {
+        stage: TestStage::Download,
+        class: if all_timed_out {
+            FailureClass::DownloadTimeout
+        } else {
+            FailureClass::EndpointFailure
+        },
+        fast_download: false,
+        latency_ms: None,
+        download_bps: None,
+        bytes_transferred: None,
+        duration_ms: Some(elapsed_ms),
+        endpoint: None,
+        detail: serde_json::json!({"attempts":details}),
+    }
+}
+
+async fn download_endpoint(
+    client: &reqwest::Client,
+    config: &AppConfig,
+    deadline: Instant,
+    endpoint: &str,
+) -> ProbeEvent {
     let started = Instant::now();
+    let per_url_timeout = Duration::from_secs_f64(
+        config
+            .download_test
+            .per_url_timeout_seconds
+            .max(0.1)
+            .min(config.download_test.timeout_seconds.max(1) as f64),
+    );
     let Some(remaining) = remaining_budget(deadline) else {
         return event(
             TestStage::Download,
             FailureClass::DownloadTimeout,
             Some(started.elapsed()),
-            serde_json::json!({"error":"global probe deadline exceeded"}),
+            serde_json::json!({"endpoint":endpoint,"error":"global probe deadline exceeded"}),
         );
     };
-    let response = match tokio::time::timeout(
-        remaining.min(Duration::from_secs(config.download_test.timeout_seconds)),
-        client.get(&endpoint).send(),
-    )
-    .await
-    {
-        Ok(Ok(response)) if response.status().is_success() => response,
-        Ok(Ok(response)) => {
-            return event(
-                TestStage::Download,
-                FailureClass::HttpFailure,
-                Some(started.elapsed()),
-                serde_json::json!({"status":response.status().as_u16()}),
-            );
-        }
-        Ok(Err(error)) if error.is_timeout() => {
-            return event(
-                TestStage::Download,
-                FailureClass::DownloadTimeout,
-                Some(started.elapsed()),
-                serde_json::json!({"error":error.to_string()}),
-            );
-        }
-        Ok(Err(error)) => {
-            return event(
-                TestStage::Download,
-                FailureClass::EndpointFailure,
-                Some(started.elapsed()),
-                serde_json::json!({"error":error.to_string()}),
-            );
-        }
-        Err(_) => {
-            return event(
-                TestStage::Download,
-                FailureClass::DownloadTimeout,
-                Some(started.elapsed()),
-                serde_json::json!({"error":"download deadline exceeded"}),
-            );
-        }
-    };
+    let response =
+        match tokio::time::timeout(remaining.min(per_url_timeout), client.get(endpoint).send())
+            .await
+        {
+            Ok(Ok(response)) if response.status().is_success() => response,
+            Ok(Ok(response)) => {
+                return ProbeEvent {
+                    endpoint: Some(endpoint.to_owned()),
+                    ..event(
+                        TestStage::Download,
+                        FailureClass::EndpointFailure,
+                        Some(started.elapsed()),
+                        serde_json::json!({"status":response.status().as_u16()}),
+                    )
+                };
+            }
+            Ok(Err(error)) if error.is_timeout() => {
+                return ProbeEvent {
+                    endpoint: Some(endpoint.to_owned()),
+                    ..event(
+                        TestStage::Download,
+                        FailureClass::DownloadTimeout,
+                        Some(started.elapsed()),
+                        serde_json::json!({"error":error.to_string()}),
+                    )
+                };
+            }
+            Ok(Err(error)) => {
+                return ProbeEvent {
+                    endpoint: Some(endpoint.to_owned()),
+                    ..event(
+                        TestStage::Download,
+                        FailureClass::EndpointFailure,
+                        Some(started.elapsed()),
+                        serde_json::json!({"error":error.to_string()}),
+                    )
+                };
+            }
+            Err(_) => {
+                return ProbeEvent {
+                    endpoint: Some(endpoint.to_owned()),
+                    ..event(
+                        TestStage::Download,
+                        FailureClass::DownloadTimeout,
+                        Some(started.elapsed()),
+                        serde_json::json!({"error":"per-endpoint deadline exceeded"}),
+                    )
+                };
+            }
+        };
     let mut stream = response.bytes_stream();
     let mut bytes = 0_usize;
-    let max_bytes = 1_000_000_usize;
-    while bytes < max_bytes {
+    const MAX_BYTES: usize = 1_000_000;
+    while bytes < MAX_BYTES {
         let Some(remaining) = remaining_budget(deadline) else {
-            return event(
-                TestStage::Download,
-                FailureClass::DownloadTimeout,
-                Some(started.elapsed()),
-                serde_json::json!({"error":"global probe deadline exceeded"}),
-            );
-        };
-        match tokio::time::timeout(
-            remaining.min(Duration::from_secs(config.download_test.timeout_seconds)),
-            stream.next(),
-        )
-        .await
-        {
-            Ok(Some(Ok(chunk))) => bytes += chunk.len(),
-            Ok(Some(Err(error))) => {
-                return event(
+            return ProbeEvent {
+                endpoint: Some(endpoint.to_owned()),
+                ..event(
                     TestStage::Download,
                     FailureClass::DownloadTimeout,
                     Some(started.elapsed()),
-                    serde_json::json!({"error":error.to_string()}),
-                );
+                    serde_json::json!({"error":"global probe deadline exceeded"}),
+                )
+            };
+        };
+        match tokio::time::timeout(remaining.min(per_url_timeout), stream.next()).await {
+            Ok(Some(Ok(chunk))) => bytes += chunk.len(),
+            Ok(Some(Err(error))) => {
+                return ProbeEvent {
+                    endpoint: Some(endpoint.to_owned()),
+                    ..event(
+                        TestStage::Download,
+                        FailureClass::DownloadTimeout,
+                        Some(started.elapsed()),
+                        serde_json::json!({"error":error.to_string()}),
+                    )
+                };
             }
             Ok(None) => break,
             Err(_) => {
-                return event(
-                    TestStage::Download,
-                    FailureClass::DownloadTimeout,
-                    Some(started.elapsed()),
-                    serde_json::json!({"error":"download stream deadline exceeded"}),
-                );
+                return ProbeEvent {
+                    endpoint: Some(endpoint.to_owned()),
+                    ..event(
+                        TestStage::Download,
+                        FailureClass::DownloadTimeout,
+                        Some(started.elapsed()),
+                        serde_json::json!({"error":"download stream deadline exceeded"}),
+                    )
+                };
             }
         }
     }
@@ -548,7 +633,7 @@ async fn download(client: &reqwest::Client, config: &AppConfig, deadline: Instan
         download_bps: Some(bps),
         bytes_transferred: Some(bytes as i64),
         duration_ms: Some(duration.as_millis() as i64),
-        endpoint: Some(endpoint),
+        endpoint: Some(endpoint.to_owned()),
         detail: serde_json::json!({"kbps":kbps}),
     }
 }

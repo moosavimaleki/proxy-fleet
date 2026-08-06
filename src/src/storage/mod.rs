@@ -381,6 +381,18 @@ impl Store {
         })
     }
 
+    /// Dashboard filters must remain bounded even with a large fleet.  This
+    /// query is intentionally distinct from the paged node query and returns
+    /// only a small list of display values.
+    pub async fn list_exit_countries(&self) -> anyhow::Result<Vec<String>> {
+        let rows = sqlx::query_scalar::<_, String>(
+            "SELECT DISTINCT exit_country FROM nodes WHERE exit_country <> '' ORDER BY exit_country ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     pub async fn sqlite_size_bytes(&self) -> anyhow::Result<i64> {
         let pages = sqlx::query_scalar::<_, i64>("PRAGMA page_count")
             .fetch_one(&self.pool)
