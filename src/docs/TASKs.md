@@ -479,7 +479,7 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 - [x] transportها و securityهای فعلی بدون regression منتقل شوند.
 - [x] config canonical با ترتیب field ثابت ساخته شود.
 - [x] fragment/remark، نام subscription و metadata نمایشی از technical hash حذف شود.
-- [ ] IPv4، IPv6، hostname، port، UUID/custom ID، SNI، ALPN، REALITY key/short-id و cipher validate شوند.
+- [x] IPv4، IPv6، hostname، port، UUID/custom ID، SNI، ALPN، REALITY key/short-id و cipher validate شوند.
 - [x] deprecated optionها به ساختار Xray جاری normalize شوند.
 - [x] duplicateهای هم‌هویت sourceهای خود را merge کنند و آخرین remark مفید صرفاً برای نمایش حفظ شود.
 - [x] parse failure با `INVALID_CONFIG` ثبت شود و process Xray برای آن ساخته نشود.
@@ -904,80 +904,80 @@ fieldهای جدید node:
 
 ### فاز 1: skeleton Rust
 
-- [ ] workspace/crate، config، error، tracing و graceful shutdown.
-- [ ] Axum health endpoint.
-- [ ] SQLx pool و migration runner.
-- [ ] CI محلی `fmt`, `clippy`, `test`.
+- [x] workspace/crate، config، error، tracing و graceful shutdown.
+- [x] Axum health endpoint.
+- [x] SQLx pool و migration runner.
+- [x] CI محلی `fmt`, `clippy`, `test`.
 
 معیار خروج: binary داخل container اجرا و clean shutdown می‌شود.
 
 ### فاز 2: storage و migration
 
-- [ ] migrationهای افزایشی.
-- [ ] repositoryهای nodes/events/upstream/client.
-- [ ] seed evidence از schema قدیمی.
-- [ ] compatibility query برای history و EWMA.
+- [x] migrationهای افزایشی.
+- [x] repositoryهای nodes/events/upstream/client.
+- [x] seed evidence از schema قدیمی.
+- [x] compatibility query برای history و EWMA.
 
 معیار خروج: DB کپی‌شده بدون data loss باز و تمام countها reconcile می‌شوند.
 
 ### فاز 3: parser و ingestion
 
-- [ ] تمام protocolها و transportها.
-- [ ] canonical identity/dedup.
-- [ ] manual import و subscription decoder.
-- [ ] upstream generation fetch/reconcile.
+- [x] تمام protocolها و transportها.
+- [x] canonical identity/dedup.
+- [x] manual import و subscription decoder.
+- [x] upstream generation fetch/reconcile.
 
 معیار خروج: خروجی parser Rust روی corpus فعلی با Python مقایسه و اختلاف‌ها توضیح داده شده‌اند.
 
 ### فاز 4: health engine
 
-- [ ] event model، classifier، decay، Bayesian score.
-- [ ] transition/hysteresis.
-- [ ] publication lease.
-- [ ] incident-safe evidence application.
+- [x] event model، classifier، decay، Bayesian score.
+- [x] transition/hysteresis.
+- [x] publication lease.
+- [x] incident-safe evidence application.
 
 معیار خروج: تمام سناریوهای `ALGORITHM.md` با تست clock-controlled پاس می‌شوند.
 
 ### فاز 5: Xray و probe cascade
 
-- [ ] config generation.
-- [ ] process/port lifecycle.
-- [ ] Stage 0 تا 4.
-- [ ] batch split، cancellation، timeout budget و metadata.
+- [x] config generation.
+- [x] process/port lifecycle.
+- [x] Stage 0 تا 4.
+- [x] batch split، cancellation، timeout budget و metadata.
 
 معیار خروج: proxyهای known-good/known-bad با failure class صحیح دسته‌بندی می‌شوند و process leak صفر است.
 
 ### فاز 6: scheduler و pressure control
 
-- [ ] multi-queue quota.
-- [ ] priority/circuit/full jitter.
-- [ ] atomic claim.
-- [ ] AIMD و global incident detector.
+- [x] multi-queue quota.
+- [x] priority/circuit/full jitter.
+- [x] atomic claim.
+- [x] AIMD و global incident detector.
 
 معیار خروج: simulation چندروزه starvation، retry storm یا حذف ناگهانی ACTIVE ایجاد نمی‌کند.
 
 ### فاز 7: selection، client circuit و VIP
 
-- [ ] انتقال scoring و fairness.
-- [ ] feedback و per-client circuit.
-- [ ] persistent runtime و VIP hysteresis.
+- [x] انتقال scoring و fairness.
+- [x] feedback و per-client circuit.
+- [x] persistent runtime و VIP hysteresis.
 
 معیار خروج: رفتار API best/feedback و VIP با نسخهٔ فعلی سازگار است.
 
 ### فاز 8: API و UI
 
-- [ ] همهٔ routeهای compatibility.
-- [ ] APIهای جدید scheduler/upstream/incidents.
-- [ ] تمام صفحات و actionها.
-- [ ] pagination و response budget.
+- [x] همهٔ routeهای compatibility.
+- [x] APIهای جدید scheduler/upstream/incidents.
+- [x] تمام صفحات و actionها.
+- [x] pagination و response budget.
 
 معیار خروج: contract tests و browser smoke تمام صفحات پاس می‌شوند.
 
 ### فاز 9: publisher
 
-- [ ] lease query، render، dedup و stable ordering.
-- [ ] Git commit/push/debounce/retry.
-- [ ] diagnostics و no-op detection.
+- [x] lease query، render، dedup و stable ordering.
+- [x] Git commit/push/debounce/retry.
+- [x] diagnostics و no-op detection.
 
 معیار خروج: لینک‌های عمومی بدون تغییر path با خروجی معتبر و unique به‌روز می‌شوند.
 

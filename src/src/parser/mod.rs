@@ -62,6 +62,7 @@ pub fn parse_share_url(raw: &str, source: &str) -> anyhow::Result<ParsedProxy> {
     anyhow::ensure!(!address.is_empty(), "proxy address is empty");
     validate_address(&address)?;
     anyhow::ensure!(port > 0, "proxy port is invalid");
+    validate_transport_parameters(&normalized_config)?;
     let canonical = serde_json::to_vec(&normalized_config)?;
     let config_hash = format!("{:x}", Sha256::digest(canonical));
     Ok(ParsedProxy {
@@ -345,6 +346,60 @@ fn validate_address(address: &str) -> anyhow::Result<()> {
         }),
         "proxy hostname is invalid"
     );
+    Ok(())
+}
+
+fn validate_transport_parameters(config: &serde_json::Value) -> anyhow::Result<()> {
+    let Some(params) = config.get("params").and_then(serde_json::Value::as_object) else {
+        // VMess carries legacy fields in its payload. Xray config generation
+        // validates those fields before any process is spawned.
+        return Ok(());
+    };
+    for key in ["sni", "host"] {
+        if let Some(value) = params.get(key).and_then(serde_json::Value::as_str) {
+            for hostname in value.split(',').filter(|value| !value.is_empty()) {
+                validate_address(hostname)?;
+            }
+        }
+    }
+    if let Some(alpn) = params.get("alpn").and_then(serde_json::Value::as_str) {
+        anyhow::ensure!(
+            alpn.split(',').all(|token| {
+                !token.is_empty()
+                    && token.len() <= 255
+                    && token
+                        .bytes()
+                        .all(|byte| byte.is_ascii_graphic() && byte != b',')
+            }),
+            "ALPN contains an invalid token"
+        );
+    }
+    let security = params
+        .get("security")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("none");
+    if security.eq_ignore_ascii_case("reality") {
+        let key = params
+            .get("pbk")
+            .or_else(|| params.get("password"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        anyhow::ensure!(
+            key.len() >= 32
+                && key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')),
+            "REALITY public key is invalid"
+        );
+        if let Some(short_id) = params.get("sid").and_then(serde_json::Value::as_str) {
+            anyhow::ensure!(
+                short_id.len() <= 16
+                    && short_id.len() % 2 == 0
+                    && short_id.bytes().all(|byte| byte.is_ascii_hexdigit()),
+                "REALITY short id is invalid"
+            );
+        }
+    }
     Ok(())
 }
 
@@ -653,6 +708,34 @@ mod tests {
     }
 
     #[test]
+    fn validates_sni_alpn_and_reality_material_before_xray() {
+        let base = "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443";
+        assert!(
+            parse_share_url(
+                &format!("{base}?security=tls&sni=cdn.example.com&alpn=h2,http%2F1.1"),
+                "fixture"
+            )
+            .is_ok()
+        );
+        assert!(parse_share_url(&format!("{base}?security=tls&sni=bad_host!"), "fixture").is_err());
+        let public_key = "A".repeat(43);
+        assert!(
+            parse_share_url(
+                &format!("{base}?security=reality&type=tcp&pbk={public_key}&sid=a1b2"),
+                "fixture"
+            )
+            .is_ok()
+        );
+        assert!(
+            parse_share_url(
+                &format!("{base}?security=reality&type=tcp&pbk=short&sid=not-hex"),
+                "fixture"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
     fn supports_all_documented_vless_transports_and_security_modes() {
         for (network, extra) in [
             ("tcp", ""),
@@ -673,7 +756,7 @@ mod tests {
             assert_eq!(outbound["streamSettings"]["security"], "tls");
         }
         let reality = parse_share_url(
-            "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?type=tcp&security=reality&pbk=public-key&sid=abcd&sni=example.com#label",
+            "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?type=tcp&security=reality&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&sid=abcd&sni=example.com#label",
             "fixture",
         )
         .expect("reality parse");
