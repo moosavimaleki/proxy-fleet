@@ -956,9 +956,18 @@ impl Store {
     }
 
     pub async fn schedule_manual_test(&self, proxy_id: &str) -> anyhow::Result<()> {
-        let affected = sqlx::query("UPDATE nodes SET next_test_at = ?, test_lease_until = NULL, lifecycle_state = CASE WHEN lifecycle_state = 'TESTING' THEN COALESCE(testing_from_state, 'CANDIDATE') ELSE lifecycle_state END, status = CASE WHEN status = 'TESTING' THEN COALESCE(testing_from_state, 'CANDIDATE') ELSE status END, testing_from_state = NULL WHERE id = ?")
-            .bind(Utc::now().to_rfc3339()).bind(proxy_id).execute(&self.pool).await?.rows_affected();
-        anyhow::ensure!(affected == 1, "node not found");
+        // A manual action should make an idle node due immediately, but must
+        // never revoke an in-flight lease: the running worker owns that
+        // observation and a second worker would double the network cost.
+        let affected = sqlx::query("UPDATE nodes SET next_test_at = ?, updated_at = ? WHERE id = ? AND lifecycle_state <> 'TESTING'")
+            .bind(Utc::now().to_rfc3339()).bind(Utc::now().to_rfc3339()).bind(proxy_id).execute(&self.pool).await?.rows_affected();
+        if affected == 0 {
+            let exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM nodes WHERE id = ?")
+                .bind(proxy_id)
+                .fetch_one(&self.pool)
+                .await?;
+            anyhow::ensure!(exists == 1, "node not found");
+        }
         Ok(())
     }
 
@@ -1359,6 +1368,26 @@ mod tests {
             store.scheduler_state("quota_debt").await.expect("read"),
             Some(serde_json::json!({"candidate": 0.8}))
         );
+    }
+
+    #[tokio::test]
+    async fn manual_test_does_not_revoke_an_active_test_lease() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        sqlx::query("INSERT INTO nodes(id, config_hash, raw_config, normalized_config, source_subs, status, lifecycle_state, structurally_valid, health_alpha, health_beta, health_score, created_at, updated_at, test_lease_until, testing_from_state) VALUES ('node', 'hash', 'vless://demo', '{}', '[]', 'TESTING', 'TESTING', 1, 1, 1, 0.5, ?, ?, ?, 'CANDIDATE')")
+            .bind(Utc::now().to_rfc3339()).bind(Utc::now().to_rfc3339()).bind((Utc::now() + chrono::Duration::minutes(5)).to_rfc3339()).execute(store.pool()).await.expect("node");
+        store
+            .schedule_manual_test("node")
+            .await
+            .expect("manual test");
+        let row = sqlx::query("SELECT lifecycle_state, test_lease_until, testing_from_state FROM nodes WHERE id = 'node'")
+            .fetch_one(store.pool()).await.expect("node row");
+        assert_eq!(row.get::<String, _>("lifecycle_state"), "TESTING");
+        assert_eq!(row.get::<String, _>("testing_from_state"), "CANDIDATE");
+        assert!(row.get::<Option<String>, _>("test_lease_until").is_some());
     }
 
     async fn test_store() -> (tempfile::TempDir, Store, String) {
