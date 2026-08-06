@@ -129,20 +129,35 @@ pub fn lease_until(stage: TestStage, fast_download: bool, now: DateTime<Utc>) ->
     }
 }
 
-pub fn full_jitter_delay(failure_streak: u32, had_real_success: bool, dormant: bool) -> Duration {
+pub fn full_jitter_delay(
+    failure_streak: u32,
+    had_real_success: bool,
+    dormant: bool,
+    class: FailureClass,
+) -> Duration {
     use rand::Rng;
 
     let (base_seconds, cap_seconds) = if dormant {
-        // Dormant means low priority, not permanently dead.  A two-hour
-        // retry floor gives recently failing upstream entries a practical
-        // chance to recover without occupying the hot queue.
-        (2 * 60 * 60_u64, 12 * 60 * 60_u64)
+        // Dormant is a recovery queue, never a graveyard. The successive
+        // ceilings are 6h, 12h and 24h; full jitter prevents many revived
+        // records from waking in one scheduler tick.
+        let recovery_ceiling = match failure_streak {
+            0 => 6 * 60 * 60_u64,
+            1 => 12 * 60 * 60_u64,
+            _ => 24 * 60 * 60_u64,
+        };
+        (recovery_ceiling, recovery_ceiling)
     } else if had_real_success {
         (5 * 60_u64, 6 * 60 * 60_u64)
     } else {
         (30 * 60_u64, 24 * 60 * 60_u64)
     };
-    let shift = failure_streak.min(20);
+    // A refused connection is stronger evidence than a timeout.  Advance its
+    // exponential backoff by one step without changing its evidence class or
+    // prematurely revoking its publication lease.
+    let shift = failure_streak
+        .saturating_add(u32::from(class == FailureClass::ConnectionRefused))
+        .min(20);
     let ceiling = base_seconds.saturating_mul(1_u64 << shift).min(cap_seconds);
     Duration::seconds(rand::rng().random_range(0..=ceiling) as i64)
 }
@@ -152,7 +167,7 @@ mod tests {
     use chrono::{Duration, TimeZone, Utc};
     use proptest::prelude::*;
 
-    use super::{TestStage, decay, full_jitter_delay, health, lease_until};
+    use super::{FailureClass, TestStage, decay, full_jitter_delay, health, lease_until};
 
     #[test]
     fn decay_halves_exactly_at_the_half_life() {
@@ -191,9 +206,19 @@ mod tests {
 
         #[test]
         fn jitter_is_never_negative_or_above_its_cap(streak in 0_u32..30, successful in any::<bool>(), dormant in any::<bool>()) {
-            let delay = full_jitter_delay(streak, successful, dormant);
-            let cap = if dormant { 12 * 60 * 60 } else if successful { 6 * 60 * 60 } else { 24 * 60 * 60 };
+            let delay = full_jitter_delay(streak, successful, dormant, FailureClass::TcpTimeout);
+            let cap = if dormant { if streak == 0 { 6 * 60 * 60 } else if streak == 1 { 12 * 60 * 60 } else { 24 * 60 * 60 } } else if successful { 6 * 60 * 60 } else { 24 * 60 * 60 };
             prop_assert!((0..=cap).contains(&delay.num_seconds()));
         }
+    }
+
+    #[test]
+    fn refused_connection_has_a_stronger_first_backoff_ceiling_than_timeout() {
+        // With no prior success, TCP starts at 30 min while a refused port
+        // advances one exponential step to one hour.
+        let timeout = full_jitter_delay(0, false, false, FailureClass::TcpTimeout);
+        let refused = full_jitter_delay(0, false, false, FailureClass::ConnectionRefused);
+        assert!(timeout <= Duration::minutes(30));
+        assert!(refused <= Duration::hours(1));
     }
 }

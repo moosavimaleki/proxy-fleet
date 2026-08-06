@@ -8,10 +8,15 @@ use std::{
 
 use anyhow::Context;
 use tokio::{
+    io::{AsyncRead, AsyncReadExt},
     net::TcpStream,
     process::{Child, Command},
+    task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{debug, warn};
+
+#[cfg(target_os = "linux")]
+use std::os::unix::ffi::OsStrExt;
 
 use crate::parser::{ParsedProxy, xray_outbound};
 
@@ -19,6 +24,200 @@ pub mod runtime;
 
 static PORT_RESERVATIONS: LazyLock<Mutex<HashSet<u16>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
+
+const XRAY_OUTPUT_LIMIT_BYTES: usize = 32 * 1024;
+const XRAY_CONFIG_PREFIX: &str = "proxy-fleet-xray-";
+
+/// Drain child pipes continuously while retaining only a bounded tail for
+/// startup diagnostics. This avoids both pipe backpressure and unbounded logs.
+#[derive(Clone, Default)]
+struct ProcessLogs {
+    stdout: std::sync::Arc<Mutex<Vec<u8>>>,
+    stderr: std::sync::Arc<Mutex<Vec<u8>>>,
+}
+
+impl ProcessLogs {
+    fn append(&self, is_stderr: bool, bytes: &[u8]) {
+        let target = if is_stderr {
+            &self.stderr
+        } else {
+            &self.stdout
+        };
+        let mut target = target.lock().expect("Xray output mutex is not poisoned");
+        target.extend_from_slice(bytes);
+        if target.len() > XRAY_OUTPUT_LIMIT_BYTES {
+            let excess = target.len() - XRAY_OUTPUT_LIMIT_BYTES;
+            target.drain(..excess);
+        }
+    }
+
+    fn summary(&self) -> String {
+        let stderr = self
+            .stderr
+            .lock()
+            .expect("Xray output mutex is not poisoned");
+        let stdout = self
+            .stdout
+            .lock()
+            .expect("Xray output mutex is not poisoned");
+        let bytes = if stderr.is_empty() {
+            &*stdout
+        } else {
+            &*stderr
+        };
+        String::from_utf8_lossy(bytes)
+            .trim()
+            .chars()
+            .take(2_000)
+            .collect()
+    }
+}
+
+fn drain_output<R>(mut reader: R, logs: ProcessLogs, is_stderr: bool) -> JoinHandle<()>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut buffer = [0_u8; 4096];
+        loop {
+            match reader.read(&mut buffer).await {
+                Ok(0) => return,
+                Ok(read) => logs.append(is_stderr, &buffer[..read]),
+                Err(error) => {
+                    debug!(%error, "could not drain Xray child output");
+                    return;
+                }
+            }
+        }
+    })
+}
+
+pub async fn detect_version(binary: &str) -> anyhow::Result<String> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(3),
+        Command::new(binary)
+            .arg("version")
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .context("timed out while reading Xray version")??;
+    anyhow::ensure!(
+        output.status.success(),
+        "Xray version command exited with {}: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    let version = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    anyhow::ensure!(
+        !version.is_empty(),
+        "Xray version command produced no version"
+    );
+    Ok(version)
+}
+
+/// Remove only Xray processes and temporary configs created by this project
+/// after an ungraceful restart. The config filename is an ownership marker;
+/// no generic process name or port scan is ever used.
+pub fn cleanup_project_orphans() -> anyhow::Result<usize> {
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Ok(0);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let mut stopped = 0;
+        for entry in std::fs::read_dir("/proc").context("reading /proc for owned Xray processes")? {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
+            let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else {
+                continue;
+            };
+            let cmdline = match std::fs::read(entry.path().join("cmdline")) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            if owned_xray_command(&cmdline) && terminate_orphan(pid) {
+                stopped += 1;
+            }
+        }
+        let temporary = std::env::temp_dir();
+        if let Ok(entries) = std::fs::read_dir(temporary) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                if name.to_string_lossy().starts_with(XRAY_CONFIG_PREFIX) {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+        Ok(stopped)
+    }
+}
+
+fn owned_xray_command(cmdline: &[u8]) -> bool {
+    let args: Vec<_> = cmdline
+        .split(|byte| *byte == 0)
+        .filter(|part| !part.is_empty())
+        .collect();
+    args.windows(2).any(|pair| {
+        pair[0] == b"-config"
+            && std::path::Path::new(std::ffi::OsStr::from_bytes(pair[1]))
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with(XRAY_CONFIG_PREFIX))
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn terminate_orphan(pid: i32) -> bool {
+    // SAFETY: `pid` comes from /proc and `owned_xray_command` has verified a
+    // project-specific config marker. The negative form targets the owned
+    // group created by this binary; the direct fallback covers older groups.
+    let group_result = unsafe { libc::kill(-pid, libc::SIGTERM) };
+    if group_result == 0 {
+        return true;
+    }
+    // SAFETY: same scoped ownership predicate as above.
+    unsafe { libc::kill(pid, libc::SIGTERM) == 0 }
+}
+
+fn spawn_xray(
+    binary: &str,
+    config_path: &PathBuf,
+) -> anyhow::Result<(Child, ProcessLogs, Vec<JoinHandle<()>>)> {
+    let mut command = Command::new(binary);
+    command
+        .arg("run")
+        .arg("-config")
+        .arg(config_path)
+        .kill_on_drop(true)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        // Xray and any helper it spawns are contained in this group.
+        command.as_std_mut().process_group(0);
+    }
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("starting Xray binary {binary}"))?;
+    let logs = ProcessLogs::default();
+    let mut drains = Vec::with_capacity(2);
+    if let Some(stdout) = child.stdout.take() {
+        drains.push(drain_output(stdout, logs.clone(), false));
+    }
+    if let Some(stderr) = child.stderr.take() {
+        drains.push(drain_output(stderr, logs.clone(), true));
+    }
+    Ok((child, logs, drains))
+}
 
 /// A process-local reservation closes the race where concurrent testers both
 /// observe the same free TCP port between probe bind and Xray spawn. The OS
@@ -46,6 +245,8 @@ impl Drop for PortReservation {
 pub struct XraySession {
     child: Child,
     config_path: PathBuf,
+    logs: ProcessLogs,
+    drain_tasks: Vec<JoinHandle<()>>,
     pub socks_port: u16,
     _reservation: Option<PortReservation>,
 }
@@ -56,6 +257,8 @@ pub struct XraySession {
 pub struct XrayBatchSession {
     child: Child,
     config_path: PathBuf,
+    logs: ProcessLogs,
+    drain_tasks: Vec<JoinHandle<()>>,
     pub socks_ports: Vec<u16>,
     _reservations: Vec<PortReservation>,
 }
@@ -105,20 +308,12 @@ impl XraySession {
             uuid::Uuid::new_v4().simple()
         ));
         tokio::fs::write(&config_path, serde_json::to_vec(&config)?).await?;
-        let child = Command::new(binary)
-            .arg("run")
-            .arg("-config")
-            .arg(&config_path)
-            .kill_on_drop(true)
-            .stdout(std::process::Stdio::null())
-            // We do not consume a child pipe here.  Keeping stderr piped can
-            // deadlock a noisy Xray process once its pipe buffer fills.
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .with_context(|| format!("starting Xray binary {binary}"))?;
+        let (child, logs, drain_tasks) = spawn_xray(binary, &config_path)?;
         let mut session = Self {
             child,
             config_path,
+            logs,
+            drain_tasks,
             socks_port,
             _reservation: reservation,
         };
@@ -132,7 +327,10 @@ impl XraySession {
     async fn wait_ready(&mut self) -> anyhow::Result<()> {
         for _ in 0..30 {
             if let Some(status) = self.child.try_wait()? {
-                anyhow::bail!("Xray exited during startup: {status}");
+                anyhow::bail!(
+                    "Xray exited during startup: {status}; {}",
+                    self.logs.summary()
+                );
             }
             if TcpStream::connect(("127.0.0.1", self.socks_port))
                 .await
@@ -142,11 +340,15 @@ impl XraySession {
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-        anyhow::bail!("Xray SOCKS inbound did not become ready")
+        anyhow::bail!(
+            "Xray SOCKS inbound did not become ready; {}",
+            self.logs.summary()
+        )
     }
 
     pub async fn stop(&mut self) {
         terminate_and_reap(&mut self.child, "Xray child").await;
+        join_output_drains(&mut self.drain_tasks).await;
         let _ = tokio::fs::remove_file(&self.config_path).await;
     }
 }
@@ -185,20 +387,12 @@ impl XrayBatchSession {
             uuid::Uuid::new_v4().simple()
         ));
         tokio::fs::write(&config_path, serde_json::to_vec(&config)?).await?;
-        let child = Command::new(binary)
-            .arg("run")
-            .arg("-config")
-            .arg(&config_path)
-            .kill_on_drop(true)
-            .stdout(std::process::Stdio::null())
-            // See the single-session startup path above: do not leave an
-            // unread pipe attached to a long-lived batch process.
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .with_context(|| format!("starting Xray binary {binary}"))?;
+        let (child, logs, drain_tasks) = spawn_xray(binary, &config_path)?;
         let mut session = Self {
             child,
             config_path,
+            logs,
+            drain_tasks,
             socks_ports,
             _reservations: reservations,
         };
@@ -212,7 +406,10 @@ impl XrayBatchSession {
     async fn wait_ready(&mut self) -> anyhow::Result<()> {
         for _ in 0..30 {
             if let Some(status) = self.child.try_wait()? {
-                anyhow::bail!("Xray batch exited during startup: {status}");
+                anyhow::bail!(
+                    "Xray batch exited during startup: {status}; {}",
+                    self.logs.summary()
+                );
             }
             let mut ready = true;
             for port in &self.socks_ports {
@@ -226,11 +423,15 @@ impl XrayBatchSession {
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-        anyhow::bail!("Xray batch SOCKS inbounds did not become ready")
+        anyhow::bail!(
+            "Xray batch SOCKS inbounds did not become ready; {}",
+            self.logs.summary()
+        )
     }
 
     pub async fn stop(&mut self) {
         terminate_and_reap(&mut self.child, "Xray batch child").await;
+        join_output_drains(&mut self.drain_tasks).await;
         let _ = tokio::fs::remove_file(&self.config_path).await;
     }
 }
@@ -249,9 +450,9 @@ async fn terminate_and_reap(child: &mut Child, label: &str) {
 
     #[cfg(unix)]
     if let Some(pid) = child.id() {
-        // SAFETY: `pid` is supplied by Tokio for this exact child process;
-        // sending SIGTERM does not dereference memory or widen process scope.
-        let result = unsafe { libc::kill(pid as i32, libc::SIGTERM) };
+        // SAFETY: `spawn_xray` creates a new process group whose ID is the
+        // child PID. A negative PID confines this signal to that owned group.
+        let result = unsafe { libc::kill(-(pid as i32), libc::SIGTERM) };
         if result != 0 {
             warn!(error = %std::io::Error::last_os_error(), %label, "could not send SIGTERM to Xray child");
         }
@@ -265,6 +466,15 @@ async fn terminate_and_reap(child: &mut Child, label: &str) {
         }
         Err(_) => {}
     }
+    #[cfg(unix)]
+    if let Some(pid) = child.id() {
+        // SAFETY: see the SIGTERM rationale above; only the owned group gets
+        // SIGKILL after its bounded grace period has expired.
+        let result = unsafe { libc::kill(-(pid as i32), libc::SIGKILL) };
+        if result != 0 {
+            warn!(error = %std::io::Error::last_os_error(), %label, "could not send SIGKILL to Xray process group");
+        }
+    }
     if let Err(error) = child.start_kill() {
         warn!(%error, %label, "could not force-stop Xray child");
         return;
@@ -274,16 +484,38 @@ async fn terminate_and_reap(child: &mut Child, label: &str) {
     }
 }
 
+async fn join_output_drains(tasks: &mut Vec<JoinHandle<()>>) {
+    for task in tasks.drain(..) {
+        let _ = tokio::time::timeout(Duration::from_secs(1), task).await;
+    }
+}
+
 impl Drop for XrayBatchSession {
     fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(pid) = self.child.id() {
+            // SAFETY: the child was created in its own Xray process group.
+            let _ = unsafe { libc::kill(-(pid as i32), libc::SIGKILL) };
+        }
         let _ = self.child.start_kill();
+        for task in &self.drain_tasks {
+            task.abort();
+        }
         let _ = std::fs::remove_file(&self.config_path);
     }
 }
 
 impl Drop for XraySession {
     fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(pid) = self.child.id() {
+            // SAFETY: see the batch Drop implementation above.
+            let _ = unsafe { libc::kill(-(pid as i32), libc::SIGKILL) };
+        }
         let _ = self.child.start_kill();
+        for task in &self.drain_tasks {
+            task.abort();
+        }
         let _ = std::fs::remove_file(&self.config_path);
     }
 }
@@ -348,7 +580,7 @@ pub async fn allocate_ports(
 
 #[cfg(test)]
 mod tests {
-    use super::allocate_port;
+    use super::{ProcessLogs, allocate_port, owned_xray_command};
 
     #[tokio::test]
     async fn concurrent_allocations_do_not_reserve_the_same_port() {
@@ -357,5 +589,27 @@ mod tests {
         let left = left.expect("first reservation");
         let right = right.expect("second reservation");
         assert_ne!(left.port(), right.port());
+    }
+
+    #[test]
+    fn output_tail_is_bounded_and_prefers_stderr() {
+        let logs = ProcessLogs::default();
+        logs.append(false, b"stdout");
+        logs.append(true, &vec![b'x'; super::XRAY_OUTPUT_LIMIT_BYTES + 16]);
+        assert_eq!(
+            logs.stderr.lock().expect("output lock").len(),
+            super::XRAY_OUTPUT_LIMIT_BYTES
+        );
+        assert!(logs.summary().starts_with('x'));
+    }
+
+    #[test]
+    fn orphan_cleanup_requires_our_config_marker() {
+        assert!(owned_xray_command(
+            b"/usr/local/bin/xray\0run\0-config\0/tmp/proxy-fleet-xray-batch-a.json\0"
+        ));
+        assert!(!owned_xray_command(
+            b"/usr/local/bin/xray\0run\0-config\0/tmp/another-service.json\0"
+        ));
     }
 }

@@ -18,6 +18,18 @@ async fn main() -> anyhow::Result<()> {
 
     let config_path = parse_config_path()?;
     let config = Arc::new(AppConfig::load(&config_path).context("loading configuration")?);
+    let xray_version = proxy_fleet::xray::detect_version(&config.xray_bin)
+        .await
+        .with_context(|| format!("checking configured Xray binary {}", config.xray_bin))?;
+    info!(xray_bin = %config.xray_bin, xray_version = %xray_version, "validated Xray runtime");
+    let orphaned_xray =
+        proxy_fleet::xray::cleanup_project_orphans().context("cleaning scoped Xray leftovers")?;
+    if orphaned_xray > 0 {
+        info!(
+            orphaned_xray,
+            "stopped Xray processes owned by a previous proxy-fleet instance"
+        );
+    }
     let store = Store::connect(&config.database.path)
         .await
         .context("opening SQLite database")?;

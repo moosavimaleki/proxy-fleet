@@ -56,18 +56,14 @@ async fn index() -> Html<&'static str> {
 }
 
 async fn health(State(state): State<AppState>) -> impl IntoResponse {
-    match state.store.counts().await {
-        Ok(counts) => (
-            StatusCode::OK,
-            Json(json!({"status":"ok", "service": state.config.service.name, "version": SERVICE_VERSION, "counts": counts})),
-        )
-            .into_response(),
-        Err(error) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({"status":"error", "error":error.to_string()})),
-        )
-            .into_response(),
-    }
+    // `/health` is deliberately read-only and O(1): the heartbeat refreshes
+    // this bounded snapshot off the request path every five seconds.
+    let runtime = state.runtime.read().await;
+    (
+        StatusCode::OK,
+        Json(json!({"status":"ok", "service": state.config.service.name, "version": SERVICE_VERSION, "counts": runtime.fleet_counts, "last_tick_at": runtime.last_tick_at})),
+    )
+        .into_response()
 }
 
 #[derive(Deserialize)]
@@ -77,6 +73,9 @@ struct NodeQuery {
     status: Option<String>,
     country: Option<String>,
     search: Option<String>,
+    source: Option<String>,
+    protocol: Option<String>,
+    failure_class: Option<String>,
 }
 
 async fn nodes(State(state): State<AppState>, Query(query): Query<NodeQuery>) -> impl IntoResponse {
@@ -87,21 +86,14 @@ async fn nodes(State(state): State<AppState>, Query(query): Query<NodeQuery>) ->
         .list_nodes(
             page,
             page_size,
-            query
-                .status
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty()),
-            query
-                .country
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty()),
-            query
-                .search
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty()),
+            crate::storage::NodeFilters {
+                status: non_empty(query.status),
+                country: non_empty(query.country),
+                search: non_empty(query.search),
+                source: non_empty(query.source),
+                protocol: non_empty(query.protocol),
+                failure_class: non_empty(query.failure_class),
+            },
         )
         .await
     {
@@ -200,6 +192,10 @@ async fn nodes(State(state): State<AppState>, Query(query): Query<NodeQuery>) ->
         }
         Err(error) => api_error(error),
     }
+}
+
+fn non_empty(value: Option<String>) -> Option<String> {
+    value.and_then(|value| (!value.trim().is_empty()).then(|| value.trim().to_owned()))
 }
 
 async fn node_config(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {

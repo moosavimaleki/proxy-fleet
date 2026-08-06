@@ -6,8 +6,6 @@ use crate::domain::{
     proxy::LifecycleState,
 };
 
-pub const ACTIVE_MIN_RESIDENCE: Duration = Duration::minutes(30);
-
 #[derive(Debug, Clone)]
 pub struct HealthDecision {
     pub lifecycle: LifecycleState,
@@ -37,6 +35,7 @@ pub struct HealthInput {
     pub now: DateTime<Utc>,
     pub active_relay_interval: Duration,
     pub active_download_interval: Duration,
+    pub active_min_residence: Duration,
 }
 
 pub fn decide(input: HealthInput) -> HealthDecision {
@@ -62,7 +61,7 @@ pub fn decide(input: HealthInput) -> HealthDecision {
     };
     let active_resident = input
         .activated_at
-        .map(|time| input.now - time >= ACTIVE_MIN_RESIDENCE)
+        .map(|time| input.now - time >= input.active_min_residence)
         .unwrap_or(false);
 
     let lifecycle = if input.class == FailureClass::InvalidConfig {
@@ -118,6 +117,7 @@ pub fn decide(input: HealthInput) -> HealthDecision {
                 failure_streak,
                 input.had_real_download,
                 lifecycle == LifecycleState::Dormant,
+                input.class,
             )
     };
     HealthDecision {
@@ -163,6 +163,7 @@ mod tests {
             now: Utc::now(),
             active_relay_interval: Duration::seconds(10),
             active_download_interval: Duration::minutes(5),
+            active_min_residence: Duration::minutes(30),
         }
     }
 
@@ -192,7 +193,7 @@ mod tests {
         );
         event.alpha = 1.0;
         event.beta = 9.0;
-        event.activated_at = Some(event.now - ACTIVE_MIN_RESIDENCE - Duration::minutes(1));
+        event.activated_at = Some(event.now - event.active_min_residence - Duration::minutes(1));
         event.independent_failures = 0;
         event.had_real_download = true;
         let decision = decide(event);
@@ -208,7 +209,7 @@ mod tests {
         );
         event.alpha = 1.0;
         event.beta = 9.0;
-        event.activated_at = Some(event.now - ACTIVE_MIN_RESIDENCE - Duration::minutes(1));
+        event.activated_at = Some(event.now - event.active_min_residence - Duration::minutes(1));
         event.independent_failures = 1;
         assert_eq!(decide(event).lifecycle, LifecycleState::Probation);
     }
@@ -241,5 +242,20 @@ mod tests {
         relay.active_download_interval = Duration::minutes(5);
         let now = relay.now;
         assert_eq!(decide(relay).next_test_at, now + Duration::seconds(11));
+    }
+
+    #[test]
+    fn configured_residence_blocks_normal_active_demotion_until_it_expires() {
+        let mut event = input(
+            LifecycleState::Active,
+            TestStage::Relay,
+            FailureClass::TcpTimeout,
+        );
+        event.alpha = 1.0;
+        event.beta = 9.0;
+        event.independent_failures = 5;
+        event.active_min_residence = Duration::minutes(15);
+        event.activated_at = Some(event.now - Duration::minutes(14));
+        assert_eq!(decide(event).lifecycle, LifecycleState::Active);
     }
 }

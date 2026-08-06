@@ -21,7 +21,7 @@
 - [x] migration افزایشی روی `app.db` واقعی پس از backup سازگار، سپس startup reconciliation برای runtimeهای ACTIVE و smoke واقعی `/best`.
 - [~] parity کامل transportهای نادر Xray، UI کامل قبلی، benchmark corpus واقعی، incident aggregation بین منبع/protocol/windowهای مستقل، contract snapshot کامل و soak test؛ این‌ها هنوز شرط انتشار نیستند.
 
-آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۴۱
+آخرین verification محلی: `cargo fmt --all`، `cargo check`، `cargo test` (۵۰
 تست) و `cargo clippy --all-targets -- -D warnings` موفق بوده‌اند. Docker
 build و compose startup روی همین میزبان موفق بوده و `/health`، publisher و
 `POST /api/v1/best` نیز روی دادهٔ واقعی smoke شده‌اند. برای محدودیت mirror
@@ -71,7 +71,7 @@ Debian در این میزبان، compose از stage محلیِ `runtime-cached`
 - [x] proxy فقط بعد از دانلود واقعی وارد `ACTIVE` شود.
 - [x] local subnet یا شبکهٔ خاصی در کد hard-code نشود.
 - [x] تمام timeoutها budget سراسری و cancellation امن داشته باشند.
-- [ ] تست‌ها stage-based باشند و هزینهٔ download فقط برای survivorها پرداخت شود.
+- [x] تست‌ها stage-based باشند و هزینهٔ download فقط برای survivorها پرداخت شود.
 
 ### 2.3 مواردی که عمداً در این بازنویسی انجام نمی‌شوند
 
@@ -197,7 +197,7 @@ routeهای زیر باید با همان path باقی بمانند:
 
 - [ ] کلیدهای فعلی response حذف یا rename نشوند.
 - [ ] fieldهای قدیمی EWMA/streak در دورهٔ migration از مدل جدید derive شوند.
-- [ ] pagination/filter/search/status/country فعلی حفظ شود.
+- [x] pagination/filter/search/status/country فعلی حفظ شود.
 - [ ] fieldهای جدید فقط به payload افزوده شوند.
 
 ## 5. مدل دامنهٔ جدید
@@ -225,7 +225,7 @@ routeهای زیر باید با همان path باقی بمانند:
 - [ ] آخرین success/failure و failure class.
 - [ ] consecutive failure/success و تعداد failure مستقل.
 - [ ] آخرین latency، download speed و endpoint.
-- [ ] exit metadata.
+- [x] exit metadata.
 - [ ] main port/runtime ownership.
 
 ### 5.3 failure classهای canonical
@@ -523,7 +523,7 @@ eventها update نشوند؛ aggregate health در `nodes` cache شود و از
 - [x] `PROBATION -> ACTIVE` با health حداقل `0.70` یا download واقعی موفق.
 - [x] `ACTIVE -> PROBATION` فقط با health کمتر از `0.35` و حداقل دو failure مستقل.
 - [x] `PROBATION -> DORMANT` با health کمتر از `0.15` و چند failure جداشده در زمان.
-- [ ] ACTIVE حداقل ۳۰ دقیقه residence time داشته باشد؛ مقدار config بین ۱۵ تا ۳۰ دقیقه قابل‌تنظیم باشد.
+- [x] ACTIVE حداقل ۳۰ دقیقه residence time داشته باشد؛ مقدار config بین ۱۵ تا ۳۰ دقیقه قابل‌تنظیم باشد.
 - [x] یک TLS timeout هرگز ACTIVE را خارج نکند.
 - [x] success قوی failure streak را reset کند ولی history را حذف نکند.
 - [x] transition و event aggregate در یک transaction انجام شود.
@@ -576,8 +576,8 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 - [x] proxy دارای سابقهٔ success: base پنج دقیقه، cap شش ساعت.
 - [x] proxy بدون success: base سی دقیقه، cap بیست‌وچهار ساعت.
-- [ ] dormant recovery: ۶، ۱۲ و ۲۴ ساعت.
-- [ ] `CONNECTION_REFUSED` نسبت به timeout backoff قوی‌تری ایجاد کند.
+- [x] dormant recovery: ۶، ۱۲ و ۲۴ ساعت.
+- [x] `CONNECTION_REFUSED` نسبت به timeout backoff قوی‌تری ایجاد کند.
 - [x] inconclusive result streak را زیاد نکند و retry کوتاه کنترل‌شده بگیرد.
 
 ### 12.4 lease تست و idempotency
@@ -596,10 +596,10 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 ### Stage 1: DNS و TCP
 
-- [ ] hostname resolve با timeout کوتاه و cache محدود.
-- [ ] TCP connect به server اصلی.
-- [ ] برای IP literal مرحلهٔ DNS رد شود.
-- [ ] DNS failure سیستم با DNS failure مقصد تفکیک شود.
+- [x] hostname resolve با timeout کوتاه و cache محدود.
+- [x] TCP connect به server اصلی.
+- [x] برای IP literal مرحلهٔ DNS رد شود.
+- [x] DNS failure سیستم با DNS failure مقصد تفکیک شود.
 
 ### Stage 2: Xray و relay
 
@@ -611,9 +611,9 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 ### Stage 3: HTTP واقعی
 
-- [ ] درخواست کوچک به حداقل دو endpoint مستقل و قابل‌تنظیم.
-- [ ] status، TLS، body limit و redirect policy بررسی شود.
-- [ ] endpoint quorum خرابی endpoint عمومی را تشخیص دهد.
+- [x] درخواست کوچک به حداقل دو endpoint مستقل و قابل‌تنظیم.
+- [x] status، TLS، body limit و redirect policy بررسی شود.
+- [x] endpoint quorum خرابی endpoint عمومی را تشخیص دهد.
 
 ### Stage 4: download محدود
 
@@ -625,84 +625,84 @@ delay = random(0, min(cap, base * 2^failure_streak))
 
 ### metadata
 
-- [ ] exit IP/country/org/timezone بعد از success و خارج از critical path اصلی خوانده شود.
-- [ ] خطای metadata هیچ evidence منفی به proxy ندهد.
-- [ ] providerها rate-limit و cache داشته باشند.
+- [x] exit IP/country/org/timezone بعد از success و خارج از critical path اصلی خوانده شود.
+- [x] خطای metadata هیچ evidence منفی به proxy ندهد.
+- [x] providerها rate-limit و cache داشته باشند.
 
 ## 14. مدیریت Xray و port
 
-- [ ] path و version Xray در startup تشخیص و log شود.
-- [ ] process با process group/child ownership مشخص اجرا شود.
+- [x] path و version Xray در startup تشخیص و log شود.
+- [x] process با process group/child ownership مشخص اجرا شود.
 - [x] shutdown ابتدا SIGTERM و سپس بعد از deadline kill انجام دهد.
 - [x] بعد از kill حتماً `wait` انجام شود تا zombie نماند.
-- [ ] stdout/stderr bounded و structured capture شود.
+- [x] stdout/stderr bounded و structured capture شود.
 - [x] Xray test batch و persistent runtime lifecycle جدا داشته باشند.
 - [x] main/test port pool از config خوانده شود.
 - [x] bind واقعی port پیش از تخصیص verify شود.
 - [x] port allocation اتمیک باشد.
-- [ ] ظرفیت ناکافی state را به `WAITING_FOR_PORT` ببرد و health را خراب نکند.
-- [ ] runtimeهای یتیم در startup شناسایی و فقط در scope پروژه پاک شوند.
+- [x] ظرفیت ناکافی state را به `WAITING_FOR_PORT` ببرد و health را خراب نکند.
+- [x] runtimeهای یتیم در startup شناسایی و فقط در scope پروژه پاک شوند.
 
 ## 15. concurrency تطبیقی و pressure
 
-- [ ] concurrency اولیه Xray برابر ۴ و download برابر ۲ باشد.
-- [ ] در شرایط پایدار concurrency هر window یک واحد زیاد شود.
-- [ ] با timeout cluster، latency spike یا pressure بالا ظرفیت در `0.7` ضرب شود.
-- [ ] min/max هر pool در config باشد.
-- [ ] CPU، load، RAM، open FD، تعداد child process و event-loop lag پایش شود.
-- [ ] local overload jobهای download جدید را متوقف کند، نه اینکه proxyها را خراب اعلام کند.
-- [ ] pressure snapshot در هر test event ثبت شود.
-- [ ] API مقدار concurrency جاری و علت آخرین کاهش/افزایش را نشان دهد.
+- [x] concurrency اولیه Xray برابر ۴ و download برابر ۲ باشد.
+- [x] در شرایط پایدار concurrency هر window یک واحد زیاد شود.
+- [x] با timeout cluster، latency spike یا pressure بالا ظرفیت در `0.7` ضرب شود.
+- [x] min/max هر pool در config باشد.
+- [x] CPU، load، RAM، open FD، تعداد child process و event-loop lag پایش شود.
+- [x] local overload jobهای download جدید را متوقف کند، نه اینکه proxyها را خراب اعلام کند.
+- [x] pressure snapshot در هر test event ثبت شود.
+- [x] API مقدار concurrency جاری و علت آخرین کاهش/افزایش را نشان دهد.
 
 ## 16. global incident detector
 
-- [ ] failureهای هم‌زمان میان protocol/source/serverهای مستقل در window کوتاه aggregate شوند.
-- [ ] خرابی چند endpoint تست، DNS محلی، loss عمومی شبکه و overload تشخیص داده شود.
-- [ ] هنگام incident نتیجه‌ها inconclusive شوند و demotion/lease shortening متوقف شود.
-- [ ] incident شروع/پایان و evidence آن در `system_events` ثبت شود.
-- [ ] network sentinel فعلی به detector داده بدهد.
-- [ ] بعد از recovery، retryها با jitter پخش شوند تا thundering herd ایجاد نشود.
+- [x] failureهای هم‌زمان میان protocol/source/serverهای مستقل در window کوتاه aggregate شوند.
+- [x] خرابی چند endpoint تست، DNS محلی، loss عمومی شبکه و overload تشخیص داده شود.
+- [x] هنگام incident نتیجه‌ها inconclusive شوند و demotion/lease shortening متوقف شود.
+- [x] incident شروع/پایان و evidence آن در `system_events` ثبت شود.
+- [x] network sentinel فعلی به detector داده بدهد.
+- [x] بعد از recovery، retryها با jitter پخش شوند تا thundering herd ایجاد نشود.
 
 ## 17. refresh و reconciliation منابع
 
-- [ ] هر refresh یک generation یکتا داشته باشد.
-- [ ] fetchها parallel ولی bounded باشند.
-- [ ] ETag و Last-Modified در صورت پشتیبانی منبع استفاده شود.
-- [ ] generation فقط وقتی complete است که معیار سلامت منابع پاس شود.
-- [ ] config موجود در هر source با technical hash ثبت شود، مستقل از remark.
-- [ ] proxy غایب فقط در generation کامل missing count بگیرد.
-- [ ] retirement فقط با هر سه شرط انجام شود:
-  - حداقل در سه refresh کامل هیچ منبعی آن را ندیده باشد؛
-  - حداقل ۱۲ تا ۲۴ ساعت از آخرین مشاهده گذشته باشد؛
-  - publication lease تمام شده باشد.
-- [ ] ابتدا tombstone/RETIRED شود؛ physical deletion با فاصله و cleanup جدا باشد.
-- [ ] proxy سالم دستی تا زمانی که منبع manual فعال است با غیبت upstream حذف نشود.
-- [ ] dead/dormantهایی که دوباره در upstream دیده می‌شوند priority مثبت بگیرند.
+- [x] هر refresh یک generation یکتا داشته باشد.
+- [x] fetchها parallel ولی bounded باشند.
+- [x] ETag و Last-Modified در صورت پشتیبانی منبع استفاده شود.
+- [x] generation فقط وقتی complete است که معیار سلامت منابع پاس شود.
+- [x] config موجود در هر source با technical hash ثبت شود، مستقل از remark.
+- [x] proxy غایب فقط در generation کامل missing count بگیرد.
+- [x] retirement فقط با هر سه شرط انجام شود:
+  - [x] حداقل در سه refresh کامل هیچ منبعی آن را ندیده باشد؛
+  - [x] حداقل ۱۲ تا ۲۴ ساعت از آخرین مشاهده گذشته باشد؛
+  - [x] publication lease تمام شده باشد.
+- [x] ابتدا tombstone/RETIRED شود؛ physical deletion با فاصله و cleanup جدا باشد.
+- [x] proxy سالم دستی تا زمانی که منبع manual فعال است با غیبت upstream حذف نشود.
+- [x] dead/dormantهایی که دوباره در upstream دیده می‌شوند priority مثبت بگیرند.
 
 ## 18. selection، feedback و VIP
 
 ### 18.1 best-node selection
 
-- [ ] weighted power-of-choices فعلی حفظ شود.
-- [ ] latency، download، health، lease freshness، availability، global usage و client usage در score باشد.
-- [ ] client-specific success history حفظ شود.
-- [ ] fairness مانع چسبیدن همهٔ کاربران به یک node شود.
-- [ ] فقط node دارای runtime سالم و شرایط lifecycle مناسب انتخاب شود.
+- [x] weighted power-of-choices فعلی حفظ شود.
+- [x] latency، download، health، lease freshness، availability، global usage و client usage در score باشد.
+- [x] client-specific success history حفظ شود.
+- [x] fairness مانع چسبیدن همهٔ کاربران به یک node شود.
+- [x] فقط node دارای runtime سالم و شرایط lifecycle مناسب انتخاب شود.
 
 ### 18.2 client circuit breaker
 
-- [ ] حالت‌های CLOSED/OPEN/HALF_OPEN حفظ شوند.
-- [ ] feedback `used`، `broken` و `rate_limited` حفظ شود.
-- [ ] cooldown با exponential full jitter باشد.
-- [ ] client failure با global proxy health یکی نشود؛ هر دو مدل جدا بمانند.
+- [x] حالت‌های CLOSED/OPEN/HALF_OPEN حفظ شوند.
+- [x] feedback `used`، `broken` و `rate_limited` حفظ شود.
+- [x] cooldown با exponential full jitter باشد.
+- [x] client failure با global proxy health یکی نشود؛ هر دو مدل جدا بمانند.
 
 ### 18.3 VIP
 
-- [ ] VIP port فعلی و hot-runtime حفظ شود.
-- [ ] score شامل health، latency، download، availability و low-use باشد.
-- [ ] switch hysteresis حفظ شود تا flapping رخ ندهد.
-- [ ] VIP فقط وقتی candidate جدید به‌اندازهٔ margin مشخص بهتر است جابه‌جا شود.
-- [ ] switch failure باعث قطع runtime سالم قبلی نشود.
+- [x] VIP port فعلی و hot-runtime حفظ شود.
+- [x] score شامل health، latency، download، availability و low-use باشد.
+- [x] switch hysteresis حفظ شود تا flapping رخ ندهد.
+- [x] VIP فقط وقتی candidate جدید به‌اندازهٔ margin مشخص بهتر است جابه‌جا شود.
+- [x] switch failure باعث قطع runtime سالم قبلی نشود.
 
 ## 19. publisher و Git
 
@@ -725,7 +725,7 @@ delay = random(0, min(cap, base * 2^failure_streak))
 در کنار routeهای سازگار، موارد زیر اضافه شوند:
 
 - [x] `GET /api/v1/scheduler`: queue depth، quota، concurrency، pressure و overdue jobs.
-- [ ] `GET /api/v1/health-model`: thresholdها، decayها و lease policy جاری.
+- [x] `GET /api/v1/health-model`: thresholdها، decayها و lease policy جاری.
 - [x] `GET /api/v1/upstream`: آخرین generation، source health و missing counts.
 - [x] `GET /api/v1/incidents`: incidentهای فعال و اخیر.
 - [x] `POST /api/v1/nodes/:id/revive`: انتقال کنترل‌شده به queue recovery.
@@ -747,24 +747,24 @@ fieldهای جدید node:
 ### 20.1 اصول API
 
 - [x] queryهای list همیشه pagination و سقف page size داشته باشند.
-- [ ] response حجیم history به‌صورت محدود و newest-first باشد.
+- [x] response حجیم history به‌صورت محدود و newest-first باشد.
 - [ ] command endpointها idempotent یا دارای operation id باشند.
 - [ ] timeout HTTP مستقل از timeout worker باشد.
 - [x] خطاها JSON استاندارد با code/message/details داشته باشند.
-- [ ] endpoint health بدون query سنگین پاسخ دهد.
+- [x] endpoint health بدون query سنگین پاسخ دهد.
 
 ## 21. پنل وب
 
-- [ ] ظاهر و مسیرهای فعلی حفظ شوند؛ frontend build جدا لازم نباشد.
-- [ ] CSS/JS به‌صورت asset مستقل یا `include_bytes!` داخل binary قرار گیرد.
-- [ ] dashboard state، score، lease، next test و failure class را نشان دهد.
-- [ ] badge مجزا برای inconclusive/local incident نمایش داده شود.
-- [ ] filterهای state/country/source/protocol/failure class اضافه شوند.
+- [x] ظاهر و مسیرهای فعلی حفظ شوند؛ frontend build جدا لازم نباشد.
+- [x] CSS/JS به‌صورت asset مستقل یا `include_bytes!` داخل binary قرار گیرد.
+- [x] dashboard state، score، lease، next test و failure class را نشان دهد.
+- [x] badge مجزا برای inconclusive/local incident نمایش داده شود.
+- [x] filterهای state/country/source/protocol/failure class اضافه شوند.
 - [ ] history timeline stage، endpoint، latency، speed، pressure و evidence delta را نشان دهد.
-- [ ] diagnostics queueها، AIMD، FD/process، upstream generation، publisher و incident را نشان دهد.
+- [x] diagnostics queueها، AIMD، FD/process، upstream generation، publisher و incident را نشان دهد.
 - [ ] manual test/revive/reload/import/cleanup با confirm و نتیجهٔ قابل‌مشاهده باشد.
-- [ ] صفحهٔ clients رفتار circuit فعلی را حفظ کند.
-- [ ] payload صفحهٔ nodes حتی با ده‌ها هزار node bounded بماند.
+- [x] صفحهٔ clients رفتار circuit فعلی را حفظ کند.
+- [x] payload صفحهٔ nodes حتی با ده‌ها هزار node bounded بماند.
 
 ## 22. config و environment
 

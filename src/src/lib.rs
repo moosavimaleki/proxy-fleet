@@ -3,6 +3,7 @@ pub mod app;
 pub mod config;
 pub mod domain;
 pub mod health;
+pub mod metadata;
 pub mod parser;
 pub mod probe;
 pub mod publisher;

@@ -114,10 +114,21 @@ impl QueueDebt {
 /// A proxy that has any successful stage is not counted as failed.  Structural
 /// errors remain per-proxy and are deliberately excluded by the caller.
 pub fn is_mass_failure(reports: &[(String, ProbeReport)], threshold_percent: u8) -> bool {
+    correlated_incident(reports, threshold_percent).is_some()
+}
+
+/// Classify a batch as a local/shared incident only when failures cross
+/// independent proxy dimensions. A single bad source or server must remain
+/// ordinary per-proxy evidence; a DNS collapse or endpoint outage across
+/// multiple sources/protocols must not demote the fleet.
+pub fn correlated_incident(
+    reports: &[(String, ProbeReport)],
+    threshold_percent: u8,
+) -> Option<&'static str> {
     if reports.len() < 3 {
-        return false;
+        return None;
     }
-    let failed = reports
+    let failed: Vec<_> = reports
         .iter()
         .filter(|(_, report)| {
             let succeeded = report
@@ -127,10 +138,54 @@ pub fn is_mass_failure(reports: &[(String, ProbeReport)], threshold_percent: u8)
             let inconclusive_only = report.events.iter().all(|event| {
                 event.class.inconclusive() || event.class == FailureClass::InvalidConfig
             });
-            !succeeded && !inconclusive_only && !report.events.is_empty()
+            let structurally_invalid = report
+                .events
+                .iter()
+                .any(|event| event.class == FailureClass::InvalidConfig);
+            !succeeded && !inconclusive_only && !structurally_invalid && !report.events.is_empty()
         })
-        .count();
-    failed.saturating_mul(100) >= reports.len().saturating_mul(threshold_percent as usize)
+        .collect();
+    if failed.len().saturating_mul(100) < reports.len().saturating_mul(threshold_percent as usize) {
+        return None;
+    }
+    let mut sources = std::collections::BTreeSet::new();
+    let mut protocols = std::collections::BTreeSet::new();
+    let mut servers = std::collections::BTreeSet::new();
+    let mut dns_failures = 0_usize;
+    let mut endpoint_failures = 0_usize;
+    for (node_id, report) in &failed {
+        if let Some(proxy) = &report.proxy {
+            sources.insert(proxy.source.as_str());
+            protocols.insert(proxy.protocol.as_str());
+            servers.insert(proxy.address.as_str());
+        } else {
+            // Test fixtures and a rare parser-less report have no transport
+            // metadata; distinct node IDs are still safer than declaring a
+            // shared incident from one repeated identifier.
+            servers.insert(node_id.as_str());
+        }
+        dns_failures += report
+            .events
+            .iter()
+            .filter(|event| event.class == FailureClass::DnsFailure)
+            .count();
+        endpoint_failures += report
+            .events
+            .iter()
+            .filter(|event| event.class == FailureClass::EndpointFailure)
+            .count();
+    }
+    let independent = sources.len() >= 2 || protocols.len() >= 2 || servers.len() >= 2;
+    if !independent {
+        return None;
+    }
+    if dns_failures.saturating_mul(2) >= failed.len() {
+        Some("dns_failure_cluster")
+    } else if endpoint_failures.saturating_mul(2) >= failed.len() {
+        Some("endpoint_failure_cluster")
+    } else {
+        Some("cross_source_failure_cluster")
+    }
 }
 
 impl QueueQuota {
@@ -317,13 +372,16 @@ async fn append_claims(
         return Ok(());
     }
     let remaining = params.queue_limit.min(total_limit - jobs.len());
+    // WAITING_FOR_PORT is an execution state. Its stored origin determines
+    // the fair queue it returns to once a real port can be reserved.
+    let effective_state = "CASE WHEN lifecycle_state = 'WAITING_FOR_PORT' THEN waiting_from_state ELSE lifecycle_state END";
     let state_clause = if params.state.is_empty() {
-        "lifecycle_state IN ('CANDIDATE', 'PROBATION', 'DORMANT', 'ACTIVE')"
+        "(CASE WHEN lifecycle_state = 'WAITING_FOR_PORT' THEN waiting_from_state ELSE lifecycle_state END) IN ('CANDIDATE', 'PROBATION', 'DORMANT', 'ACTIVE')"
     } else {
-        "lifecycle_state = ?"
+        "(CASE WHEN lifecycle_state = 'WAITING_FOR_PORT' THEN waiting_from_state ELSE lifecycle_state END) = ?"
     };
     let sql = format!(
-        "SELECT id, raw_config, lifecycle_state, last_real_download_at FROM nodes WHERE {state_clause} AND structurally_valid = 1 AND (next_test_at IS NULL OR next_test_at <= ?) AND (test_lease_until IS NULL OR test_lease_until <= ?) ORDER BY CASE WHEN publication_lease_until IS NOT NULL AND publication_lease_until <= ? THEN 100 ELSE 0 END + CASE WHEN last_real_download_at IS NOT NULL THEN 80 ELSE 0 END + CASE WHEN last_failure_class = 'TLS_TIMEOUT' THEN 50 ELSE 0 END + CASE WHEN last_test_at IS NULL OR last_test_at <= ? THEN 40 ELSE 0 END + CASE WHEN last_seen_generation IS NOT NULL THEN 30 ELSE 0 END - CASE WHEN last_real_download_at IS NULL AND failure_streak >= 5 THEN 80 ELSE 0 END DESC, next_test_at ASC LIMIT ?"
+        "SELECT id, raw_config, {effective_state} AS effective_state, last_real_download_at FROM nodes WHERE {state_clause} AND structurally_valid = 1 AND (next_test_at IS NULL OR next_test_at <= ?) AND (test_lease_until IS NULL OR test_lease_until <= ?) ORDER BY CASE WHEN publication_lease_until IS NOT NULL AND publication_lease_until <= ? THEN 100 ELSE 0 END + CASE WHEN last_real_download_at IS NOT NULL THEN 80 ELSE 0 END + CASE WHEN last_failure_class = 'TLS_TIMEOUT' THEN 50 ELSE 0 END + CASE WHEN last_test_at IS NULL OR last_test_at <= ? THEN 40 ELSE 0 END + CASE WHEN last_seen_generation IS NOT NULL THEN 30 ELSE 0 END - CASE WHEN last_real_download_at IS NULL AND failure_streak >= 5 THEN 80 ELSE 0 END DESC, next_test_at ASC LIMIT ?"
     );
     let mut query = sqlx::query(&sql);
     if !params.state.is_empty() {
@@ -341,10 +399,10 @@ async fn append_claims(
     let lease_until = params.now + params.lease;
     for row in rows {
         let id: String = row.get("id");
-        let update = sqlx::query("UPDATE nodes SET testing_from_state = lifecycle_state, lifecycle_state = 'TESTING', status = 'TESTING', test_lease_until = ?, updated_at = ? WHERE id = ? AND (test_lease_until IS NULL OR test_lease_until <= ?)")
+        let update = sqlx::query("UPDATE nodes SET testing_from_state = CASE WHEN lifecycle_state = 'WAITING_FOR_PORT' THEN COALESCE(waiting_from_state, 'CANDIDATE') ELSE lifecycle_state END, waiting_from_state = NULL, lifecycle_state = 'TESTING', status = 'TESTING', test_lease_until = ?, updated_at = ? WHERE id = ? AND (test_lease_until IS NULL OR test_lease_until <= ?)")
             .bind(lease_until.to_rfc3339()).bind(params.now.to_rfc3339()).bind(&id).bind(params.now.to_rfc3339()).execute(store.pool()).await?;
         if update.rows_affected() == 1 {
-            let lifecycle_state: String = row.get("lifecycle_state");
+            let lifecycle_state: String = row.get("effective_state");
             let last_download = row
                 .get::<Option<String>, _>("last_real_download_at")
                 .and_then(|value| chrono::DateTime::parse_from_rfc3339(&value).ok())

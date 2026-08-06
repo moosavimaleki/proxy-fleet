@@ -68,6 +68,15 @@ pub struct NodeSummary {
     pub relay_delay_ms: Option<i64>,
     pub download_kbps: Option<i64>,
     pub exit_country: String,
+    pub exit_ip: String,
+    pub exit_hostname: String,
+    pub exit_city: String,
+    pub exit_region: String,
+    pub exit_loc: String,
+    pub exit_org: String,
+    pub exit_postal: String,
+    pub exit_timezone: String,
+    pub exit_info_fetched_at: Option<DateTime<Utc>>,
     pub health_success_ewma: f64,
     pub health_alpha: f64,
     pub health_beta: f64,
@@ -81,6 +90,23 @@ pub struct NodeSummary {
     pub evidence_summary: EvidenceSummary,
     pub created_at: Option<DateTime<Utc>>,
     pub last_test_at: Option<DateTime<Utc>>,
+}
+
+/// Public information observed after a successful proxy download.  It is
+/// deliberately independent from probe evidence: a metadata provider outage
+/// can never demote a usable proxy.
+#[derive(Debug, Clone)]
+pub struct ExitMetadata {
+    pub ip: String,
+    pub hostname: String,
+    pub city: String,
+    pub region: String,
+    pub country: String,
+    pub loc: String,
+    pub org: String,
+    pub postal: String,
+    pub timezone: String,
+    pub raw: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize)]

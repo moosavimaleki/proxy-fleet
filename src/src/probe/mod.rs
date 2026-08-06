@@ -1,4 +1,9 @@
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    sync::{LazyLock, Mutex},
+    time::{Duration, Instant},
+};
 
 use futures_util::{StreamExt, stream};
 use reqwest::Proxy;
@@ -9,6 +14,18 @@ use crate::{
     parser::{ParsedProxy, parse_share_url},
     xray::{XrayBatchSession, XraySession, allocate_port, allocate_ports},
 };
+
+const DNS_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const DNS_CACHE_CAPACITY: usize = 1024;
+type DnsCacheKey = (String, u16);
+type DnsCacheEntry = (Instant, Vec<SocketAddr>);
+
+/// A tiny process-local DNS cache prevents a large candidate cohort from
+/// repeatedly asking the host resolver for the same endpoint. It is only a
+/// performance cache: failed lookups are never cached and every entry expires
+/// quickly enough for subscription endpoints that rotate addresses.
+static DNS_CACHE: LazyLock<Mutex<HashMap<DnsCacheKey, DnsCacheEntry>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Debug, Clone)]
 pub struct ProbeEvent {
@@ -155,48 +172,7 @@ async fn preflight(
     deadline: Instant,
 ) -> Result<(), ProbeEvent> {
     let tcp_started = Instant::now();
-    let address = proxy.address.clone();
-    let port = proxy.port;
-    let Some(remaining) = remaining_budget(deadline) else {
-        return Err(event(
-            TestStage::DnsTcp,
-            FailureClass::DnsFailure,
-            None,
-            serde_json::json!({"error":"global probe deadline exceeded before DNS"}),
-        ));
-    };
-    let addresses = match tokio::time::timeout(
-        remaining.min(Duration::from_secs(3)),
-        tokio::net::lookup_host((address.as_str(), port)),
-    )
-    .await
-    {
-        Ok(Ok(addresses)) => addresses.collect::<Vec<_>>(),
-        Ok(Err(error)) => {
-            return Err(event(
-                TestStage::DnsTcp,
-                FailureClass::DnsFailure,
-                None,
-                serde_json::json!({"error":error.to_string()}),
-            ));
-        }
-        Err(_) => {
-            return Err(event(
-                TestStage::DnsTcp,
-                FailureClass::DnsFailure,
-                None,
-                serde_json::json!({"error":"DNS timeout"}),
-            ));
-        }
-    };
-    if addresses.is_empty() {
-        return Err(event(
-            TestStage::DnsTcp,
-            FailureClass::DnsFailure,
-            None,
-            serde_json::json!({"error":"no address returned"}),
-        ));
-    }
+    let (addresses, dns_detail) = resolve_destination(&proxy.address, proxy.port, deadline).await?;
     let Some(remaining) = remaining_budget(deadline) else {
         return Err(event(
             TestStage::DnsTcp,
@@ -217,7 +193,7 @@ async fn preflight(
                 TestStage::DnsTcp,
                 FailureClass::ConnectionRefused,
                 Some(tcp_started.elapsed()),
-                serde_json::json!({"error":error.to_string()}),
+                serde_json::json!({"error":error.to_string(),"dns":dns_detail}),
             ));
         }
         Ok(Err(error)) => {
@@ -225,7 +201,7 @@ async fn preflight(
                 TestStage::DnsTcp,
                 FailureClass::TcpTimeout,
                 Some(tcp_started.elapsed()),
-                serde_json::json!({"error":error.to_string()}),
+                serde_json::json!({"error":error.to_string(),"dns":dns_detail}),
             ));
         }
         Err(_) => {
@@ -233,11 +209,83 @@ async fn preflight(
                 TestStage::DnsTcp,
                 FailureClass::TcpTimeout,
                 Some(tcp_started.elapsed()),
-                serde_json::json!({"error":"TCP timeout"}),
+                serde_json::json!({"error":"TCP timeout","dns":dns_detail}),
             ));
         }
     }
     Ok(())
+}
+
+async fn resolve_destination(
+    address: &str,
+    port: u16,
+    deadline: Instant,
+) -> Result<(Vec<SocketAddr>, &'static str), ProbeEvent> {
+    if let Ok(ip) = address.parse::<IpAddr>() {
+        // IP literals must not be sent through the DNS resolver. This is both
+        // cheaper and separates a destination TCP failure from local DNS.
+        return Ok((vec![SocketAddr::new(ip, port)], "literal"));
+    }
+    let key = (address.to_owned(), port);
+    if let Some((inserted_at, addresses)) = DNS_CACHE
+        .lock()
+        .expect("DNS cache mutex is not poisoned")
+        .get(&key)
+        .cloned()
+        .filter(|(inserted_at, _)| inserted_at.elapsed() < DNS_CACHE_TTL)
+    {
+        let _ = inserted_at;
+        return Ok((addresses, "cache"));
+    }
+    let Some(remaining) = remaining_budget(deadline) else {
+        return Err(event(
+            TestStage::DnsTcp,
+            FailureClass::DnsFailure,
+            None,
+            serde_json::json!({"error":"global probe deadline exceeded before DNS","scope":"local_resolver"}),
+        ));
+    };
+    let addresses = match tokio::time::timeout(
+        remaining.min(Duration::from_secs(3)),
+        tokio::net::lookup_host((address, port)),
+    )
+    .await
+    {
+        Ok(Ok(addresses)) => addresses.collect::<Vec<_>>(),
+        Ok(Err(error)) => {
+            return Err(event(
+                TestStage::DnsTcp,
+                FailureClass::DnsFailure,
+                None,
+                serde_json::json!({"error":error.to_string(),"scope":"destination_resolver"}),
+            ));
+        }
+        Err(_) => {
+            return Err(event(
+                TestStage::DnsTcp,
+                FailureClass::DnsFailure,
+                None,
+                serde_json::json!({"error":"DNS timeout","scope":"destination_resolver"}),
+            ));
+        }
+    };
+    if addresses.is_empty() {
+        return Err(event(
+            TestStage::DnsTcp,
+            FailureClass::DnsFailure,
+            None,
+            serde_json::json!({"error":"no address returned","scope":"destination_resolver"}),
+        ));
+    }
+    let mut cache = DNS_CACHE.lock().expect("DNS cache mutex is not poisoned");
+    if cache.len() >= DNS_CACHE_CAPACITY {
+        cache.retain(|_, (inserted_at, _)| inserted_at.elapsed() < DNS_CACHE_TTL);
+        if cache.len() >= DNS_CACHE_CAPACITY {
+            cache.clear();
+        }
+    }
+    cache.insert(key, (Instant::now(), addresses.clone()));
+    Ok((addresses, "lookup"))
 }
 
 async fn test_survivor_batch(
@@ -265,7 +313,7 @@ async fn test_survivor_batch(
                             TestStage::Relay,
                             FailureClass::LocalOverload,
                             None,
-                            serde_json::json!({"error":error.to_string()}),
+                            serde_json::json!({"error":error.to_string(), "reason":"port_capacity"}),
                         )],
                     )
                 })
@@ -351,10 +399,18 @@ async fn test_through_xray(
             )];
         }
     };
-    let mut endpoints = vec![config.health.test_url.clone()];
-    endpoints.extend(config.health.fallback_urls.iter().cloned());
-    let mut endpoint_failure_count = 0;
-    for endpoint in endpoints.iter().take(3) {
+    let endpoints = http_endpoints(config);
+    let endpoint_count = endpoints
+        .len()
+        .min(config.health.http_probe_max_endpoints.max(1));
+    let quorum = config
+        .health
+        .http_probe_success_quorum
+        .clamp(1, endpoint_count.max(1));
+    let mut successes = Vec::new();
+    let mut timeouts = 0_usize;
+    let mut failures = Vec::new();
+    for endpoint in endpoints.iter().take(endpoint_count) {
         let started = Instant::now();
         let Some(remaining) = remaining_budget(deadline) else {
             return vec![event(
@@ -368,66 +424,34 @@ async fn test_through_xray(
             Ok(Ok(response))
                 if response.status().is_success() || response.status().is_redirection() =>
             {
-                let mut events = vec![ProbeEvent {
-                    stage: TestStage::Relay,
-                    class: FailureClass::Success,
-                    fast_download: false,
-                    latency_ms: Some(started.elapsed().as_secs_f64() * 1000.0),
-                    download_bps: None,
-                    bytes_transferred: None,
-                    duration_ms: Some(started.elapsed().as_millis() as i64),
-                    endpoint: Some(endpoint.clone()),
-                    detail: serde_json::json!({"status":response.status().as_u16()}),
-                }];
-                events.push(ProbeEvent {
-                    stage: TestStage::Http,
-                    class: FailureClass::Success,
-                    fast_download: false,
-                    latency_ms: Some(started.elapsed().as_secs_f64() * 1000.0),
-                    download_bps: None,
-                    bytes_transferred: None,
-                    duration_ms: Some(started.elapsed().as_millis() as i64),
-                    endpoint: Some(endpoint.clone()),
-                    detail: serde_json::json!({"status":response.status().as_u16()}),
-                });
-                if config.download_test.enabled && run_download {
-                    events.push(download(&client, config, deadline).await);
+                let status = response.status().as_u16();
+                let body_read = read_http_body_limited(
+                    response,
+                    config.health.http_probe_body_limit_bytes,
+                    deadline,
+                )
+                .await;
+                match body_read {
+                    Ok(bytes) => successes.push(serde_json::json!({
+                        "endpoint":endpoint,
+                        "status":status,
+                        "bytes":bytes,
+                        "latency_ms":started.elapsed().as_secs_f64() * 1000.0,
+                    })),
+                    Err(detail) => failures.push(detail),
                 }
-                return events;
             }
             Ok(Ok(response)) => {
-                endpoint_failure_count += 1;
-                if response.status().is_server_error() {
-                    continue;
-                }
-                return vec![event(
-                    TestStage::Http,
-                    FailureClass::HttpFailure,
-                    Some(started.elapsed()),
-                    serde_json::json!({"status":response.status().as_u16()}),
-                )];
+                failures.push(
+                    serde_json::json!({"endpoint":endpoint,"status":response.status().as_u16()}),
+                );
             }
             Ok(Err(error)) if error.is_timeout() => {
-                endpoint_failure_count += 1;
-                if endpoint_failure_count >= 2 {
-                    return vec![event(
-                        TestStage::Relay,
-                        FailureClass::RelayTimeout,
-                        Some(started.elapsed()),
-                        serde_json::json!({"error":error.to_string()}),
-                    )];
-                }
+                timeouts += 1;
+                failures.push(serde_json::json!({"endpoint":endpoint,"error":error.to_string()}));
             }
             Ok(Err(error)) => {
-                endpoint_failure_count += 1;
-                if endpoint_failure_count >= 2 {
-                    return vec![event(
-                        TestStage::Http,
-                        FailureClass::EndpointFailure,
-                        Some(started.elapsed()),
-                        serde_json::json!({"error":error.to_string()}),
-                    )];
-                }
+                failures.push(serde_json::json!({"endpoint":endpoint,"error":error.to_string()}));
             }
             Err(_) => {
                 return vec![event(
@@ -439,12 +463,83 @@ async fn test_through_xray(
             }
         }
     }
+    if successes.len() >= quorum {
+        let first = &successes[0];
+        let latency_ms = first["latency_ms"].as_f64();
+        let endpoint = first["endpoint"].as_str().map(str::to_owned);
+        let details = serde_json::json!({"quorum":quorum,"successful":successes,"failed":failures});
+        let mut events = vec![
+            ProbeEvent {
+                stage: TestStage::Relay,
+                class: FailureClass::Success,
+                fast_download: false,
+                latency_ms,
+                download_bps: None,
+                bytes_transferred: None,
+                duration_ms: latency_ms.map(|value| value.round() as i64),
+                endpoint: endpoint.clone(),
+                detail: details.clone(),
+            },
+            ProbeEvent {
+                stage: TestStage::Http,
+                class: FailureClass::Success,
+                fast_download: false,
+                latency_ms,
+                download_bps: None,
+                bytes_transferred: None,
+                duration_ms: latency_ms.map(|value| value.round() as i64),
+                endpoint,
+                detail: details,
+            },
+        ];
+        if config.download_test.enabled && run_download {
+            events.push(download(&client, config, deadline).await);
+        }
+        return events;
+    }
+    let class = if timeouts == endpoint_count && endpoint_count > 0 {
+        FailureClass::RelayTimeout
+    } else {
+        FailureClass::EndpointFailure
+    };
     vec![event(
         TestStage::Http,
-        FailureClass::EndpointFailure,
+        class,
         None,
-        serde_json::json!({"error":"all HTTP endpoints failed"}),
+        serde_json::json!({"error":"HTTP endpoint quorum not reached","quorum":quorum,"failed":failures}),
     )]
+}
+
+fn http_endpoints(config: &AppConfig) -> Vec<String> {
+    let mut endpoints = Vec::with_capacity(1 + config.health.fallback_urls.len());
+    endpoints.push(config.health.test_url.clone());
+    endpoints.extend(config.health.fallback_urls.iter().cloned());
+    let mut seen = std::collections::HashSet::new();
+    endpoints.retain(|endpoint| seen.insert(endpoint.clone()));
+    endpoints
+}
+
+async fn read_http_body_limited(
+    response: reqwest::Response,
+    limit: usize,
+    deadline: Instant,
+) -> Result<usize, serde_json::Value> {
+    let mut stream = response.bytes_stream();
+    let mut bytes = 0_usize;
+    while bytes < limit {
+        let Some(remaining) = remaining_budget(deadline) else {
+            return Err(
+                serde_json::json!({"error":"global probe deadline exceeded while reading body"}),
+            );
+        };
+        match tokio::time::timeout(remaining, stream.next()).await {
+            Ok(Some(Ok(chunk))) => bytes = bytes.saturating_add(chunk.len()),
+            Ok(Some(Err(error))) => return Err(serde_json::json!({"error":error.to_string()})),
+            Ok(None) => break,
+            Err(_) => return Err(serde_json::json!({"error":"HTTP body read deadline exceeded"})),
+        }
+    }
+    Ok(bytes.min(limit))
 }
 
 async fn download(client: &reqwest::Client, config: &AppConfig, deadline: Instant) -> ProbeEvent {
@@ -688,7 +783,7 @@ mod tests {
 
     use crate::config::AppConfig;
 
-    use super::{download_endpoints, remaining_budget};
+    use super::{download_endpoints, http_endpoints, remaining_budget, resolve_destination};
 
     #[test]
     fn global_budget_never_returns_a_non_positive_timeout() {
@@ -711,5 +806,33 @@ mod tests {
                 "https://fallback.example/file".to_owned(),
             ]
         );
+    }
+
+    #[test]
+    fn http_probe_defaults_to_independent_deduplicated_endpoints() {
+        let mut config = AppConfig::default();
+        config.health.test_url = "https://one.example/health".to_owned();
+        config.health.fallback_urls = vec![
+            "https://two.example/health".to_owned(),
+            "https://one.example/health".to_owned(),
+        ];
+        assert_eq!(
+            http_endpoints(&config),
+            vec![
+                "https://one.example/health".to_owned(),
+                "https://two.example/health".to_owned(),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn ip_literal_skips_hostname_resolution() {
+        let (addresses, mode) =
+            resolve_destination("192.0.2.1", 443, Instant::now() + Duration::from_secs(1))
+                .await
+                .expect("literal resolution");
+        assert_eq!(mode, "literal");
+        assert_eq!(addresses.len(), 1);
+        assert_eq!(addresses[0].to_string(), "192.0.2.1:443");
     }
 }

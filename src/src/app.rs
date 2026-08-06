@@ -4,7 +4,10 @@ use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::{config::AppConfig, storage::Store};
+use crate::{
+    config::AppConfig,
+    storage::{FleetCounts, Store},
+};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RuntimeStatus {
@@ -14,6 +17,7 @@ pub struct RuntimeStatus {
     pub last_error: String,
     pub xray_concurrency: usize,
     pub download_concurrency: usize,
+    pub last_concurrency_change: String,
     pub system_pressure: f64,
     pub system_load_pressure: f64,
     pub system_memory_pressure: f64,
@@ -21,6 +25,7 @@ pub struct RuntimeStatus {
     pub child_processes: usize,
     pub event_loop_lag_ms: i64,
     pub last_scheduler_jobs: usize,
+    pub fleet_counts: FleetCounts,
     pub network_incident: bool,
     pub network_message: String,
 }
@@ -36,6 +41,8 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: Arc<AppConfig>, store: Store, shutdown: CancellationToken) -> Self {
+        let initial_xray_concurrency = config.health.xray_concurrency_min;
+        let initial_download_concurrency = config.health.download_concurrency_min;
         Self {
             config,
             store,
@@ -45,8 +52,9 @@ impl AppState {
                 scheduler_ticks: 0,
                 last_tick_at: None,
                 last_error: String::new(),
-                xray_concurrency: 4,
-                download_concurrency: 2,
+                xray_concurrency: initial_xray_concurrency,
+                download_concurrency: initial_download_concurrency,
+                last_concurrency_change: "initial configured minimum".to_owned(),
                 system_pressure: 0.0,
                 system_load_pressure: 0.0,
                 system_memory_pressure: 0.0,
@@ -54,6 +62,7 @@ impl AppState {
                 child_processes: 0,
                 event_loop_lag_ms: 0,
                 last_scheduler_jobs: 0,
+                fleet_counts: FleetCounts::default(),
                 network_incident: false,
                 network_message: "baseline pending".to_owned(),
             })),
@@ -191,7 +200,13 @@ impl AppState {
                         runtime.open_fds = metrics.open_fds;
                         runtime.child_processes = metrics.child_processes;
                         runtime.event_loop_lag_ms = lag_ms;
-                        if let Err(error) = result { runtime.last_error = error.to_string(); warn!(%error, "storage heartbeat failed"); }
+                        match result {
+                            Ok(counts) => runtime.fleet_counts = counts,
+                            Err(error) => {
+                                runtime.last_error = error.to_string();
+                                warn!(%error, "storage heartbeat failed");
+                            }
+                        }
                     }
                 }
             }
@@ -243,7 +258,19 @@ impl AppState {
                             runtime.system_pressure = pressure;
                             (runtime.xray_concurrency, runtime.download_concurrency, runtime.network_incident)
                         };
-                        if pressure >= 0.90 || incident { continue; }
+                        if pressure >= 0.90 || incident {
+                            let mut runtime = state.runtime.write().await;
+                            if pressure >= 0.90 {
+                                runtime.xray_concurrency = ((runtime.xray_concurrency as f64 * 0.7).floor() as usize)
+                                    .clamp(state.config.health.xray_concurrency_min, state.config.health.xray_concurrency_max);
+                                runtime.download_concurrency = ((runtime.download_concurrency as f64 * 0.7).floor() as usize)
+                                    .clamp(state.config.health.download_concurrency_min, state.config.health.download_concurrency_max);
+                                runtime.last_concurrency_change = "decreased: scheduler paused for system_pressure".to_owned();
+                            } else {
+                                runtime.last_concurrency_change = "scheduler paused: network incident".to_owned();
+                            }
+                            continue;
+                        }
                         let jobs = match crate::scheduler::claim_due(
                             &state.store,
                             concurrency,
@@ -263,13 +290,42 @@ impl AppState {
                         // recursively isolates startup failures, then permits only a small
                         // number of bounded downloads through that batch.
                         let reports = crate::probe::test_batch(jobs.into_iter().map(|job| (job.id, job.raw_config, job.download_due)).collect(), "scheduler", &config, download_concurrency).await;
-                        let mass_failure = crate::scheduler::is_mass_failure(
+                        let probe_events: Vec<_> = reports
+                            .iter()
+                            .flat_map(|(_, report)| report.events.iter())
+                            .collect();
+                        let timeout_cluster = probe_events.len() >= 3
+                            && probe_events
+                                .iter()
+                                .filter(|event| matches!(
+                                    event.class,
+                                    crate::domain::failure::FailureClass::TcpTimeout
+                                        | crate::domain::failure::FailureClass::TlsTimeout
+                                        | crate::domain::failure::FailureClass::RelayTimeout
+                                        | crate::domain::failure::FailureClass::DownloadTimeout
+                                ))
+                                .count()
+                                * 2
+                                >= probe_events.len();
+                        let latency_spike = probe_events.iter().any(|event| {
+                            event.latency_ms.unwrap_or_default()
+                                > config.health.max_relay_delay_ms as f64
+                        });
+                        let local_overload = probe_events.iter().any(|event| {
+                            event.class == crate::domain::failure::FailureClass::LocalOverload
+                        });
+                        let incident_reason = crate::scheduler::correlated_incident(
                             &reports,
                             config.network_guard.mass_failure_threshold_percent,
                         );
+                        let mass_failure = incident_reason.is_some();
                         let incident_id = mass_failure.then(|| format!("batch-{}", uuid::Uuid::new_v4().simple()));
                         if mass_failure {
-                            let message = format!("correlated failure detected across {} scheduler jobs", reports.len());
+                            let message = format!(
+                                "{} detected across {} scheduler jobs",
+                                incident_reason.unwrap_or("correlated failure"),
+                                reports.len()
+                            );
                             {
                                 let mut runtime = state.runtime.write().await;
                                 runtime.network_incident = true;
@@ -280,7 +336,7 @@ impl AppState {
                                 "incident",
                                 "MASS_FAILURE",
                                 &message,
-                                serde_json::json!({"jobs": reports.len(), "threshold_percent": config.network_guard.mass_failure_threshold_percent}),
+                                serde_json::json!({"jobs": reports.len(), "threshold_percent": config.network_guard.mass_failure_threshold_percent, "reason": incident_reason}),
                             ).await {
                                 warn!(%error, "could not record correlated scheduler failure");
                             }
@@ -289,13 +345,19 @@ impl AppState {
                                 "level": "WARN",
                                 "kind": "MASS_FAILURE",
                                 "message": message,
-                                "details": {"jobs": reports.len(), "threshold_percent": config.network_guard.mass_failure_threshold_percent},
+                                "details": {"jobs": reports.len(), "threshold_percent": config.network_guard.mass_failure_threshold_percent, "reason": incident_reason},
                             })).await {
                                 warn!(%error, "could not persist mass-failure service state");
                             }
                         }
                         let mut results = Vec::with_capacity(reports.len());
                         for (node_id, report) in reports {
+                            let waiting_for_port = !report.events.is_empty()
+                                && report.events.iter().all(|event| {
+                                    event.class == crate::domain::failure::FailureClass::LocalOverload
+                                        && event.detail.get("reason").and_then(serde_json::Value::as_str)
+                                            == Some("port_capacity")
+                                });
                             let mut real_download_success = false;
                             let run_id = uuid::Uuid::new_v4().simple().to_string();
                             for probe_event in report.events {
@@ -309,26 +371,102 @@ impl AppState {
                                     event,
                                     Duration::from_secs(config.health.active_pool_relay_check_interval_seconds),
                                     Duration::from_secs(config.health.active_pool_download_check_interval_seconds),
+                                    Duration::from_secs(config.health.active_min_residence_seconds),
                                 ).await { warn!(node = %node_id, %error, "could not persist test event"); }
                             }
                             if real_download_success {
                                 if let Some(raw_config) = raw_configs.get(&node_id) {
-                                    if let Err(error) = runtimes.ensure(&node_id, raw_config, &config, &store).await { warn!(node = %node_id, %error, "could not start persistent runtime"); }
+                                    match runtimes.ensure(&node_id, raw_config, &config, &store).await {
+                                        Ok(port) if config.metadata.enabled => {
+                                            let metadata_config = config.metadata.clone();
+                                            let metadata_store = store.clone();
+                                            let metadata_node_id = node_id.clone();
+                                            let claimed = metadata_store
+                                                .claim_metadata_refresh(
+                                                    &metadata_node_id,
+                                                    chrono::Duration::seconds(
+                                                        metadata_config.cache_ttl_seconds.max(1) as i64,
+                                                    ),
+                                                    chrono::Duration::seconds(
+                                                        (metadata_config.timeout_seconds.max(1) + 5) as i64,
+                                                    ),
+                                                )
+                                                .await
+                                                .unwrap_or_else(|error| {
+                                                    warn!(node = %metadata_node_id, %error, "could not claim exit metadata refresh");
+                                                    false
+                                                });
+                                            if claimed {
+                                                tokio::spawn(async move {
+                                                    if let Err(error) = crate::metadata::refresh_via_runtime(
+                                                        &metadata_store,
+                                                        &metadata_node_id,
+                                                        port,
+                                                        &metadata_config,
+                                                    )
+                                                    .await
+                                                    {
+                                                        // Metadata is deliberately inconclusive. Releasing
+                                                        // its lease makes a later successful runtime retry
+                                                        // possible without affecting proxy health or publication.
+                                                        let _ = metadata_store.release_metadata_lease(&metadata_node_id).await;
+                                                        warn!(node = %metadata_node_id, %error, "exit metadata refresh failed");
+                                                    }
+                                                });
+                                            }
+                                        }
+                                        Ok(_) => {}
+                                        Err(error) => warn!(node = %node_id, %error, "could not start persistent runtime"),
+                                    }
                                 }
                             }
-                            let _ = store.release_test_lease(&node_id).await;
+                            if waiting_for_port {
+                                if let Err(error) = store
+                                    .mark_waiting_for_port(
+                                        &node_id,
+                                        chrono::Duration::seconds(5),
+                                    )
+                                    .await
+                                {
+                                    warn!(node = %node_id, %error, "could not mark node waiting for Xray port");
+                                }
+                            } else {
+                                let _ = store.release_test_lease(&node_id).await;
+                            }
                             results.push(real_download_success);
                         }
                         let successes = results.iter().filter(|value| **value).count();
                         let mut runtime = state.runtime.write().await;
-                        let recovered = successes == results.len() && pressure < 0.65;
-                        if recovered {
-                            runtime.xray_concurrency = (runtime.xray_concurrency + 1).min(config.health.candidate_batch_concurrency.max(4));
-                            runtime.download_concurrency = (runtime.download_concurrency + 1).min(8);
-                        }
-                        if successes < results.len() || pressure >= 0.75 {
-                            runtime.xray_concurrency = ((runtime.xray_concurrency as f64 * 0.7).floor() as usize).max(1);
-                            runtime.download_concurrency = ((runtime.download_concurrency as f64 * 0.7).floor() as usize).max(1);
+                        let recovered = successes == results.len()
+                            && !results.is_empty()
+                            && pressure < 0.65
+                            && !latency_spike
+                            && !local_overload;
+                        let decrease_reason = if pressure >= 0.75 {
+                            Some("system_pressure")
+                        } else if timeout_cluster {
+                            Some("timeout_cluster")
+                        } else if latency_spike {
+                            Some("latency_spike")
+                        } else if local_overload {
+                            Some("local_overload")
+                        } else {
+                            None
+                        };
+                        if let Some(reason) = decrease_reason {
+                            runtime.xray_concurrency = ((runtime.xray_concurrency as f64 * 0.7).floor() as usize)
+                                .clamp(config.health.xray_concurrency_min, config.health.xray_concurrency_max);
+                            runtime.download_concurrency = ((runtime.download_concurrency as f64 * 0.7).floor() as usize)
+                                .clamp(config.health.download_concurrency_min, config.health.download_concurrency_max);
+                            runtime.last_concurrency_change = format!("decreased: {reason}");
+                        } else if recovered {
+                            runtime.xray_concurrency = runtime.xray_concurrency
+                                .saturating_add(1)
+                                .clamp(config.health.xray_concurrency_min, config.health.xray_concurrency_max);
+                            runtime.download_concurrency = runtime.download_concurrency
+                                .saturating_add(1)
+                                .clamp(config.health.download_concurrency_min, config.health.download_concurrency_max);
+                            runtime.last_concurrency_change = "increased: stable window".to_owned();
                         }
                         let scheduler_state = serde_json::json!({
                             "at": chrono::Utc::now(),
@@ -337,6 +475,7 @@ impl AppState {
                             "download_concurrency": runtime.download_concurrency,
                             "last_scheduler_jobs": runtime.last_scheduler_jobs,
                             "network_incident": runtime.network_incident,
+                            "last_concurrency_change": runtime.last_concurrency_change,
                             "last_recovery_at": recovered.then(chrono::Utc::now),
                         });
                         drop(runtime);

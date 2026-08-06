@@ -14,7 +14,7 @@ use crate::{
     domain::{
         evidence::TestStage,
         failure::FailureClass,
-        proxy::{LifecycleState, NodeSummary},
+        proxy::{ExitMetadata, LifecycleState, NodeSummary},
     },
     health::{HealthInput, decide, event_contribution},
     parser::ParsedProxy,
@@ -26,7 +26,7 @@ pub struct Store {
     database_path: PathBuf,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct FleetCounts {
     pub total: i64,
     pub candidate: i64,
@@ -46,6 +46,16 @@ pub struct NodePage {
     pub page: u64,
     pub page_size: u64,
     pub nodes: Vec<NodeSummary>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct NodeFilters {
+    pub status: Option<String>,
+    pub country: Option<String>,
+    pub search: Option<String>,
+    pub source: Option<String>,
+    pub protocol: Option<String>,
+    pub failure_class: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +91,7 @@ pub struct CandidateForSelection {
     pub relay_delay_ms: Option<i64>,
     pub download_kbps: Option<i64>,
     pub health_score: f64,
+    pub publication_lease_until: Option<DateTime<Utc>>,
     pub active_assignments: i64,
     pub recent_global_usage: i64,
     pub recent_client_usage: i64,
@@ -336,26 +347,36 @@ impl Store {
         &self,
         page: u64,
         page_size: u64,
-        status: Option<&str>,
-        country: Option<&str>,
-        search: Option<&str>,
+        filters: NodeFilters,
     ) -> anyhow::Result<NodePage> {
         let page = page.max(1);
         let page_size = page_size.clamp(1, 200);
         let mut clauses = Vec::new();
         let mut values = Vec::new();
-        if let Some(status) = status.filter(|v| !v.is_empty()) {
+        if let Some(status) = filters.status.as_deref().filter(|v| !v.is_empty()) {
             clauses.push("lifecycle_state = ?");
             values.push(status.to_owned());
         }
-        if let Some(country) = country.filter(|v| !v.is_empty()) {
+        if let Some(country) = filters.country.as_deref().filter(|v| !v.is_empty()) {
             clauses.push("exit_country = ?");
             values.push(country.to_owned());
         }
-        if let Some(search) = search.filter(|v| !v.is_empty()) {
-            clauses.push("(raw_config LIKE ? OR config_hash LIKE ? OR exit_country LIKE ?)");
+        if let Some(search) = filters.search.as_deref().filter(|v| !v.is_empty()) {
+            clauses.push("(raw_config LIKE ? OR config_hash LIKE ? OR exit_country LIKE ? OR exit_org LIKE ? OR exit_city LIKE ?)");
             let like = format!("%{search}%");
-            values.extend([like.clone(), like.clone(), like]);
+            values.extend([like.clone(), like.clone(), like.clone(), like.clone(), like]);
+        }
+        if let Some(source) = filters.source.as_deref().filter(|v| !v.is_empty()) {
+            clauses.push("source_subs LIKE ?");
+            values.push(format!("%{source}%"));
+        }
+        if let Some(protocol) = filters.protocol.as_deref().filter(|v| !v.is_empty()) {
+            clauses.push("LOWER(raw_config) LIKE ?");
+            values.push(format!("{}:%", protocol.to_ascii_lowercase()));
+        }
+        if let Some(failure_class) = filters.failure_class.as_deref().filter(|v| !v.is_empty()) {
+            clauses.push("last_failure_class = ?");
+            values.push(failure_class.to_owned());
         }
         let where_sql = if clauses.is_empty() {
             String::new()
@@ -369,7 +390,7 @@ impl Store {
         }
         let total = count_query.fetch_one(&self.pool).await?;
         let list_sql = format!(
-            "SELECT id, config_hash, raw_config, source_subs, lifecycle_state, status, main_port, relay_delay_ms, download_kbps, exit_country, health_success_ewma, health_alpha, health_beta, health_score, next_test_at, publication_lease_until, publication_lease_kind, last_failure_class, last_seen_generation, upstream_missing_generations, created_at, last_test_at FROM nodes{where_sql} ORDER BY CASE lifecycle_state WHEN 'ACTIVE' THEN 0 WHEN 'PROBATION' THEN 1 WHEN 'CANDIDATE' THEN 2 ELSE 3 END, health_score DESC, last_test_at DESC LIMIT ? OFFSET ?"
+            "SELECT id, config_hash, raw_config, source_subs, lifecycle_state, status, main_port, relay_delay_ms, download_kbps, exit_ip, exit_hostname, exit_city, exit_region, exit_country, exit_loc, exit_org, exit_postal, exit_timezone, exit_info_fetched_at, health_success_ewma, health_alpha, health_beta, health_score, next_test_at, publication_lease_until, publication_lease_kind, last_failure_class, last_seen_generation, upstream_missing_generations, created_at, last_test_at FROM nodes{where_sql} ORDER BY CASE lifecycle_state WHEN 'ACTIVE' THEN 0 WHEN 'PROBATION' THEN 1 WHEN 'CANDIDATE' THEN 2 ELSE 3 END, health_score DESC, last_test_at DESC LIMIT ? OFFSET ?"
         );
         let mut query = sqlx::query(&list_sql);
         for value in &values {
@@ -477,6 +498,7 @@ impl Store {
         event: TestEventInput,
         active_relay_interval: std::time::Duration,
         active_download_interval: std::time::Duration,
+        active_min_residence: std::time::Duration,
     ) -> anyhow::Result<TestEventApplied> {
         let now = Utc::now();
         let mut transaction = self.pool.begin().await?;
@@ -594,6 +616,8 @@ impl Store {
                 .unwrap_or_else(|_| chrono::Duration::seconds(10)),
             active_download_interval: chrono::Duration::from_std(active_download_interval)
                 .unwrap_or_else(|_| chrono::Duration::minutes(5)),
+            active_min_residence: chrono::Duration::from_std(active_min_residence)
+                .unwrap_or_else(|_| chrono::Duration::minutes(30)),
         };
         let decision = decide(input);
         let activated_at = if decision.lifecycle == LifecycleState::Active
@@ -794,6 +818,24 @@ impl Store {
         Ok(())
     }
 
+    /// Port exhaustion is scheduler pressure, not proxy evidence. Preserve
+    /// the state from which this node was claimed and retry it shortly.
+    pub async fn mark_waiting_for_port(
+        &self,
+        proxy_id: &str,
+        retry_after: chrono::Duration,
+    ) -> anyhow::Result<()> {
+        let now = Utc::now();
+        sqlx::query("UPDATE nodes SET waiting_from_state = lifecycle_state, lifecycle_state = 'WAITING_FOR_PORT', status = 'WAITING_FOR_PORT', test_lease_until = NULL, testing_from_state = NULL, next_test_at = ?, state_entered_at = ?, updated_at = ? WHERE id = ? AND structurally_valid = 1")
+            .bind((now + retry_after.max(chrono::Duration::seconds(1))).to_rfc3339())
+            .bind(now.to_rfc3339())
+            .bind(now.to_rfc3339())
+            .bind(proxy_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn set_main_port(&self, proxy_id: &str, port: u16) -> anyhow::Result<()> {
         sqlx::query("UPDATE nodes SET main_port = ?, updated_at = ? WHERE id = ?")
             .bind(port as i64)
@@ -849,6 +891,47 @@ impl Store {
                 .fetch_optional(&self.pool)
                 .await?,
         )
+    }
+
+    /// Atomically reserve a best-effort metadata lookup.  A failed lookup is
+    /// released immediately by the caller; a successful lookup records its
+    /// cache timestamp.  Neither outcome has any health-model side effect.
+    pub async fn claim_metadata_refresh(
+        &self,
+        proxy_id: &str,
+        cache_ttl: chrono::Duration,
+        lease: chrono::Duration,
+    ) -> anyhow::Result<bool> {
+        let now = Utc::now();
+        let stale_before = now - cache_ttl;
+        let affected = sqlx::query("UPDATE nodes SET metadata_lease_until = ? WHERE id = ? AND (metadata_lease_until IS NULL OR metadata_lease_until <= ?) AND (exit_info_fetched_at IS NULL OR exit_info_fetched_at <= ?)")
+            .bind((now + lease).to_rfc3339())
+            .bind(proxy_id)
+            .bind(now.to_rfc3339())
+            .bind(stale_before.to_rfc3339())
+            .execute(&self.pool)
+            .await?
+            .rows_affected();
+        Ok(affected == 1)
+    }
+
+    pub async fn record_exit_metadata(
+        &self,
+        proxy_id: &str,
+        metadata: &ExitMetadata,
+    ) -> anyhow::Result<()> {
+        let now = Utc::now().to_rfc3339();
+        sqlx::query("UPDATE nodes SET exit_ip = ?, exit_hostname = ?, exit_city = ?, exit_region = ?, exit_country = ?, exit_loc = ?, exit_org = ?, exit_postal = ?, exit_timezone = ?, exit_info_json = ?, exit_info_fetched_at = ?, metadata_lease_until = NULL, updated_at = ? WHERE id = ?")
+            .bind(&metadata.ip).bind(&metadata.hostname).bind(&metadata.city).bind(&metadata.region).bind(&metadata.country).bind(&metadata.loc).bind(&metadata.org).bind(&metadata.postal).bind(&metadata.timezone).bind(metadata.raw.to_string()).bind(&now).bind(&now).bind(proxy_id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn release_metadata_lease(&self, proxy_id: &str) -> anyhow::Result<()> {
+        sqlx::query("UPDATE nodes SET metadata_lease_until = NULL WHERE id = ?")
+            .bind(proxy_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     pub async fn history(
@@ -1009,7 +1092,7 @@ impl Store {
         let assignment_since = now - chrono::Duration::seconds(assignment_ttl_seconds as i64);
         let usage_since = now - chrono::Duration::minutes(5);
         let client_usage_since = now - chrono::Duration::minutes(30);
-        let rows = sqlx::query("SELECT n.id, n.main_port, n.relay_delay_ms, n.download_kbps, n.health_score, c.state AS client_state, c.cooldown_until, c.success_rate_ewma, c.fail_streak, c.rate_limit_streak, (SELECT COUNT(*) FROM assignment_events a WHERE a.node_id = n.id AND a.assigned_at >= ?) AS active_assignments, (SELECT COUNT(*) FROM usage_events u WHERE u.node_id = n.id AND u.created_at >= ?) AS recent_global_usage, (SELECT COUNT(*) FROM usage_events u WHERE u.node_id = n.id AND u.client_id = ? AND u.created_at >= ?) AS recent_client_usage FROM nodes n LEFT JOIN client_node_state c ON c.node_id = n.id AND c.client_id = ? WHERE n.lifecycle_state = 'ACTIVE' AND n.main_port IS NOT NULL AND n.structurally_valid = 1 AND n.publication_lease_until > ?")
+        let rows = sqlx::query("SELECT n.id, n.main_port, n.relay_delay_ms, n.download_kbps, n.health_score, n.publication_lease_until, c.state AS client_state, c.cooldown_until, c.success_rate_ewma, c.fail_streak, c.rate_limit_streak, (SELECT COUNT(*) FROM assignment_events a WHERE a.node_id = n.id AND a.assigned_at >= ?) AS active_assignments, (SELECT COUNT(*) FROM usage_events u WHERE u.node_id = n.id AND u.created_at >= ?) AS recent_global_usage, (SELECT COUNT(*) FROM usage_events u WHERE u.node_id = n.id AND u.client_id = ? AND u.created_at >= ?) AS recent_client_usage FROM nodes n LEFT JOIN client_node_state c ON c.node_id = n.id AND c.client_id = ? WHERE n.lifecycle_state = 'ACTIVE' AND n.main_port IS NOT NULL AND n.structurally_valid = 1 AND n.publication_lease_until > ?")
             .bind(assignment_since.to_rfc3339()).bind(usage_since.to_rfc3339()).bind(client).bind(client_usage_since.to_rfc3339()).bind(client).bind(now.to_rfc3339()).fetch_all(&self.pool).await?;
         Ok(rows
             .into_iter()
@@ -1024,6 +1107,7 @@ impl Store {
                     relay_delay_ms: row.get("relay_delay_ms"),
                     download_kbps: row.get("download_kbps"),
                     health_score: row.get::<Option<f64>, _>("health_score").unwrap_or(0.5),
+                    publication_lease_until: parse_time(row.get("publication_lease_until")),
                     active_assignments: row.get("active_assignments"),
                     recent_global_usage: row.get("recent_global_usage"),
                     recent_client_usage: row.get("recent_client_usage"),
@@ -1041,20 +1125,23 @@ impl Store {
     }
 
     pub async fn best_vip_candidate(&self) -> anyhow::Result<Option<VipCandidate>> {
-        let row = sqlx::query("SELECT id, raw_config, health_score, relay_delay_ms, download_kbps FROM nodes WHERE lifecycle_state = 'ACTIVE' AND structurally_valid = 1 AND publication_lease_until > ? ORDER BY health_score DESC, COALESCE(download_kbps, 0) DESC, COALESCE(relay_delay_ms, 999999) ASC, config_hash ASC LIMIT 1")
-            .bind(Utc::now().to_rfc3339()).fetch_optional(&self.pool).await?;
+        let usage_since = Utc::now() - chrono::Duration::minutes(5);
+        let row = sqlx::query("SELECT n.id, n.raw_config, n.health_score, n.relay_delay_ms, n.download_kbps, (SELECT COUNT(*) FROM usage_events u WHERE u.node_id = n.id AND u.created_at >= ?) AS recent_usage FROM nodes n WHERE n.lifecycle_state = 'ACTIVE' AND n.main_port IS NOT NULL AND n.structurally_valid = 1 AND n.publication_lease_until > ? ORDER BY n.health_score DESC, COALESCE(n.download_kbps, 0) DESC, COALESCE(n.relay_delay_ms, 999999) ASC, n.config_hash ASC LIMIT 1")
+            .bind(usage_since.to_rfc3339()).bind(Utc::now().to_rfc3339()).fetch_optional(&self.pool).await?;
         Ok(row.map(|row| {
             let health = row.get::<Option<f64>, _>("health_score").unwrap_or(0.5);
             let latency = row.get::<Option<i64>, _>("relay_delay_ms").unwrap_or(3000) as f64;
             let download = row
                 .get::<Option<i64>, _>("download_kbps")
                 .unwrap_or_default() as f64;
+            let low_use = 1.0 / (1.0 + row.get::<i64, _>("recent_usage") as f64);
             VipCandidate {
                 id: row.get("id"),
                 raw_config: row.get("raw_config"),
-                score: health * 0.60
-                    + (download / 1000.0).clamp(0.0, 1.0) * 0.25
-                    + (1.0 - latency / 3000.0).clamp(0.0, 1.0) * 0.15,
+                score: health * 0.55
+                    + (download / 1000.0).clamp(0.0, 1.0) * 0.22
+                    + (1.0 - latency / 3000.0).clamp(0.0, 1.0) * 0.15
+                    + low_use * 0.08,
             }
         }))
     }
@@ -1230,6 +1317,25 @@ fn row_to_summary(row: sqlx::sqlite::SqliteRow) -> NodeSummary {
         relay_delay_ms: row.get("relay_delay_ms"),
         download_kbps: row.get("download_kbps"),
         exit_country: row.get("exit_country"),
+        exit_ip: row.get::<Option<String>, _>("exit_ip").unwrap_or_default(),
+        exit_hostname: row
+            .get::<Option<String>, _>("exit_hostname")
+            .unwrap_or_default(),
+        exit_city: row
+            .get::<Option<String>, _>("exit_city")
+            .unwrap_or_default(),
+        exit_region: row
+            .get::<Option<String>, _>("exit_region")
+            .unwrap_or_default(),
+        exit_loc: row.get::<Option<String>, _>("exit_loc").unwrap_or_default(),
+        exit_org: row.get::<Option<String>, _>("exit_org").unwrap_or_default(),
+        exit_postal: row
+            .get::<Option<String>, _>("exit_postal")
+            .unwrap_or_default(),
+        exit_timezone: row
+            .get::<Option<String>, _>("exit_timezone")
+            .unwrap_or_default(),
+        exit_info_fetched_at: parse_time(row.get("exit_info_fetched_at")),
         health_success_ewma: row
             .get::<Option<f64>, _>("health_success_ewma")
             .unwrap_or(0.5),
@@ -1264,6 +1370,7 @@ const NODE_ADDITIONS: &[(&str, &str)] = &[
     ("health_score", "REAL"),
     ("evidence_updated_at", "TEXT"),
     ("testing_from_state", "TEXT"),
+    ("waiting_from_state", "TEXT"),
     ("test_lease_until", "TEXT"),
     ("publication_lease_until", "TEXT"),
     ("publication_lease_kind", "TEXT"),
@@ -1277,6 +1384,17 @@ const NODE_ADDITIONS: &[(&str, &str)] = &[
     ("failure_streak", "INTEGER NOT NULL DEFAULT 0"),
     ("independent_failure_count", "INTEGER NOT NULL DEFAULT 0"),
     ("last_test_endpoint", "TEXT"),
+    ("exit_ip", "TEXT NOT NULL DEFAULT ''"),
+    ("exit_hostname", "TEXT NOT NULL DEFAULT ''"),
+    ("exit_city", "TEXT NOT NULL DEFAULT ''"),
+    ("exit_region", "TEXT NOT NULL DEFAULT ''"),
+    ("exit_loc", "TEXT NOT NULL DEFAULT ''"),
+    ("exit_org", "TEXT NOT NULL DEFAULT ''"),
+    ("exit_postal", "TEXT NOT NULL DEFAULT ''"),
+    ("exit_timezone", "TEXT NOT NULL DEFAULT ''"),
+    ("exit_info_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("exit_info_fetched_at", "TEXT"),
+    ("metadata_lease_until", "TEXT"),
     ("last_seen_generation", "INTEGER"),
     ("upstream_missing_generations", "INTEGER NOT NULL DEFAULT 0"),
     ("retired_at", "TEXT"),
@@ -1287,7 +1405,7 @@ const COMPAT_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS nodes (
  id TEXT PRIMARY KEY, config_hash TEXT UNIQUE NOT NULL, raw_config TEXT NOT NULL, normalized_config TEXT NOT NULL,
  source_subs TEXT NOT NULL, status TEXT NOT NULL, main_port INTEGER, relay_delay_ms INTEGER, download_kbps INTEGER,
- exit_country TEXT NOT NULL DEFAULT '', health_success_ewma REAL DEFAULT 1.0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+ exit_ip TEXT NOT NULL DEFAULT '', exit_hostname TEXT NOT NULL DEFAULT '', exit_city TEXT NOT NULL DEFAULT '', exit_region TEXT NOT NULL DEFAULT '', exit_country TEXT NOT NULL DEFAULT '', exit_loc TEXT NOT NULL DEFAULT '', exit_org TEXT NOT NULL DEFAULT '', exit_postal TEXT NOT NULL DEFAULT '', exit_timezone TEXT NOT NULL DEFAULT '', exit_info_json TEXT NOT NULL DEFAULT '{}', exit_info_fetched_at TEXT, metadata_lease_until TEXT, health_success_ewma REAL DEFAULT 1.0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
  last_test_at TEXT, last_download_test_at TEXT, next_test_at TEXT
 );
 CREATE TABLE IF NOT EXISTS client_node_state (client_id TEXT NOT NULL, node_id TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'CLOSED', fail_streak INTEGER DEFAULT 0, rate_limit_streak INTEGER DEFAULT 0, cooldown_until TEXT, usage_count INTEGER DEFAULT 0, success_count INTEGER DEFAULT 0, broken_count INTEGER DEFAULT 0, rate_limited_count INTEGER DEFAULT 0, recent_usage_score REAL DEFAULT 0, success_rate_ewma REAL DEFAULT 0.5, last_assigned_at TEXT, last_feedback_at TEXT, last_failure_at TEXT, last_success_at TEXT, PRIMARY KEY(client_id, node_id));
@@ -1414,6 +1532,93 @@ mod tests {
         assert!(row.get::<Option<String>, _>("test_lease_until").is_some());
     }
 
+    #[tokio::test]
+    async fn port_exhaustion_is_a_temporary_execution_state() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        let now = Utc::now().to_rfc3339();
+        sqlx::query("INSERT INTO nodes(id, config_hash, raw_config, normalized_config, source_subs, status, lifecycle_state, structurally_valid, health_alpha, health_beta, health_score, created_at, updated_at) VALUES ('port-node', 'port-hash', 'vless://demo', '{}', '[]', 'CANDIDATE', 'CANDIDATE', 1, 4, 2, 0.666, ?, ?)")
+            .bind(&now)
+            .bind(&now)
+            .execute(store.pool())
+            .await
+            .expect("node");
+        store
+            .mark_waiting_for_port("port-node", chrono::Duration::seconds(5))
+            .await
+            .expect("waiting state");
+        let row = sqlx::query("SELECT lifecycle_state, waiting_from_state, health_alpha, health_beta, test_lease_until FROM nodes WHERE id = 'port-node'")
+            .fetch_one(store.pool())
+            .await
+            .expect("node row");
+        assert_eq!(row.get::<String, _>("lifecycle_state"), "WAITING_FOR_PORT");
+        assert_eq!(row.get::<String, _>("waiting_from_state"), "CANDIDATE");
+        assert_eq!(row.get::<f64, _>("health_alpha"), 4.0);
+        assert_eq!(row.get::<f64, _>("health_beta"), 2.0);
+        assert!(row.get::<Option<String>, _>("test_lease_until").is_none());
+    }
+
+    #[tokio::test]
+    async fn metadata_cache_lease_is_independent_from_proxy_health() {
+        let (_temp, store, id) = test_store().await;
+        assert!(
+            store
+                .claim_metadata_refresh(
+                    &id,
+                    chrono::Duration::hours(24),
+                    chrono::Duration::minutes(1),
+                )
+                .await
+                .expect("first metadata claim")
+        );
+        assert!(
+            !store
+                .claim_metadata_refresh(
+                    &id,
+                    chrono::Duration::hours(24),
+                    chrono::Duration::minutes(1),
+                )
+                .await
+                .expect("duplicate metadata claim")
+        );
+        store
+            .record_exit_metadata(
+                &id,
+                &ExitMetadata {
+                    ip: "203.0.113.12".to_owned(),
+                    hostname: String::new(),
+                    city: "Example City".to_owned(),
+                    region: String::new(),
+                    country: "ZZ".to_owned(),
+                    loc: String::new(),
+                    org: "Example ASN".to_owned(),
+                    postal: String::new(),
+                    timezone: "Etc/UTC".to_owned(),
+                    raw: serde_json::json!({"ip":"203.0.113.12"}),
+                },
+            )
+            .await
+            .expect("record metadata");
+        let row = sqlx::query(
+            "SELECT exit_ip, exit_country, metadata_lease_until, health_alpha, health_beta FROM nodes WHERE id = ?",
+        )
+        .bind(&id)
+        .fetch_one(store.pool())
+        .await
+        .expect("metadata row");
+        assert_eq!(row.get::<String, _>("exit_ip"), "203.0.113.12");
+        assert_eq!(row.get::<String, _>("exit_country"), "ZZ");
+        assert!(
+            row.get::<Option<String>, _>("metadata_lease_until")
+                .is_none()
+        );
+        assert_eq!(row.get::<f64, _>("health_alpha"), 1.0);
+        assert_eq!(row.get::<f64, _>("health_beta"), 1.0);
+    }
+
     async fn test_store() -> (tempfile::TempDir, Store, String) {
         let temp = tempfile::tempdir().expect("tempdir");
         let store = Store::connect(temp.path().join("fleet.db"))
@@ -1460,6 +1665,7 @@ mod tests {
                 event(&id, "one-run", TestStage::Download, FailureClass::Success),
                 std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(1800),
             )
             .await
             .expect("first event");
@@ -1468,6 +1674,7 @@ mod tests {
                 event(&id, "one-run", TestStage::Download, FailureClass::Success),
                 std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(1800),
             )
             .await
             .expect("duplicate event");
@@ -1495,6 +1702,7 @@ mod tests {
                     ),
                     std::time::Duration::from_secs(10),
                     std::time::Duration::from_secs(300),
+                    std::time::Duration::from_secs(1800),
                 )
                 .await
                 .expect("relay success");
@@ -1515,6 +1723,7 @@ mod tests {
                 event(&id, "download", TestStage::Download, FailureClass::Success),
                 std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(1800),
             )
             .await
             .expect("activate");
@@ -1528,6 +1737,7 @@ mod tests {
                 ),
                 std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(1800),
             )
             .await
             .expect("incident event");
@@ -1568,7 +1778,7 @@ mod tests {
     async fn paged_nodes_never_serialize_the_raw_proxy_credential() {
         let (_temp, store, _id) = test_store().await;
         let page = store
-            .list_nodes(1, 1, None, None, None)
+            .list_nodes(1, 1, NodeFilters::default())
             .await
             .expect("page");
         let value = serde_json::to_value(&page.nodes[0]).expect("node JSON");
@@ -1584,6 +1794,7 @@ mod tests {
                 event(&id, "download", TestStage::Download, FailureClass::Success),
                 std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(1800),
             )
             .await
             .expect("activate");
@@ -1600,6 +1811,7 @@ mod tests {
                 event(&id, "download", TestStage::Download, FailureClass::Success),
                 std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(1800),
             )
             .await
             .expect("activate");
@@ -1697,7 +1909,7 @@ mod tests {
     async fn node_page_exposes_evidence_and_generation_fields_with_a_hard_page_cap() {
         let (_temp, store, _id) = test_store().await;
         let page = store
-            .list_nodes(0, 10_000, None, None, None)
+            .list_nodes(0, 10_000, NodeFilters::default())
             .await
             .expect("node page");
         assert_eq!(page.page, 1);

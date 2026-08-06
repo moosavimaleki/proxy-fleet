@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub ports: PortsConfig,
     pub database: DatabaseConfig,
     pub health: HealthConfig,
+    pub metadata: MetadataConfig,
     pub download_test: DownloadTestConfig,
     pub dead_pool: DeadPoolConfig,
     pub client_penalty: ClientPenaltyConfig,
@@ -56,6 +57,29 @@ impl AppConfig {
             "candidate cycle limit must be positive"
         );
         anyhow::ensure!(
+            self.health.xray_concurrency_min > 0
+                && self.health.xray_concurrency_min <= self.health.xray_concurrency_max
+                && self.health.download_concurrency_min > 0
+                && self.health.download_concurrency_min <= self.health.download_concurrency_max,
+            "adaptive concurrency ranges must be positive and ordered"
+        );
+        anyhow::ensure!(
+            self.health.http_probe_max_endpoints > 0,
+            "health.http_probe_max_endpoints must be positive"
+        );
+        anyhow::ensure!(
+            self.health.http_probe_success_quorum > 0,
+            "health.http_probe_success_quorum must be positive"
+        );
+        anyhow::ensure!(
+            self.health.http_probe_body_limit_bytes > 0,
+            "health.http_probe_body_limit_bytes must be positive"
+        );
+        anyhow::ensure!(
+            (15 * 60..=30 * 60).contains(&self.health.active_min_residence_seconds),
+            "health.active_min_residence_seconds must be between 900 and 1800 seconds"
+        );
+        anyhow::ensure!(
             self.download_test.timeout_seconds > 0,
             "download timeout must be positive"
         );
@@ -76,6 +100,7 @@ impl Default for AppConfig {
             ports: PortsConfig::default(),
             database: DatabaseConfig::default(),
             health: HealthConfig::default(),
+            metadata: MetadataConfig::default(),
             download_test: DownloadTestConfig::default(),
             dead_pool: DeadPoolConfig::default(),
             client_penalty: ClientPenaltyConfig::default(),
@@ -200,6 +225,11 @@ impl Default for DatabaseConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct HealthConfig {
+    /// A recently download-verified node is protected from normal lifecycle
+    /// demotion for this bounded period.  Keeping it configurable makes the
+    /// retention policy explicit while preventing accidental multi-hour
+    /// settings that would hide a genuinely broken node for too long.
+    pub active_min_residence_seconds: u64,
     pub active_pool_relay_check_interval_seconds: u64,
     pub active_pool_download_check_interval_seconds: u64,
     pub active_relay_failure_threshold: u32,
@@ -214,18 +244,32 @@ pub struct HealthConfig {
     pub candidate_batch_concurrency: usize,
     pub candidate_parallel_batches: usize,
     pub candidate_batch_timeout_seconds: u64,
+    pub xray_concurrency_min: usize,
+    pub xray_concurrency_max: usize,
+    pub download_concurrency_min: usize,
+    pub download_concurrency_max: usize,
     pub recent_success_retention_hours: u64,
     pub dead_recheck_batch_size: usize,
     pub dead_retry_recent_seconds: u64,
     pub dead_retry_unverified_seconds: u64,
     pub relay_timeout_ms: u64,
     pub max_relay_delay_ms: u64,
+    /// A Stage 3 request reads only this many bytes.  It is enough to prove
+    /// that HTTP works without turning every relay revalidation into a
+    /// download benchmark.
+    pub http_probe_body_limit_bytes: usize,
+    /// Number of independently configured HTTP targets attempted at Stage 3.
+    pub http_probe_max_endpoints: usize,
+    /// Successful targets required to pass Stage 3.  It is clamped to the
+    /// number of configured distinct targets at runtime.
+    pub http_probe_success_quorum: usize,
     pub test_url: String,
     pub fallback_urls: Vec<String>,
 }
 impl Default for HealthConfig {
     fn default() -> Self {
         Self {
+            active_min_residence_seconds: 30 * 60,
             active_pool_relay_check_interval_seconds: 10,
             active_pool_download_check_interval_seconds: 300,
             active_relay_failure_threshold: 3,
@@ -240,14 +284,24 @@ impl Default for HealthConfig {
             candidate_batch_concurrency: 16,
             candidate_parallel_batches: 4,
             candidate_batch_timeout_seconds: 20,
+            xray_concurrency_min: 4,
+            xray_concurrency_max: 16,
+            download_concurrency_min: 2,
+            download_concurrency_max: 8,
             recent_success_retention_hours: 24,
             dead_recheck_batch_size: 32,
             dead_retry_recent_seconds: 7200,
             dead_retry_unverified_seconds: 21600,
             relay_timeout_ms: 3000,
             max_relay_delay_ms: 3000,
+            http_probe_body_limit_bytes: 16 * 1024,
+            http_probe_max_endpoints: 2,
+            http_probe_success_quorum: 1,
             test_url: "https://www.cloudflare.com/cdn-cgi/trace".to_owned(),
-            fallback_urls: vec![],
+            fallback_urls: vec![
+                "https://www.gstatic.com/generate_204".to_owned(),
+                "https://www.google.com/generate_204".to_owned(),
+            ],
         }
     }
 }
@@ -262,6 +316,28 @@ pub struct DownloadTestConfig {
     pub target_download_kbps: u64,
     pub test_url: String,
     pub fallback_urls: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct MetadataConfig {
+    pub enabled: bool,
+    /// The request is made through the verified proxy runtime, never directly
+    /// from the host. Any endpoint that returns a JSON exit-IP document can
+    /// be used here.
+    pub endpoint: String,
+    pub timeout_seconds: u64,
+    pub cache_ttl_seconds: u64,
+}
+impl Default for MetadataConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            endpoint: "https://ipapi.co/json/".to_owned(),
+            timeout_seconds: 5,
+            cache_ttl_seconds: 24 * 60 * 60,
+        }
+    }
 }
 impl Default for DownloadTestConfig {
     fn default() -> Self {

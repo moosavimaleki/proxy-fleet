@@ -137,6 +137,12 @@ impl RuntimeManager {
             }
         }
         let proxy = parse_share_url(&candidate.raw_config, "vip")?;
+        // Validate the candidate in an isolated test-port process before
+        // touching the hot VIP port. A malformed or unsupported candidate can
+        // therefore never interrupt the currently serving runtime.
+        let reservation = allocate_port(config.ports.test.start..=config.ports.test.end).await?;
+        let mut preflight = XraySession::start(&config.xray_bin, &proxy, reservation).await?;
+        preflight.stop().await;
         // Retain the previous descriptor so a failed switch is recoverable.
         let mut previous = self.vip.lock().await.take();
         if let Some(old) = previous.as_mut() {

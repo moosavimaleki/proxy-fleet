@@ -92,12 +92,24 @@ fn score(candidate: &CandidateForSelection, config: &AppConfig) -> f64 {
             + candidate.recent_global_usage as f64
             + candidate.recent_client_usage as f64);
     let history = candidate.client_success_ewma.unwrap_or(0.5);
+    // A lease close to expiry is still selectable, but it receives less
+    // availability credit than one with a recently verified publication
+    // window. This avoids over-assigning a node that may leave the feed soon.
+    let lease_freshness = candidate
+        .publication_lease_until
+        .map(|until| {
+            (until - chrono::Utc::now()).num_seconds().max(0) as f64
+                / chrono::Duration::hours(12).num_seconds() as f64
+        })
+        .unwrap_or_default()
+        .clamp(0.0, 1.0);
+    let availability = candidate.health_score * (0.75 + 0.25 * lease_freshness);
     let penalty = (candidate.client_fail_streak as f64 * 0.15
         + candidate.client_rate_limit_streak as f64 * 0.25)
         .min(0.5);
     config.selection.weights.latency * latency
         + config.selection.weights.download * download
-        + config.selection.weights.availability * candidate.health_score
+        + config.selection.weights.availability * availability
         + config.selection.weights.fairness * fairness
         + config.selection.weights.client_history * history
         - penalty

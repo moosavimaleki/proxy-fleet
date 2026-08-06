@@ -46,6 +46,8 @@ database:
   path: ./data/app.db
 
 health:
+  # A real-download success is protected from normal demotion for 15–30 min.
+  active_min_residence_seconds: 1800
   active_pool_relay_check_interval_seconds: 10
   # A node stays ACTIVE only if real downloads still work from this host/network.
   active_pool_download_check_interval_seconds: 300
@@ -63,6 +65,11 @@ health:
   candidate_batch_concurrency: 16
   candidate_parallel_batches: 4
   candidate_batch_timeout_seconds: 20
+  # Independent AIMD bounds for batch-Xray processes and expensive downloads.
+  xray_concurrency_min: 4
+  xray_concurrency_max: 16
+  download_concurrency_min: 2
+  download_concurrency_max: 8
   # A successful real download keeps a config eligible for the public feed for 24 hours.
   recent_success_retention_hours: 24
   dead_recheck_batch_size: 32
@@ -70,6 +77,11 @@ health:
   dead_retry_unverified_seconds: 21600
   relay_timeout_ms: 3000
   max_relay_delay_ms: 3000
+  # Stage 3 reads a tiny bounded response from two independent endpoints;
+  # the quorum avoids treating a single public endpoint outage as proxy death.
+  http_probe_body_limit_bytes: 16384
+  http_probe_max_endpoints: 2
+  http_probe_success_quorum: 1
   test_url: "https://www.cloudflare.com/cdn-cgi/trace"
   fallback_urls:
     - "https://www.gstatic.com/generate_204"
@@ -100,6 +112,14 @@ download_test:
     - "http://speedtest.london.linode.com/100MB-london.bin"
     - "http://speedtest.frankfurt.linode.com/100MB-frankfurt.bin"
     - "http://speedtest.singapore.linode.com/100MB-singapore.bin"
+
+# Exit metadata is fetched asynchronously through an already-running proxy;
+# it is cached and never changes the health evidence of that proxy.
+metadata:
+  enabled: true
+  endpoint: "https://ipapi.co/json/"
+  timeout_seconds: 5
+  cache_ttl_seconds: 86400
 
 dead_pool:
   ttl_hours: 24
