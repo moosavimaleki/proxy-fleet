@@ -36,5 +36,5 @@ vless://8787dd0a-095a-414e-804f-a7d16a1ae166@193.29.224.185:8443/?type=tcp&encry
 vless://83afd88f-200f-4d89-bfc7-66eff160c1d8@one-for-all.levikogjgfdd.ir:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=josni.hoyes.cloudns.ch&type=ws&allowInsecure=0&sni=josni.hoyes.cloudns.ch#@tootffarangi🍓-12
 trojan://humanity@104.19.229.21:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#@Filtershekan_channel |3
 trojan://UO36402987@34.251.228.118:443?sni=definite-ladybird.rooster465.autos&type=tcp&fp=chrome#🇮🇪IE-🚀@VPNine1
-vless://78eddd19-4fd4-461e-ad75-efd8cd44e0d0@fn.cloud--vpn.site:80?security=none&encryption=none&host=playstationisp.com&type=ws#🇮🇹135200 | ⚡️Telegram = t.me/SOSkeyNET
 vless://2d116b12-4db5-44de-81d7-01b2f9e0c312@172.66.146.2:8443?path=/&security=tls&encryption=none&insecure=0&host=ftp.skylinknet.ir&fp=chrome&type=ws&allowInsecure=0&sni=ftp.skylinknet.ir#@skyliink_vpn丨چنل تلگرام 0🇩🇪
+vless://78eddd19-4fd4-461e-ad75-efd8cd44e0d0@fn.cloud--vpn.site:80?security=none&encryption=none&host=playstationisp.com&type=ws#🇮🇹135200 | ⚡️Telegram = t.me/SOSkeyNET
