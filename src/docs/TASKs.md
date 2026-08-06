@@ -805,7 +805,7 @@ fieldهای جدید node:
 - [x] logها structured با timestamp، component، proxy id، run id و failure class باشند.
 - [x] raw config و credential در log mask شوند.
 - [ ] counterها: parsed، deduped، invalid، tested، stage pass/fail، transitions و published.
-- [ ] gaugeها: queue depth، concurrency، child process، FD، active/probation/dormant و lease count.
+- [x] gaugeها: queue depth، concurrency، child process، FD، active/probation/dormant و lease count.
 - [ ] histogramها: stage latency، download speed، DB query و API latency.
 - [x] system eventهای مهم در SQLite با retention محدود ثبت شوند.
 - [x] log storm ناشی از retry با sampling/rate-limit کنترل شود.
@@ -867,7 +867,7 @@ fieldهای جدید node:
 ## 25. budgetهای عملکرد و پذیرش
 
 - [ ] هیچ full-table scan در scheduler tick عادی وجود نداشته باشد.
-- [ ] API list با pagination در اندازهٔ محدود باقی بماند.
+- [x] API list با pagination در اندازهٔ محدود باقی بماند.
 - [ ] یک writer کند SQLite کل HTTP server را block نکند.
 - [ ] تعداد process Xray از سقف config بالاتر نرود.
 - [ ] تعداد FD پس از چند چرخهٔ تست رشد دائمی نداشته باشد.
@@ -1006,7 +1006,7 @@ fieldهای جدید node:
 ### فاز 12: cleanup و مستندات
 
 - [ ] کد Python فقط بعد از پایان rollback window archive/remove شود.
-- [ ] schema، config، API و runbook مستند شوند.
+- [x] schema، config، API و runbook مستند شوند.
 - [ ] backupهای موقت طبق policy پاک شوند.
 - [ ] benchmark نهایی و تفاوت الگوریتم ثبت شود.
 

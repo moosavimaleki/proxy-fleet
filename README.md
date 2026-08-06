@@ -1,6 +1,6 @@
 # Proxy Fleet
 
-Proxy Fleet is a Python service for importing, testing, scoring, and serving V2Ray-compatible proxy configurations.
+Proxy Fleet is a Rust service for importing, testing, scoring, and serving V2Ray-compatible proxy configurations.
 
 It provides:
 
@@ -19,6 +19,8 @@ It provides:
 ```bash
 docker compose up -d --build
 ```
+
+Operational configuration, API contracts, database lifecycle, backup and rollback procedures are in [src/docs/RUNBOOK.md](src/docs/RUNBOOK.md). The implemented health-manager policy is documented in [src/docs/ALGORITHM.md](src/docs/ALGORITHM.md).
 
 Open:
 
@@ -54,4 +56,4 @@ Every complete upstream refresh also reconciles normalized configuration hashes.
 
 ## How health is decided
 
-A proxy is not promoted merely because its server answers. It must pass the cheap relay stage and produce a measured download speed of at least `download_test.min_download_kbps` from this machine. See [docs/ALGORITHM.md](docs/ALGORITHM.md) for scheduling and retry details and [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md) for the measured optimization results.
+A proxy is not promoted merely because its server answers. It must pass the cheap relay stage and produce a measured download speed of at least `download_test.min_download_kbps` from this machine. See [src/docs/ALGORITHM.md](src/docs/ALGORITHM.md) for scheduling and retry details and [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md) for the historical optimization results.
