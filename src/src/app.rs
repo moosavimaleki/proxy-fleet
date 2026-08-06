@@ -1,19 +1,40 @@
 use std::{
     sync::{
-        Arc,
+        Arc, LazyLock, Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use tokio::{sync::RwLock, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     config::AppConfig,
     storage::{FleetCounts, Store},
 };
+
+const RETRY_LOG_SAMPLE_WINDOW: Duration = Duration::from_secs(30);
+static RETRY_LOG_SAMPLES: LazyLock<Mutex<std::collections::HashMap<(String, String), Instant>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
+
+/// Keep one diagnostic sample per proxy/failure class during a retry storm.
+/// This intentionally never includes the raw configuration or credentials.
+fn should_emit_failure_log(proxy_id: &str, failure_class: &str, now: Instant) -> bool {
+    let mut samples = RETRY_LOG_SAMPLES
+        .lock()
+        .expect("retry log sampler mutex is not poisoned");
+    samples.retain(|_, seen| now.saturating_duration_since(*seen) < RETRY_LOG_SAMPLE_WINDOW);
+    let key = (proxy_id.to_owned(), failure_class.to_owned());
+    match samples.get(&key) {
+        Some(seen) if now.saturating_duration_since(*seen) < RETRY_LOG_SAMPLE_WINDOW => false,
+        _ => {
+            samples.insert(key, now);
+            true
+        }
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RuntimeStatus {
@@ -389,6 +410,11 @@ impl AppState {
                                 let class = if mass_failure && probe_event.class != crate::domain::failure::FailureClass::Success && probe_event.class != crate::domain::failure::FailureClass::InvalidConfig {
                                     crate::domain::failure::FailureClass::EndpointFailure
                                 } else { probe_event.class };
+                                if class == crate::domain::failure::FailureClass::Success {
+                                    debug!(component = "probe", proxy_id = %node_id, run_id = %run_id, test_stage = probe_event.stage.as_str(), failure_class = class.as_str(), "probe stage completed");
+                                } else if should_emit_failure_log(&node_id, class.as_str(), Instant::now()) {
+                                    warn!(component = "probe", proxy_id = %node_id, run_id = %run_id, test_stage = probe_event.stage.as_str(), failure_class = class.as_str(), "probe stage failed");
+                                }
                                 let event = crate::storage::TestEventInput { proxy_id: node_id.clone(), run_id: run_id.clone(), stage: probe_event.stage, class, fast_download: probe_event.fast_download, latency_ms: probe_event.latency_ms, download_bps: probe_event.download_bps, bytes_transferred: probe_event.bytes_transferred, duration_ms: probe_event.duration_ms, endpoint: probe_event.endpoint, system_pressure: Some(crate::scheduler::system_pressure()), incident_id: incident_id.clone(), detail_json: probe_event.detail };
                                 if let Err(error) = store.apply_test_event(
                                     event,
@@ -633,5 +659,59 @@ impl NetworkGuardMinimum for crate::config::NetworkGuardConfig {
         self.minimum_successful_targets
             .max(1)
             .min(self.sentinel_targets.len().max(1))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::HashMap,
+        time::{Duration, Instant},
+    };
+
+    use super::RETRY_LOG_SAMPLE_WINDOW;
+
+    fn sampled(
+        samples: &mut HashMap<(String, String), Instant>,
+        proxy: &str,
+        class: &str,
+        now: Instant,
+    ) -> bool {
+        samples.retain(|_, seen| now.saturating_duration_since(*seen) < RETRY_LOG_SAMPLE_WINDOW);
+        let key = (proxy.to_owned(), class.to_owned());
+        if samples
+            .get(&key)
+            .is_some_and(|seen| now.saturating_duration_since(*seen) < RETRY_LOG_SAMPLE_WINDOW)
+        {
+            false
+        } else {
+            samples.insert(key, now);
+            true
+        }
+    }
+
+    #[test]
+    fn retry_log_sampling_keeps_one_failure_per_proxy_and_class_window() {
+        let start = Instant::now();
+        let mut samples = HashMap::new();
+        assert!(sampled(&mut samples, "node", "TCP_TIMEOUT", start));
+        assert!(!sampled(
+            &mut samples,
+            "node",
+            "TCP_TIMEOUT",
+            start + Duration::from_secs(5)
+        ));
+        assert!(sampled(
+            &mut samples,
+            "node",
+            "TLS_TIMEOUT",
+            start + Duration::from_secs(5)
+        ));
+        assert!(sampled(
+            &mut samples,
+            "node",
+            "TCP_TIMEOUT",
+            start + RETRY_LOG_SAMPLE_WINDOW
+        ));
     }
 }
