@@ -167,7 +167,7 @@ mod tests {
     use chrono::{Duration, TimeZone, Utc};
     use proptest::prelude::*;
 
-    use super::{FailureClass, TestStage, decay, full_jitter_delay, health, lease_until};
+    use super::{FailureClass, TestStage, decay, delta, full_jitter_delay, health, lease_until};
 
     #[test]
     fn decay_halves_exactly_at_the_half_life() {
@@ -194,6 +194,19 @@ mod tests {
             lease_until(TestStage::Relay, false, now),
             now + Duration::minutes(30)
         );
+    }
+
+    #[test]
+    fn evidence_weights_and_inconclusive_classes_follow_the_model() {
+        let fast = delta(TestStage::Download, FailureClass::Success, true);
+        assert_eq!((fast.alpha, fast.beta), (8.0, 0.0));
+        let slow = delta(TestStage::Download, FailureClass::DownloadTooSlow, false);
+        assert_eq!((slow.alpha, slow.beta), (0.0, 3.0));
+        for class in [FailureClass::LocalOverload, FailureClass::EndpointFailure] {
+            let inconclusive = delta(TestStage::Http, class, false);
+            assert_eq!((inconclusive.alpha, inconclusive.beta), (0.0, 0.0));
+            assert!(class.inconclusive());
+        }
     }
 
     proptest! {

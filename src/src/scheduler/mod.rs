@@ -429,7 +429,8 @@ mod tests {
         probe::{ProbeEvent, ProbeReport},
     };
 
-    use super::{QueueDebt, QueueQuota, is_mass_failure, system_metrics};
+    use super::{QueueDebt, QueueQuota, claim_due, is_mass_failure, system_metrics};
+    use crate::storage::Store;
 
     fn report(class: FailureClass) -> ProbeReport {
         ProbeReport {
@@ -514,5 +515,32 @@ mod tests {
         assert!((0.0..=1.0).contains(&metrics.pressure));
         assert!((0.0..=1.0).contains(&metrics.load_pressure));
         assert!((0.0..=1.0).contains(&metrics.memory_pressure));
+    }
+
+    #[tokio::test]
+    async fn active_test_lease_is_never_claimed_twice() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        let now = chrono::Utc::now();
+        sqlx::query("INSERT INTO nodes(id, config_hash, raw_config, normalized_config, source_subs, status, lifecycle_state, structurally_valid, health_alpha, health_beta, health_score, created_at, updated_at, next_test_at, test_lease_until, testing_from_state) VALUES ('leased', 'lease-hash', 'vless://demo', '{}', '[]', 'TESTING', 'TESTING', 1, 1, 1, 0.5, ?, ?, ?, ?, 'CANDIDATE')")
+            .bind(now.to_rfc3339())
+            .bind(now.to_rfc3339())
+            .bind((now - chrono::Duration::seconds(1)).to_rfc3339())
+            .bind((now + chrono::Duration::minutes(1)).to_rfc3339())
+            .execute(store.pool())
+            .await
+            .expect("leased fixture");
+        let jobs = claim_due(
+            &store,
+            4,
+            chrono::Duration::seconds(30),
+            chrono::Duration::minutes(5),
+        )
+        .await
+        .expect("claim");
+        assert!(jobs.is_empty());
     }
 }

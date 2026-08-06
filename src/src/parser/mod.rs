@@ -491,8 +491,20 @@ fn canonical_query(url: &Url) -> BTreeMap<String, String> {
     url.query_pairs()
         .filter_map(|(key, value)| {
             let key = key.to_ascii_lowercase();
-            (!matches!(key.as_str(), "remark" | "remarks" | "ps" | "name"))
-                .then(|| (key, value.into_owned()))
+            (!matches!(key.as_str(), "remark" | "remarks" | "ps" | "name")).then(|| {
+                let value = value.into_owned();
+                let value = match key.as_str() {
+                    // These are protocol/hostname tokens, not
+                    // case-sensitive credentials.  Canonicalizing them
+                    // prevents duplicate technical identities from
+                    // differently-capitalized subscription remarks.
+                    "sni" | "host" | "security" | "type" | "net" | "fp" | "flow" | "headertype" => {
+                        value.to_ascii_lowercase()
+                    }
+                    _ => value,
+                };
+                (key, value)
+            })
         })
         .collect()
 }
@@ -539,6 +551,22 @@ mod tests {
             "source",
         )
         .unwrap();
+        assert_eq!(first.config_hash, second.config_hash);
+    }
+
+    #[test]
+    fn canonical_normalization_is_stable_across_remarks_and_case() {
+        let first = parse_share_url(
+            "vless://11111111-1111-1111-1111-111111111111@EXAMPLE.com:443?security=tls&sni=EXAMPLE.com#one",
+            "source",
+        )
+        .expect("first");
+        let second = parse_share_url(
+            "vless://11111111-1111-1111-1111-111111111111@example.COM:443?security=tls&sni=example.com#two",
+            "source",
+        )
+        .expect("second");
+        assert_eq!(first.normalized_config, second.normalized_config);
         assert_eq!(first.config_hash, second.config_hash);
     }
 

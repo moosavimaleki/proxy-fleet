@@ -233,3 +233,30 @@ async fn write_if_changed(path: &Path, bytes: &[u8]) -> anyhow::Result<bool> {
     tokio::fs::rename(temporary, path).await?;
     Ok(true)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::write_if_changed;
+
+    #[tokio::test]
+    async fn publisher_output_is_atomic_and_noops_for_identical_content() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let output = temp.path().join("subscriptions/active-raw.txt");
+        assert!(
+            write_if_changed(&output, b"one\n")
+                .await
+                .expect("initial write")
+        );
+        assert!(
+            !write_if_changed(&output, b"one\n")
+                .await
+                .expect("no-op write")
+        );
+        assert!(
+            write_if_changed(&output, b"two\n")
+                .await
+                .expect("changed write")
+        );
+        assert_eq!(tokio::fs::read(output).await.expect("read"), b"two\n");
+    }
+}

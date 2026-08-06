@@ -793,7 +793,7 @@ fieldهای جدید node:
 - [x] `subscriptions.refresh_interval_seconds` به refresh service نسل‌دار منتقل شود.
 - [x] `subscriptions.prune_missing_after_cycles: 2` به policy جدید حداقل سه generation کامل migrate و deprecated warning داده شود.
 - [x] `publishing.retained_snapshots: 3` پس از migration نادیده گرفته و با publication lease جایگزین شود.
-- [ ] `health.recent_success_retention_hours` فقط برای seed migration قدیمی استفاده و سپس با leaseهای stage-specific جایگزین شود.
+- [x] `health.recent_success_retention_hours` فقط برای seed migration قدیمی استفاده و سپس با leaseهای stage-specific جایگزین شود.
 - [x] interval/thresholdهای candidate/probation/dead قدیمی به defaultهای scheduler/backoff جدید map شوند و keyهای منسوخ warning روشن بدهند.
 - [x] `network_guard` فعلی بدون تغییر اولیه load شود و سپس ورودی global incident detector باشد.
 - [x] weightهای `selection`، cooldownهای client، VIP port و port rangeهای فعلی حفظ شوند.
@@ -815,23 +815,23 @@ fieldهای جدید node:
 
 ### 24.1 unit test
 
-- [ ] تمام transitionهای lifecycle.
-- [ ] evidence weights و time decay با clock مصنوعی.
-- [ ] lease extension و expiry.
-- [ ] full-jitter در bound صحیح.
-- [ ] queue quota و starvation prevention.
-- [ ] failure classifier و inconclusiveها.
-- [ ] technical hash مستقل از remark.
-- [ ] parser هر protocol/transport/security.
-- [ ] publication filter و deterministic ordering.
+- [x] تمام transitionهای lifecycle.
+- [x] evidence weights و time decay با clock مصنوعی.
+- [x] lease extension و expiry.
+- [x] full-jitter در bound صحیح.
+- [x] queue quota و starvation prevention.
+- [x] failure classifier و inconclusiveها.
+- [x] technical hash مستقل از remark.
+- [x] parser هر protocol/transport/security.
+- [x] publication filter و deterministic ordering.
 
 ### 24.2 property/fuzz test
 
-- [ ] parser روی input تصادفی panic نکند.
-- [ ] normalize(normalize(x)) برابر normalize(x) باشد.
-- [ ] تغییر remark hash را تغییر ندهد.
-- [ ] alpha/beta/score هیچ‌گاه NaN، infinity یا خارج از range نشوند.
-- [ ] scheduler هیچ node با lease تست فعال را دوباره claim نکند.
+- [x] parser روی input تصادفی panic نکند.
+- [x] normalize(normalize(x)) برابر normalize(x) باشد.
+- [x] تغییر remark hash را تغییر ندهد.
+- [x] alpha/beta/score هیچ‌گاه NaN، infinity یا خارج از range نشوند.
+- [x] scheduler هیچ node با lease تست فعال را دوباره claim نکند.
 
 ### 24.3 integration test
 

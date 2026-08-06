@@ -181,6 +181,34 @@ impl Store {
             .map(|value| serde_json::from_str(&value).unwrap_or(serde_json::json!({"raw":value}))))
     }
 
+    /// One-shot compatibility seed for the Python-era health fields.  It is
+    /// intentionally guarded by `service_state`: this is migration evidence,
+    /// not a recurring extension of publication leases.
+    pub async fn seed_legacy_download_leases(&self, hours: u64) -> anyhow::Result<u64> {
+        if self
+            .service_state("legacy_download_lease_seed_v1")
+            .await?
+            .is_some()
+        {
+            return Ok(0);
+        }
+        let mut transaction = self.pool.begin().await?;
+        let now = Utc::now();
+        let affected = sqlx::query("UPDATE nodes SET publication_lease_until = ?, publication_lease_kind = 'legacy-download-seed', updated_at = ? WHERE lifecycle_state = 'ACTIVE' AND structurally_valid = 1 AND COALESCE(download_kbps, 0) > 0 AND publication_lease_until IS NULL")
+            .bind((now + chrono::Duration::hours(hours.max(1) as i64)).to_rfc3339())
+            .bind(now.to_rfc3339())
+            .execute(&mut *transaction)
+            .await?
+            .rows_affected();
+        sqlx::query("INSERT INTO service_state(key, value_json, updated_at) VALUES ('legacy_download_lease_seed_v1', ?, ?) ON CONFLICT(key) DO NOTHING")
+            .bind(serde_json::json!({"at":now,"hours":hours,"seeded":affected}).to_string())
+            .bind(now.to_rfc3339())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(affected)
+    }
+
     pub async fn set_scheduler_state(
         &self,
         key: &str,
@@ -715,16 +743,21 @@ impl Store {
         let mut transaction = self.pool.begin().await?;
         let mut inserted = 0_u64;
         for proxy in proxies {
-            let existing = sqlx::query("SELECT id, source_subs FROM nodes WHERE config_hash = ?")
-                .bind(&proxy.config_hash)
-                .fetch_optional(&mut *transaction)
-                .await?;
+            let existing = sqlx::query(
+                "SELECT id, source_subs, lifecycle_state FROM nodes WHERE config_hash = ?",
+            )
+            .bind(&proxy.config_hash)
+            .fetch_optional(&mut *transaction)
+            .await?;
             if let Some(row) = existing {
                 let mut sources: std::collections::BTreeSet<String> =
                     serde_json::from_str(&row.get::<String, _>("source_subs")).unwrap_or_default();
                 sources.insert(proxy.source.clone());
-                sqlx::query("UPDATE nodes SET raw_config = ?, normalized_config = ?, source_subs = ?, last_seen_generation = ?, upstream_missing_generations = 0, updated_at = ? WHERE id = ?")
-                    .bind(&proxy.raw_config).bind(proxy.normalized_config.to_string()).bind(serde_json::to_string(&sources)?).bind(generation).bind(&now).bind(row.get::<String, _>("id")).execute(&mut *transaction).await?;
+                // Only a complete upstream reappearance may revive RETIRED.
+                // In-flight test results cannot do this, which keeps tombstone
+                // semantics and publication safety intact.
+                sqlx::query("UPDATE nodes SET raw_config = ?, normalized_config = ?, source_subs = ?, last_seen_generation = ?, upstream_missing_generations = 0, lifecycle_state = CASE WHEN lifecycle_state = 'RETIRED' THEN 'CANDIDATE' ELSE lifecycle_state END, status = CASE WHEN lifecycle_state = 'RETIRED' THEN 'CANDIDATE' ELSE status END, retired_at = CASE WHEN lifecycle_state = 'RETIRED' THEN NULL ELSE retired_at END, tombstone_until = CASE WHEN lifecycle_state = 'RETIRED' THEN NULL ELSE tombstone_until END, next_test_at = CASE WHEN lifecycle_state = 'RETIRED' THEN ? ELSE next_test_at END, updated_at = ? WHERE id = ?")
+                    .bind(&proxy.raw_config).bind(proxy.normalized_config.to_string()).bind(serde_json::to_string(&sources)?).bind(generation).bind(&now).bind(&now).bind(row.get::<String, _>("id")).execute(&mut *transaction).await?;
             } else {
                 let id = uuid::Uuid::new_v4().simple().to_string();
                 sqlx::query("INSERT INTO nodes(id, config_hash, raw_config, normalized_config, source_subs, status, lifecycle_state, structurally_valid, health_alpha, health_beta, health_score, created_at, updated_at, next_test_at, last_seen_generation, upstream_missing_generations) VALUES (?, ?, ?, ?, ?, 'CANDIDATE', 'CANDIDATE', 1, 1.0, 1.0, 0.5, ?, ?, ?, ?, 0)")
@@ -1546,6 +1579,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn legacy_download_seed_runs_once_and_never_keeps_extending_a_lease() {
+        let (_temp, store, id) = test_store().await;
+        sqlx::query("UPDATE nodes SET lifecycle_state = 'ACTIVE', status = 'ACTIVE', download_kbps = 512 WHERE id = ?")
+            .bind(&id)
+            .execute(store.pool())
+            .await
+            .expect("legacy fixture");
+        assert_eq!(
+            store.seed_legacy_download_leases(24).await.expect("seed"),
+            1
+        );
+        let first = sqlx::query_scalar::<_, String>(
+            "SELECT publication_lease_until FROM nodes WHERE id = ?",
+        )
+        .bind(&id)
+        .fetch_one(store.pool())
+        .await
+        .expect("lease");
+        assert_eq!(
+            store.seed_legacy_download_leases(24).await.expect("repeat"),
+            0
+        );
+        let second = sqlx::query_scalar::<_, String>(
+            "SELECT publication_lease_until FROM nodes WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_one(store.pool())
+        .await
+        .expect("lease");
+        assert_eq!(first, second);
+    }
+
+    #[tokio::test]
     async fn scheduler_state_is_persistent_and_idempotent() {
         let temp = tempfile::tempdir().expect("tempdir");
         let store = Store::connect(temp.path().join("fleet.db"))
@@ -1826,6 +1892,31 @@ mod tests {
         .await
         .expect("memberships");
         assert_eq!(memberships, 1);
+    }
+
+    #[tokio::test]
+    async fn complete_upstream_reappearance_revives_a_retired_identity() {
+        let (_temp, store, id) = test_store().await;
+        sqlx::query("UPDATE nodes SET lifecycle_state = 'RETIRED', status = 'RETIRED', retired_at = ?, tombstone_until = ? WHERE id = ?")
+            .bind(Utc::now().to_rfc3339())
+            .bind((Utc::now() + chrono::Duration::days(30)).to_rfc3339())
+            .bind(&id)
+            .execute(store.pool())
+            .await
+            .expect("retire node");
+        let proxy = parse_share_url(
+            "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?security=tls&sni=example.com#renamed",
+            "test",
+        )
+        .expect("parse reappearance");
+        store.ingest_proxy(&proxy, 2).await.expect("reconcile");
+        let state =
+            sqlx::query_scalar::<_, String>("SELECT lifecycle_state FROM nodes WHERE id = ?")
+                .bind(id)
+                .fetch_one(store.pool())
+                .await
+                .expect("state");
+        assert_eq!(state, "CANDIDATE");
     }
 
     #[tokio::test]

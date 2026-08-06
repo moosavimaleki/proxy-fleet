@@ -37,6 +37,16 @@ async fn main() -> anyhow::Result<()> {
         info!(backup = %backup.display(), "created pre-migration database snapshot");
     }
     store.migrate().await.context("migrating SQLite database")?;
+    let seeded_legacy_leases = store
+        .seed_legacy_download_leases(config.health.recent_success_retention_hours)
+        .await
+        .context("seeding legacy download leases")?;
+    if seeded_legacy_leases > 0 {
+        info!(
+            seeded_legacy_leases,
+            "seeded one-time publication leases from legacy download evidence"
+        );
+    }
     store
         .set_service_state(
             "binary_version",

@@ -64,8 +64,15 @@ pub fn decide(input: HealthInput) -> HealthDecision {
         .map(|time| input.now - time >= input.active_min_residence)
         .unwrap_or(false);
 
-    let lifecycle = if input.class == FailureClass::InvalidConfig {
+    let lifecycle = if input.class == FailureClass::InvalidConfig
+        || input.prior_lifecycle == LifecycleState::Invalid
+    {
         LifecycleState::Invalid
+    } else if input.prior_lifecycle == LifecycleState::Retired {
+        // A retired upstream identity is deliberately terminal.  Reappearance
+        // in a complete later generation moves it through reconciliation,
+        // never through a stray in-flight probe result.
+        LifecycleState::Retired
     } else if real_download {
         LifecycleState::Active
     } else {
@@ -257,5 +264,40 @@ mod tests {
         event.active_min_residence = Duration::minutes(15);
         event.activated_at = Some(event.now - Duration::minutes(14));
         assert_eq!(decide(event).lifecycle, LifecycleState::Active);
+    }
+
+    #[test]
+    fn remaining_lifecycle_transitions_preserve_hysteresis_rules() {
+        let mut probation = input(
+            LifecycleState::Probation,
+            TestStage::Relay,
+            FailureClass::Success,
+        );
+        probation.alpha = 8.0;
+        probation.beta = 1.0;
+        assert_eq!(decide(probation).lifecycle, LifecycleState::Active);
+
+        let mut dormant = input(
+            LifecycleState::Dormant,
+            TestStage::Relay,
+            FailureClass::Success,
+        );
+        dormant.alpha = 8.0;
+        dormant.beta = 1.0;
+        assert_eq!(decide(dormant).lifecycle, LifecycleState::Probation);
+
+        let invalid = input(
+            LifecycleState::Candidate,
+            TestStage::Static,
+            FailureClass::InvalidConfig,
+        );
+        assert_eq!(decide(invalid).lifecycle, LifecycleState::Invalid);
+
+        let retired = input(
+            LifecycleState::Retired,
+            TestStage::Download,
+            FailureClass::Success,
+        );
+        assert_eq!(decide(retired).lifecycle, LifecycleState::Retired);
     }
 }
