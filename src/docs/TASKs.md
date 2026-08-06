@@ -372,7 +372,7 @@ src/
 - [x] `tracing` و `tracing-subscriber`: structured logs.
 - [x] `thiserror`: خطاهای domain؛ `anyhow` فقط در application boundary.
 - [x] `futures-util` و `tokio-util`: stream و cancellation token.
-- [ ] dependency اضافی فقط با دلیل و benchmark پذیرفته شود.
+- [x] dependency اضافی فقط با دلیل و benchmark پذیرفته شود.
 
 ## 8. مهاجرت دیتابیس
 
