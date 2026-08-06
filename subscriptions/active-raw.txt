@@ -1,7 +1,7 @@
 vless://8c00ea88-31f7-445a-8f74-f6e7f03a1553@82.115.6.93:443?encryption=none&security=tls&sni=kuraakavaa-5l7.pages.dev&alpn=h2,http/1.1&fp=chrome&type=ws&host=kuraakavaa-5l7.pages.dev&path=/?ed=2048#[14274] - Telegram : @V2All
 trojan://ND91608427@54.93.65.133:443?security=tls&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&sni=next-turkey.rooster465.autos#@hex_proxy ¹
-ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.244:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.216:8080#T.me/Vpn_Mafia 🇳🇱
+ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.244:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.16.253.69:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&insecure=0&allowInsecure=0#@meliproxyy
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.208:8080#TEL;Father_vpn
 vless://7e8f7489-e65f-4be6-93ed-867a74ec6759@95.85.228.161:8443/?type=grpc&encryption=none&flow=&serviceName=grpc#channel_@networld_vpn
@@ -36,8 +36,8 @@ ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.87.240:443#🇯🇵 Join+Telegram:@
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.141.83:443?encryption=none&security=tls&sni=support.zoom.us.yxls.eu.cc&fp=chrome&insecure=0&allowInsecure=0&type=ws&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi#🇨🇦CA_719_@Surfboardv2ray
 trojan://ND91608427@3.64.59.246:443?fp=chrome&sni=gentle-raptor.rooster465.autos#🤖100@oneclickvpnkeys
 vless://83afd88f-200f-4d89-bfc7-66eff160c1d8@172.66.44.97:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=josni.hoyes.cloudns.ch&type=ws&allowInsecure=0&sni=josni.hoyes.cloudns.ch#@hex_proxy ⁵
-vless://8787dd0a-095a-414e-804f-a7d16a1ae166@138.124.244.77:8443?security=tls&encryption=none&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&flow=xtls-rprx-vision&sni=fi1.hys.braidx.tech#@meliproxyy
 trojan://ND91608427@13.36.175.151:443?security=tls&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&sni=classic-gator.rooster465.autos#@hex_proxy ³
+vless://8787dd0a-095a-414e-804f-a7d16a1ae166@138.124.244.77:8443?security=tls&encryption=none&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&flow=xtls-rprx-vision&sni=fi1.hys.braidx.tech#@meliproxyy
 vless://50414e45-4c5f-5a45-5553-87784dde8e7a@173.245.49.57:443?path=/stream/PANEL_ZEUS/87784dde8e7a&security=tls&encryption=none&insecure=0&host=z-e-u-s-jipumr.nova-69a264.workers.dev&fp=chrome&type=ws&allowInsecure=0&sni=z-e-u-s-jipumr.nova-69a264.workers.dev#@meliproxyy
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5dHFoTWRJclRrZ1E0NlB2aHlBdE1I@92.112.126.90:443#@filembad
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771/?type=tcp&encryption=none&flow=#channel_@networld_vpn
@@ -123,7 +123,7 @@ vless://1b25e81f-98d6-4c69-b9db-3df6c58a7500@rhn.codmaxx.ir:8686?encryption=none
 vless://1b92d620-add7-42bd-ac1b-93ee4dfacee0@api.univesalsrv.com:443?mode=gun&security=reality&encryption=none&pbk=eU2IqYoHVYNfFqNlTNEAGooWqL2WqKbbQwxAPRu_7wc&fp=chrome&type=grpc&serviceName=rpc.v2.FeedService&sni=api.univesalsrv.com&sid=93762a4ddf178703#برای اتصال دائمی جوین شو🍥 TelegramID ⌲Express_freevpn 🪩
 vless://SoonTeam@ge.imsoon.org:8443?security=reality&encryption=none&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&fp=chrome&spx=/446d13373223738&type=grpc&sni=wxug.com&sid=ce77fcf457#@meliproxyy
 vless://3a17b816-a8ae-415d-a592-29345d7a7591@104.17.108.69:443?path=/nova-geo-psiphon-ca&security=tls&encryption=none&insecure=0&host=89drg3d.zenvorix.ir&type=ws&allowInsecure=0&sni=89drg3d.zenvorix.ir#🇨🇦 Join+Telegram:@Farah_VPN 🇨🇦
+vmess://eyJhZGQiOiI2Ni4xNjMuMTE3LjU4IiwiYWlkIjoiMCIsImFscG4iOiIiLCJmcCI6IiIsImhvc3QiOiJAUHJveHlWUE4xMSIsImlkIjoiMDQ2MjFiYWUtYWIzNi0xMWVjLWI5MDktMDI0MmFjMTIwMDAyIiwiaW5zZWN1cmUiOiIwIiwibmV0IjoidGNwIiwicGF0aCI6Ii8gQFByb3h5VlBOMTEiLCJwb3J0IjoiMjIzMjQiLCJwcyI6IvCfh6zwn4enIEBwcm94eV9rYWZlZSIsInNjeSI6ImF1dG8iLCJzbmkiOiIiLCJ0bHMiOiIiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0=
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@108.162.198.5:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@TASIYANC 💖 01
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.20.39.109:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#Unblocked_ir
-vmess://eyJhZGQiOiI2Ni4xNjMuMTE3LjU4IiwiYWlkIjoiMCIsImFscG4iOiIiLCJmcCI6IiIsImhvc3QiOiJAUHJveHlWUE4xMSIsImlkIjoiMDQ2MjFiYWUtYWIzNi0xMWVjLWI5MDktMDI0MmFjMTIwMDAyIiwiaW5zZWN1cmUiOiIwIiwibmV0IjoidGNwIiwicGF0aCI6Ii8gQFByb3h5VlBOMTEiLCJwb3J0IjoiMjIzMjQiLCJwcyI6IvCfh6zwn4enIEBwcm94eV9rYWZlZSIsInNjeSI6ImF1dG8iLCJzbmkiOiIiLCJ0bHMiOiIiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0=
 trojan://humanity@104.16.174.121:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#@IRAn_v2ray1
