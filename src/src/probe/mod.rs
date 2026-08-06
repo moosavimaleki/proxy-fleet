@@ -409,6 +409,7 @@ async fn test_through_xray(
         .clamp(1, endpoint_count.max(1));
     let mut successes = Vec::new();
     let mut timeouts = 0_usize;
+    let mut tls_failures = 0_usize;
     let mut failures = Vec::new();
     for endpoint in endpoints.iter().take(endpoint_count) {
         let started = Instant::now();
@@ -446,11 +447,12 @@ async fn test_through_xray(
                     serde_json::json!({"endpoint":endpoint,"status":response.status().as_u16()}),
                 );
             }
-            Ok(Err(error)) if error.is_timeout() => {
-                timeouts += 1;
-                failures.push(serde_json::json!({"endpoint":endpoint,"error":error.to_string()}));
-            }
             Ok(Err(error)) => {
+                match classify_request_error(&error, FailureClass::RelayTimeout) {
+                    FailureClass::RelayTimeout => timeouts += 1,
+                    FailureClass::TlsTimeout => tls_failures += 1,
+                    _ => {}
+                }
                 failures.push(serde_json::json!({"endpoint":endpoint,"error":error.to_string()}));
             }
             Err(_) => {
@@ -499,6 +501,8 @@ async fn test_through_xray(
     }
     let class = if timeouts == endpoint_count && endpoint_count > 0 {
         FailureClass::RelayTimeout
+    } else if tls_failures == endpoint_count && endpoint_count > 0 {
+        FailureClass::TlsTimeout
     } else {
         FailureClass::EndpointFailure
     };
@@ -566,6 +570,10 @@ async fn download(client: &reqwest::Client, config: &AppConfig, deadline: Instan
         && failures
             .iter()
             .all(|item| item.class == FailureClass::DownloadTimeout);
+    let all_tls_failed = !failures.is_empty()
+        && failures
+            .iter()
+            .all(|item| item.class == FailureClass::TlsTimeout);
     let elapsed_ms = failures
         .iter()
         .filter_map(|item| item.duration_ms)
@@ -585,6 +593,8 @@ async fn download(client: &reqwest::Client, config: &AppConfig, deadline: Instan
         stage: TestStage::Download,
         class: if all_timed_out {
             FailureClass::DownloadTimeout
+        } else if all_tls_failed {
+            FailureClass::TlsTimeout
         } else {
             FailureClass::EndpointFailure
         },
@@ -645,23 +655,12 @@ async fn download_endpoint(
                     )
                 };
             }
-            Ok(Err(error)) if error.is_timeout() => {
-                return ProbeEvent {
-                    endpoint: Some(endpoint.to_owned()),
-                    ..event(
-                        TestStage::Download,
-                        FailureClass::DownloadTimeout,
-                        Some(started.elapsed()),
-                        serde_json::json!({"error":error.to_string()}),
-                    )
-                };
-            }
             Ok(Err(error)) => {
                 return ProbeEvent {
                     endpoint: Some(endpoint.to_owned()),
                     ..event(
                         TestStage::Download,
-                        FailureClass::EndpointFailure,
+                        classify_request_error(&error, FailureClass::DownloadTimeout),
                         Some(started.elapsed()),
                         serde_json::json!({"error":error.to_string()}),
                     )
@@ -747,6 +746,29 @@ fn remaining_budget(deadline: Instant) -> Option<Duration> {
     (!remaining.is_zero()).then_some(remaining)
 }
 
+/// reqwest keeps TLS failures behind a transport error rather than exposing a
+/// dedicated enum. Keep this deliberately narrow: ordinary HTTP/status and
+/// connect failures remain endpoint-inconclusive, while rustls' stable
+/// diagnostics identify a failed TLS tunnel.
+fn classify_request_error(error: &reqwest::Error, timeout: FailureClass) -> FailureClass {
+    if error.is_timeout() {
+        return timeout;
+    }
+    // Display intentionally redacts much of the nested rustls cause. Debug
+    // preserves the transport chain while still containing no proxy secret.
+    let message = format!("{error:?}").to_ascii_lowercase();
+    if message.contains("tls")
+        || message.contains("certificate")
+        || message.contains("corrupt message")
+        || message.contains("wrong version number")
+        || message.contains("invalidcontenttype")
+    {
+        FailureClass::TlsTimeout
+    } else {
+        FailureClass::EndpointFailure
+    }
+}
+
 fn probe_deadline(config: &AppConfig) -> Instant {
     Instant::now()
         + Duration::from_secs(
@@ -781,9 +803,170 @@ fn event(
 mod tests {
     use std::time::{Duration, Instant};
 
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
     use crate::config::AppConfig;
 
-    use super::{download_endpoints, http_endpoints, remaining_budget, resolve_destination};
+    use super::{
+        download_endpoints, http_endpoints, remaining_budget, resolve_destination,
+        test_through_xray,
+    };
+
+    #[derive(Clone, Copy)]
+    enum SocksBehavior {
+        SuccessHttp,
+        Stall,
+        CorruptTls,
+    }
+
+    async fn mock_socks(behavior: SocksBehavior) -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind SOCKS mock");
+        let port = listener.local_addr().expect("SOCKS address").port();
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("SOCKS client");
+            let mut greeting = [0_u8; 2];
+            stream
+                .read_exact(&mut greeting)
+                .await
+                .expect("SOCKS greeting");
+            let mut methods = vec![0_u8; greeting[1] as usize];
+            stream
+                .read_exact(&mut methods)
+                .await
+                .expect("SOCKS methods");
+            stream
+                .write_all(&[5, 0])
+                .await
+                .expect("SOCKS method response");
+            if matches!(behavior, SocksBehavior::Stall) {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                return;
+            }
+            let mut request = [0_u8; 4];
+            stream
+                .read_exact(&mut request)
+                .await
+                .expect("SOCKS request");
+            match request[3] {
+                1 => {
+                    let mut address = [0_u8; 6];
+                    stream.read_exact(&mut address).await.expect("IPv4 request");
+                }
+                4 => {
+                    let mut address = [0_u8; 18];
+                    stream.read_exact(&mut address).await.expect("IPv6 request");
+                }
+                3 => {
+                    let mut size = [0_u8; 1];
+                    stream.read_exact(&mut size).await.expect("domain size");
+                    let mut address = vec![0_u8; size[0] as usize + 2];
+                    stream
+                        .read_exact(&mut address)
+                        .await
+                        .expect("domain request");
+                }
+                atyp => panic!("unexpected SOCKS address type {atyp}"),
+            }
+            stream
+                .write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
+                .await
+                .expect("SOCKS connect response");
+            let mut payload = [0_u8; 1024];
+            let _ = stream.read(&mut payload).await.expect("proxied request");
+            match behavior {
+                SocksBehavior::SuccessHttp => stream
+                    .write_all(
+                        b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .await
+                    .expect("HTTP response"),
+                SocksBehavior::CorruptTls => stream
+                    .write_all(b"HTTP/1.1 200 Not TLS\r\nContent-Length: 0\r\n\r\n")
+                    .await
+                    .expect("corrupt TLS response"),
+                SocksBehavior::Stall => unreachable!(),
+            }
+        });
+        port
+    }
+
+    fn mock_config(endpoint: String) -> AppConfig {
+        let mut config = AppConfig::default();
+        config.health.test_url = endpoint;
+        config.health.fallback_urls.clear();
+        config.health.http_probe_max_endpoints = 1;
+        config.health.http_probe_success_quorum = 1;
+        config.download_test.enabled = false;
+        config.download_test.timeout_seconds = 1;
+        config
+    }
+
+    #[tokio::test]
+    async fn socks_http_mocks_cover_success_timeout_refusal_and_tls_failure() {
+        let success_port = mock_socks(SocksBehavior::SuccessHttp).await;
+        let events = test_through_xray(
+            success_port,
+            &mock_config("http://example.test/health".to_owned()),
+            Instant::now() + Duration::from_secs(2),
+            false,
+        )
+        .await;
+        assert!(events.iter().any(|event| {
+            event.stage == crate::domain::evidence::TestStage::Http
+                && event.class == crate::domain::failure::FailureClass::Success
+        }));
+
+        let timeout_port = mock_socks(SocksBehavior::Stall).await;
+        let timeout = test_through_xray(
+            timeout_port,
+            &mock_config("http://example.test/health".to_owned()),
+            Instant::now() + Duration::from_secs(2),
+            false,
+        )
+        .await;
+        assert_eq!(
+            timeout[0].class,
+            crate::domain::failure::FailureClass::RelayTimeout
+        );
+
+        let refused_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind refusal port");
+        let refused_port = refused_listener
+            .local_addr()
+            .expect("refusal address")
+            .port();
+        drop(refused_listener);
+        let refused = test_through_xray(
+            refused_port,
+            &mock_config("http://example.test/health".to_owned()),
+            Instant::now() + Duration::from_secs(2),
+            false,
+        )
+        .await;
+        assert_eq!(
+            refused[0].class,
+            crate::domain::failure::FailureClass::EndpointFailure
+        );
+
+        let tls_port = mock_socks(SocksBehavior::CorruptTls).await;
+        let tls = test_through_xray(
+            tls_port,
+            &mock_config("https://example.test/health".to_owned()),
+            Instant::now() + Duration::from_secs(2),
+            false,
+        )
+        .await;
+        assert_eq!(
+            tls[0].class,
+            crate::domain::failure::FailureClass::TlsTimeout
+        );
+    }
 
     #[test]
     fn global_budget_never_returns_a_non_positive_timeout() {
