@@ -79,6 +79,28 @@ These are local samples, not an internet-proxy throughput comparison. The
 repeatable command and the remaining comparison/soak work stay in the task
 list until a matching Python/corpus run exists.
 
+## Runtime-resource and test-throughput baseline
+
+On 2026-08-06, after the Rust service was healthy on the production database,
+the following bounded local sample was taken.  The sample uses Docker's cgroup
+statistics, `/proc/1/fd` in the container, and the append-only event count;
+it never reads or logs raw configurations.
+
+| Measure | Value |
+|---|---:|
+| CPU at sample end | 0.73% |
+| Resident memory at sample end | 472.2 MiB |
+| Container PIDs at sample end | 991 |
+| Open FDs at sample end | 262 |
+| Test events at 30-second window start | 28,452 |
+| Test events at 30-second window end | 28,472 |
+| Observed test-event throughput | 20 / 30 s (0.67 events/s) |
+
+The endpoint p50/p95 measurements in the preceding section are the API
+latency baseline for this same service generation.  This is intentionally a
+Rust-only baseline: Python parity, long soak, and a shared real-proxy corpus
+remain separate acceptance work.
+
 ## Isolated shadow rehearsal
 
 The Rust image was started against a SQLite backup in `data/shadow/app.db` on

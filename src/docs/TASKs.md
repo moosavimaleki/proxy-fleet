@@ -896,7 +896,7 @@ fieldهای جدید node:
 - [x] schema و row count دیتابیس فعلی ثبت شود.
 - [x] نمونهٔ response تمام APIها ذخیره شود.
 - [x] صفحه‌ها و actionهای فعلی فهرست و smoke شوند.
-- [ ] CPU/RAM/FD/process/API latency و test throughput baseline ثبت شود.
+- [x] CPU/RAM/FD/process/API latency و test throughput baseline ثبت شود.
 - [ ] fixtureهای parser از configهای واقعی و بدون secret ساخته شوند.
 - [x] لینک‌های subscription و format فعلی snapshot شوند.
 
