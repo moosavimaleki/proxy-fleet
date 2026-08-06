@@ -497,7 +497,7 @@ mod tests {
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
-    use crate::{app::AppState, config::AppConfig, storage::Store};
+    use crate::{app::AppState, config::AppConfig, parser::parse_share_url, storage::Store};
 
     async fn test_router() -> (tempfile::TempDir, axum::Router) {
         let temp = tempfile::tempdir().expect("tempdir");
@@ -511,6 +511,48 @@ mod tests {
             tokio_util::sync::CancellationToken::new(),
         );
         (temp, super::router(state))
+    }
+
+    #[tokio::test]
+    async fn nodes_endpoint_keeps_legacy_pagination_without_exposing_credentials() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("store");
+        store.migrate().await.expect("migrate");
+        let proxy = parse_share_url(
+            "vless://123e4567-e89b-12d3-a456-426614174000:secret@example.com:443?security=tls#display",
+            "fixture",
+        )
+        .expect("proxy");
+        store.ingest_proxy(&proxy, 1).await.expect("ingest");
+        let state = AppState::new(
+            Arc::new(AppConfig::default()),
+            store,
+            tokio_util::sync::CancellationToken::new(),
+        );
+        let response = super::router(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/nodes?page=1&page_size=1")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert!(response.status().is_success());
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes();
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("JSON");
+        assert_eq!(payload["page"], 1);
+        assert_eq!(payload["pagination"]["page_size"], 1);
+        assert!(payload.get("filtered_total").is_some());
+        assert_eq!(payload["nodes"].as_array().expect("nodes").len(), 1);
+        assert!(payload["nodes"][0].get("raw_config").is_none());
     }
 
     #[tokio::test]
