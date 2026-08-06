@@ -847,4 +847,31 @@ mod tests {
         assert!(body["error"]["message"].is_string());
         assert!(body["error"].get("details").is_some());
     }
+
+    #[tokio::test]
+    async fn health_stays_responsive_while_sqlite_writer_is_locked() {
+        let (_temp, store, app) = test_router_with_store().await;
+        let mut connection = store.pool().acquire().await.expect("connection");
+        sqlx::query("BEGIN EXCLUSIVE")
+            .execute(&mut *connection)
+            .await
+            .expect("exclusive writer lock");
+        let response = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            app.oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            ),
+        )
+        .await
+        .expect("health must not wait for SQLite writer")
+        .expect("health response");
+        assert_eq!(response.status(), StatusCode::OK);
+        sqlx::query("ROLLBACK")
+            .execute(&mut *connection)
+            .await
+            .expect("release writer lock");
+    }
 }
