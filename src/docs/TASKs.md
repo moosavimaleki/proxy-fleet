@@ -1007,7 +1007,7 @@ fieldهای جدید node:
 
 - [ ] کد Python فقط بعد از پایان rollback window archive/remove شود.
 - [x] schema، config، API و runbook مستند شوند.
-- [ ] backupهای موقت طبق policy پاک شوند.
+- [x] backupهای موقت طبق policy پاک شوند.
 - [ ] benchmark نهایی و تفاوت الگوریتم ثبت شود.
 
 ## 28. rollback

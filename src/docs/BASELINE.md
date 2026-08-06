@@ -87,4 +87,6 @@ integrity checks with the same `6937` node and `19118` legacy-history counts.
 The shadow used independent Xray ranges, ran one bounded test worker, and
 completed an upstream ingestion/test cycle while its publisher endpoint
 reported `enabled: false`. It was then stopped and removed; the production
-container remained healthy throughout.
+container remained healthy throughout. The copied shadow DB and its WAL/SHM
+files were removed after this successful rehearsal; the named pre-Rust rollback
+snapshot remains retained separately.
