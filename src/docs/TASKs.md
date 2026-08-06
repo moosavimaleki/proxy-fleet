@@ -869,7 +869,7 @@ fieldهای جدید node:
 - [ ] هیچ full-table scan در scheduler tick عادی وجود نداشته باشد.
 - [x] API list با pagination در اندازهٔ محدود باقی بماند.
 - [ ] یک writer کند SQLite کل HTTP server را block نکند.
-- [ ] تعداد process Xray از سقف config بالاتر نرود.
+- [x] تعداد process Xray از سقف config بالاتر نرود.
 - [ ] تعداد FD پس از چند چرخهٔ تست رشد دائمی نداشته باشد.
 - [ ] idle CPU/RAM از baseline Python بدتر نباشد و هدف کاهش محسوس باشد.
 - [ ] throughput تست با endpoint یکسان حداقل برابر نسخهٔ Python باشد.

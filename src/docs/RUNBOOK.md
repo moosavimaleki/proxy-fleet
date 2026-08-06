@@ -23,7 +23,8 @@ right diagnostic endpoint instead of downloading the whole node list.
 
 - `subscriptions`: upstream feeds and generation refresh interval;
 - `health` and `download_test`: staged test timeouts, evidence thresholds,
-  retry ranges and adaptive-concurrency bounds;
+  retry ranges, adaptive-concurrency bounds, and the independent
+  `health.max_active_runtimes` persistent-Xray process cap;
 - `ports` and `vip_port`: local Xray allocation and optional stable VIP port;
 - `network_guard`: global incident detector that pauses destructive work;
 - `publishing`: Git remote/branch and reconciliation timing;

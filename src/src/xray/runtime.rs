@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use chrono::{DateTime, Utc};
 use tokio::sync::Mutex;
@@ -27,6 +30,9 @@ struct VipRuntime {
 #[derive(Clone, Default)]
 pub struct RuntimeManager {
     inner: Arc<Mutex<HashMap<String, PersistentRuntime>>>,
+    /// Reservations include in-flight startups, so concurrent requests cannot
+    /// overshoot the configured long-lived Xray process cap.
+    starting: Arc<Mutex<HashSet<String>>>,
     vip: Arc<Mutex<Option<VipRuntime>>>,
 }
 
@@ -50,11 +56,32 @@ impl RuntimeManager {
             return Ok(port);
         }
         let proxy: ParsedProxy = parse_share_url(raw_config, "runtime")?;
-        let reservation = allocate_port(config.ports.main.start..=config.ports.main.end).await?;
-        let port = reservation.port();
-        let session =
-            XraySession::start_with_listen(&config.xray_bin, &proxy, reservation, "0.0.0.0")
-                .await?;
+        {
+            let mut starting = self.starting.lock().await;
+            if starting.contains(node_id) {
+                anyhow::bail!("runtime startup already in progress for {node_id}");
+            }
+            let active = self.inner.lock().await.len();
+            if active + starting.len() >= config.health.max_active_runtimes {
+                anyhow::bail!(
+                    "persistent Xray runtime cap ({}) reached",
+                    config.health.max_active_runtimes
+                );
+            }
+            starting.insert(node_id.to_owned());
+        }
+        let started = async {
+            let reservation =
+                allocate_port(config.ports.main.start..=config.ports.main.end).await?;
+            let port = reservation.port();
+            let session =
+                XraySession::start_with_listen(&config.xray_bin, &proxy, reservation, "0.0.0.0")
+                    .await?;
+            anyhow::Ok((port, session))
+        }
+        .await;
+        self.starting.lock().await.remove(node_id);
+        let (port, session) = started?;
         let mut runtimes = self.inner.lock().await;
         let existing_port = runtimes.get(node_id).map(|existing| existing.port);
         if let Some(port) = existing_port {
@@ -109,6 +136,10 @@ impl RuntimeManager {
 
     pub async fn active_count(&self) -> usize {
         self.inner.lock().await.len()
+    }
+
+    pub async fn starting_count(&self) -> usize {
+        self.starting.lock().await.len()
     }
 
     pub async fn vip_status(&self) -> Option<(String, f64, DateTime<Utc>)> {

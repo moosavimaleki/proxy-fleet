@@ -702,7 +702,9 @@ mod tests {
     #[tokio::test]
     async fn dashboard_mutation_actions_smoke_without_external_refresh() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let store = Store::connect(temp.path().join("fleet.db")).await.expect("store");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("store");
         store.migrate().await.expect("migrate");
         let proxy = parse_share_url(
             "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?security=tls#action-smoke",
@@ -725,25 +727,49 @@ mod tests {
         );
         // Exercise the no-overlap response rather than starting a real network
         // refresh from a unit test.
-        state.upstream_refresh_in_progress.store(true, Ordering::Release);
+        state
+            .upstream_refresh_in_progress
+            .store(true, Ordering::Release);
         let app = super::router(state);
         for (method, uri, expected) in [
             ("POST", format!("/api/v1/nodes/{id}/revive"), StatusCode::OK),
             ("POST", format!("/api/v1/nodes/{id}/test"), StatusCode::OK),
-            ("POST", "/api/v1/nodes/dead/clear".to_owned(), StatusCode::OK),
+            (
+                "POST",
+                "/api/v1/nodes/dead/clear".to_owned(),
+                StatusCode::OK,
+            ),
             ("POST", "/api/v1/db/cleanup".to_owned(), StatusCode::OK),
-            ("POST", "/api/v1/subscriptions/reload".to_owned(), StatusCode::ACCEPTED),
+            (
+                "POST",
+                "/api/v1/subscriptions/reload".to_owned(),
+                StatusCode::ACCEPTED,
+            ),
         ] {
-            let response = app.clone().oneshot(
-                Request::builder().method(method).uri(uri).body(Body::empty()).unwrap(),
-            ).await.expect("action response");
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("action response");
             assert_eq!(response.status(), expected);
         }
-        let response = app.oneshot(
-            Request::builder().method("POST").uri("/api/v1/best")
-                .header("content-type", "application/json")
-                .body(Body::from(r#"{"client":"smoke-client"}"#)).unwrap(),
-        ).await.expect("best response");
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/best")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"client":"smoke-client"}"#))
+                    .unwrap(),
+            )
+            .await
+            .expect("best response");
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 

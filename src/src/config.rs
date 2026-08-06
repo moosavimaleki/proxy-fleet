@@ -133,6 +133,10 @@ impl AppConfig {
             "adaptive concurrency ranges must be positive and ordered"
         );
         anyhow::ensure!(
+            self.health.max_active_runtimes > 0,
+            "health.max_active_runtimes must be positive"
+        );
+        anyhow::ensure!(
             self.health.http_probe_max_endpoints > 0,
             "health.http_probe_max_endpoints must be positive"
         );
@@ -320,6 +324,7 @@ fn known_keys(path: &str) -> Option<&'static [&'static str]> {
             "candidate_batch_timeout_seconds",
             "xray_concurrency_min",
             "xray_concurrency_max",
+            "max_active_runtimes",
             "download_concurrency_min",
             "download_concurrency_max",
             "recent_success_retention_hours",
@@ -544,6 +549,9 @@ pub struct HealthConfig {
     pub candidate_batch_timeout_seconds: u64,
     pub xray_concurrency_min: usize,
     pub xray_concurrency_max: usize,
+    /// Hard process budget for long-lived ACTIVE Xray runtimes. Test batches
+    /// have their independent `xray_concurrency_max` budget.
+    pub max_active_runtimes: usize,
     pub download_concurrency_min: usize,
     pub download_concurrency_max: usize,
     pub recent_success_retention_hours: u64,
@@ -584,6 +592,7 @@ impl Default for HealthConfig {
             candidate_batch_timeout_seconds: 20,
             xray_concurrency_min: 4,
             xray_concurrency_max: 16,
+            max_active_runtimes: 128,
             download_concurrency_min: 2,
             download_concurrency_max: 8,
             recent_success_retention_hours: 24,

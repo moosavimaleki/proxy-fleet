@@ -68,6 +68,8 @@ health:
   # Independent AIMD bounds for batch-Xray processes and expensive downloads.
   xray_concurrency_min: 4
   xray_concurrency_max: 16
+  # Bounds persistent ACTIVE Xray processes independently of test batches.
+  max_active_runtimes: 128
   download_concurrency_min: 2
   download_concurrency_max: 8
   # A successful real download keeps a config eligible for the public feed for 24 hours.
