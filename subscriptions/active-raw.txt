@@ -68,6 +68,5 @@ vless://97ea73b6-2043-4238-903c-a1e3d4a43c96@104.27.66.214:2087?path=/download.p
 vless://97ea73b6-2043-4238-903c-a1e3d4a43c96@172.67.74.10:2087?path=/download.php&security=tls&encryption=none&insecure=0&host=amphetamine.adaspoloandco.com&fp=chrome&type=ws&allowInsecure=0&sni=amphetamine.adaspoloandco.com#@tootffarangi🍓-10
 vless://1ee1f28d-4975-4d7c-95c7-76172c20eed5@p01.parsi.sbs:2086?type=ws&headerType=none&host=parsi.parsi.sbs&path=/#🇮🇷IR-🚀@VPNine1
 vless://3c763d51-928f-456d-8f16-062285b8abcb@95.214.63.147:48097?security=&encryption=none&headerType=none&type=tcp#@meliproxyy
-ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpUV0c3SjFLUjVLc1BhVjVxWkkrcmlldWVLeHhhZlpTcENI@45.77.232.213:15675#🇦🇺 Join+Telegram:@Farah_VPN 🇦🇺
 vless://859a537b-09cf-4bce-8da4-ecbb72950e3a@159.195.22.155:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=2.oncloudnineservicestreang.com&fp=chrome&pbk=Mg3ZxHNUFbX96q1HpS3WReeM7rnhEsXXtlEzxALeTDc&sid=d8d3dc6c3ca45dd4&type=tcp&headerType=none#🇩🇪 Join+Telegram:@Farah_VPN 🇩🇪
 vless://78eddd19-4fd4-461e-ad75-efd8cd44e0d0@i.cloud--vpn.site:80?encryption=none&security=none&type=ws&host=cldomain.global.ssl.fastly.net&path=/#@filembad
