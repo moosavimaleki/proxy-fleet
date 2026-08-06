@@ -47,3 +47,19 @@ the live smoke check. Full action coverage remains a separate task.
   `subscriptions/active.txt` and `subscriptions/active-raw.txt` on the main
   branch. The raw feed was reachable during this snapshot and contained 119
   unique leased configurations.
+
+## Migration and multi-cycle runtime evidence
+
+The retained pre-Rust SQLite snapshot
+`data/app.db.bak-before-rust-20260805-130812` passed `PRAGMA integrity_check`.
+On 2026-08-06, its legacy `nodes` / `test_history` counts were `2281` /
+`19118`. The live migrated database also passed integrity checking and had
+`6937` / `19118`; legacy history was preserved while later complete upstream
+generations added nodes. Rust-added event, source, assignment and system-event
+tables are present in the live database.
+
+After a Rust recreate, seven scheduler ticks ran in the first 40 seconds. The
+diagnostics response exposed bounded queue depths, 4 Xray test slots, 2
+download slots, 88 owned child processes and 280 open FDs; the publisher
+reported a successful changed commit/push. Structured probe logs contained the
+component, proxy id, run id, stage and failure class fields.

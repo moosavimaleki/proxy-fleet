@@ -994,12 +994,12 @@ fieldهای جدید node:
 ### فاز 11: cutover امن
 
 - [ ] publisher موقتاً pause شود.
-- [ ] backup سازگار دیتابیس گرفته شود.
+- [x] backup سازگار دیتابیس گرفته شود.
 - [x] container Python متوقف ولی image آن نگه داشته شود.
 - [x] container Rust روی DB واقعی migration و start شود.
 - [x] health/API/UI/Xray/VIP/subscription smoke شوند.
 - [x] اولین publish فقط بعد از snapshot معتبر انجام شود.
-- [ ] metrics و logها در چند چرخه بررسی شوند.
+- [x] metrics و logها در چند چرخه بررسی شوند.
 
 معیار خروج: سرویس Rust تنها writer و publisher فعال است.
 
@@ -1069,7 +1069,7 @@ fieldهای جدید node:
 
 - [x] تمام parity itemها پاس شده باشند.
 - [ ] تمام قواعد `ALGORITHM.md` تست خودکار داشته باشند.
-- [ ] دیتابیس واقعی کپی‌شده بدون حذف داده مهاجرت کرده باشد.
+- [x] دیتابیس واقعی کپی‌شده بدون حذف داده مهاجرت کرده باشد.
 - [x] ACTIVE با یک failure گذرا از انتشار حذف نشود.
 - [x] INVALID و RETIRED اشتباهاً منتشر نشوند.
 - [x] DORMANTها طبق backoff دوباره فرصت بگیرند.
