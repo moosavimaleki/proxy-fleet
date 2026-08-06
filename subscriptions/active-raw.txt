@@ -13,7 +13,6 @@ vless://2af30aff-de7a-44b9-b929-158081b4f3e6@45.144.174.171:40149?encryption=non
 ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206YU1WQ0J2eHVyY3VLNG9Cd2JUeURkaGRiYm44YTRzTkhwTXJKVmZnbVZ0TT06SnJiRWh0bE5tR1A0VEpVMVdpSjN5eGZnM1Rmb1JIdm1IOGwyK2dDb1R4cz0@78.47.35.178:50667#@filembad
 vless://SoonTeam@ge.imsoon.org:2443?mode=auto&path=/x0netBot&security=reality&encryption=none&extra={"mode":"auto","xPaddingBytes":"100-1000"}&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&fp=chrome&spx=/446d13373223738&type=xhttp&sni=weatherunderground.com&sid=32ac365b183c88#@meliproxyy
 vless://01a95af3-a2f6-453e-9f88-b2fc011627cc@92.114.24.119:43630?security=none&encryption=none&headerType=none&type=tcp#✅ t.me/bigAVPN ایران آزاد 👑
-vless://507c8b98-35f5-4c8b-8d8c-c46d14b84a9d@I.cloud--vpn.site:443?mode=auto&path=/&security=tls&alpn=h2&encryption=none&insecure=0&host=aducate.studio&fp=chrome&type=xhttp&allowInsecure=0&sni=ssl.fastly.com#Tel: @VEGAAS_VPN
 trojan://humanity@104.18.152.225:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#3
 trojan://humanity@104.18.152.246:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#@Filtershekan_channel |2
 vless://1b25e81f-98d6-4c69-b9db-3df6c58a7500@rhn.codmaxx.ir:8181?encryption=none&type=ws&security=tls&path=live&host=vip.dokhtaroune.ir&sni=vip.dokhtaroune.ir&insecure=1&allowInsecure=1#🇮🇷134896 | ⚡️Telegram = t.me/SOSkeyNET
