@@ -1,6 +1,7 @@
 # Reproducible Rust build; the runtime image deliberately contains only the
 # fleet binary, Xray, Git/SSH and diagnostics required by the service.
 ARG RUNTIME_BASE=runtime-network
+ARG XRAY_VERSION=26.3.27
 FROM rust:1.85-bookworm AS builder
 
 WORKDIR /build
@@ -11,7 +12,7 @@ COPY src/assets ./assets
 RUN cargo build --release --locked
 
 FROM debian:bookworm-slim AS runtime-network
-ENV XRAY_VERSION=26.7.11
+ARG XRAY_VERSION
 
 # Debian's default HTTP mirror is routinely blocked or intercepted on Iranian
 # networks.  Force HTTPS before the first index fetch; this is deterministic
@@ -35,8 +36,10 @@ FROM src-config-orchestrator:latest AS runtime-cached
 # compose on this host because BuildKit cannot reach Debian mirrors, while the
 # existing production image already contains curl, git, SQLite and Xray.
 FROM ${RUNTIME_BASE} AS runtime
+ARG XRAY_VERSION
 
-RUN groupadd --gid 1000 app \
+RUN /usr/local/bin/xray version | grep -F "Xray ${XRAY_VERSION}" \
+    && groupadd --gid 1000 app \
     && useradd --uid 1000 --gid app --create-home --shell /usr/sbin/nologin app \
     && install -d -o app -g app -m 0700 /home/app/.ssh
 

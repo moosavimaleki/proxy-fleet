@@ -881,7 +881,7 @@ fieldهای جدید node:
   - builder رسمی Rust برای compile؛
   - runtime slim با CA، curl، git/ssh، SQLite runtime tools و Xray.
 - [x] binary به‌صورت release و stripped ساخته شود.
-- [ ] Xray version در build pin یا checksum-verified باشد؛ latest بدون checksum پذیرفته نشود.
+- [x] Xray version در build pin یا checksum-verified باشد؛ latest بدون checksum پذیرفته نشود.
 - [x] compose فعلی host network، nofile، volumeها، SSH mount و healthcheck را حفظ کند.
 - [x] container name و API port فعلی حفظ شود.
 - [x] user داخل container تا حد ممکن non-root باشد؛ نیازهای Xray/port بررسی شود.
