@@ -62,7 +62,20 @@ impl AppConfig {
     fn log_migration_report(&self) {
         let retired_snapshot_setting = self.publishing.retained_snapshots.is_some();
         let requested_prune = self.subscriptions.prune_missing_after_cycles;
+        let converted_keys = if requested_prune < 3 {
+            "subscriptions.prune_missing_after_cycles→subscriptions.complete_generations_before_retire=3"
+        } else {
+            "subscriptions.prune_missing_after_cycles→subscriptions.complete_generations_before_retire"
+        };
+        let deprecated_keys = if retired_snapshot_setting {
+            "publishing.retained_snapshots"
+        } else {
+            "none"
+        };
         info!(
+            preserved_keys = "subscriptions.urls,subscriptions.refresh_interval_seconds,selection,client_penalty,vip_port,ports,network_guard,publishing.remote",
+            converted_keys,
+            deprecated_keys,
             subscriptions = self.subscriptions.urls.len(),
             refresh_seconds = self.subscriptions.refresh_interval_seconds,
             requested_prune_cycles = requested_prune,

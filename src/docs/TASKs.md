@@ -798,7 +798,7 @@ fieldهای جدید node:
 - [x] `network_guard` فعلی بدون تغییر اولیه load شود و سپس ورودی global incident detector باشد.
 - [x] weightهای `selection`، cooldownهای client، VIP port و port rangeهای فعلی حفظ شوند.
 - [x] remote فعلی `git@github.com:moosavimaleki/proxy-fleet.git` از config خوانده شود؛ داخل binary ثابت نباشد.
-- [ ] config migration report در startup دقیقاً نشان دهد کدام key حفظ، تبدیل یا منسوخ شده است.
+- [x] config migration report در startup دقیقاً نشان دهد کدام key حفظ، تبدیل یا منسوخ شده است.
 
 ## 23. observability
 
