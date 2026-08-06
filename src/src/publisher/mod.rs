@@ -236,7 +236,107 @@ async fn write_if_changed(path: &Path, bytes: &[u8]) -> anyhow::Result<bool> {
 
 #[cfg(test)]
 mod tests {
-    use super::write_if_changed;
+    use std::{path::Path, process::Command, time::Duration};
+
+    use crate::{
+        config::PublishingConfig,
+        domain::{evidence::TestStage, failure::FailureClass},
+        parser::parse_share_url,
+        storage::{Store, TestEventInput},
+    };
+
+    use super::{publish, push_with_rebase_retry, write_if_changed};
+
+    fn git(cwd: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("run git");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
+
+    fn init_remote(temp: &tempfile::TempDir) -> std::path::PathBuf {
+        let remote = temp.path().join("remote.git");
+        git(
+            temp.path(),
+            &[
+                "init",
+                "--bare",
+                "--initial-branch=main",
+                remote.to_str().expect("remote path"),
+            ],
+        );
+        let seed = temp.path().join("seed");
+        std::fs::create_dir(&seed).expect("seed directory");
+        git(&seed, &["init", "--initial-branch=main"]);
+        git(&seed, &["config", "user.name", "test"]);
+        git(&seed, &["config", "user.email", "test@example.test"]);
+        std::fs::create_dir_all(seed.join("subscriptions")).expect("subscriptions directory");
+        std::fs::write(seed.join("subscriptions/active.txt"), "\n").expect("seed encoded feed");
+        std::fs::write(seed.join("subscriptions/active-raw.txt"), "\n").expect("seed raw feed");
+        git(&seed, &["add", "."]);
+        git(&seed, &["commit", "-m", "seed"]);
+        git(
+            &seed,
+            &[
+                "remote",
+                "add",
+                "origin",
+                remote.to_str().expect("remote path"),
+            ],
+        );
+        git(&seed, &["push", "-u", "origin", "main"]);
+        remote
+    }
+
+    async fn publishable_store(temp: &tempfile::TempDir) -> (Store, String) {
+        let data = temp.path().join("data");
+        std::fs::create_dir_all(&data).expect("data directory");
+        let store = Store::connect(data.join("app.db")).await.expect("store");
+        store.migrate().await.expect("migration");
+        let proxy = parse_share_url(
+            "vless://123e4567-e89b-12d3-a456-426614174000@example.com:443?security=tls&sni=example.com#fixture",
+            "test",
+        )
+        .expect("proxy");
+        store.ingest_proxy(&proxy, 1).await.expect("ingest");
+        let id = sqlx::query_scalar::<_, String>("SELECT id FROM nodes WHERE config_hash = ?")
+            .bind(proxy.config_hash)
+            .fetch_one(store.pool())
+            .await
+            .expect("node id");
+        store
+            .apply_test_event(
+                TestEventInput {
+                    proxy_id: id,
+                    run_id: "download".to_owned(),
+                    stage: TestStage::Download,
+                    class: FailureClass::Success,
+                    fast_download: true,
+                    latency_ms: Some(10.0),
+                    download_bps: Some(1_000_000.0),
+                    bytes_transferred: Some(1_000_000),
+                    duration_ms: Some(1_000),
+                    endpoint: Some("https://example.test".to_owned()),
+                    system_pressure: Some(0.1),
+                    incident_id: None,
+                    detail_json: serde_json::json!({}),
+                },
+                Duration::from_secs(10),
+                Duration::from_secs(300),
+                Duration::from_secs(1_800),
+            )
+            .await
+            .expect("activation");
+        (store, data.join("app.db").to_string_lossy().to_string())
+    }
 
     #[tokio::test]
     async fn publisher_output_is_atomic_and_noops_for_identical_content() {
@@ -258,5 +358,85 @@ mod tests {
                 .expect("changed write")
         );
         assert_eq!(tokio::fs::read(output).await.expect("read"), b"two\n");
+    }
+
+    #[tokio::test]
+    async fn publisher_commits_pushes_changes_and_noops_on_identical_snapshot() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let remote = init_remote(&temp);
+        let (store, database_path) = publishable_store(&temp).await;
+        let config = PublishingConfig {
+            enabled: true,
+            git_remote: remote.to_string_lossy().to_string(),
+            ..PublishingConfig::default()
+        };
+        let first = publish(&store, &database_path, &config)
+            .await
+            .expect("first publication");
+        assert!(first.changed && first.committed && first.pushed);
+        let second = publish(&store, &database_path, &config)
+            .await
+            .expect("identical publication");
+        assert!(!second.changed && !second.committed && !second.pushed);
+        let raw = git(
+            temp.path(),
+            &[
+                "--git-dir",
+                remote.to_str().expect("remote path"),
+                "show",
+                "main:subscriptions/active-raw.txt",
+            ],
+        );
+        assert!(raw.starts_with("vless://"));
+    }
+
+    #[tokio::test]
+    async fn rejected_push_is_rebased_and_retried_without_resetting_publication() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let remote = init_remote(&temp);
+        let working = temp.path().join("working");
+        let concurrent = temp.path().join("concurrent");
+        git(
+            temp.path(),
+            &[
+                "clone",
+                remote.to_str().expect("remote path"),
+                working.to_str().expect("working path"),
+            ],
+        );
+        git(
+            temp.path(),
+            &[
+                "clone",
+                remote.to_str().expect("remote path"),
+                concurrent.to_str().expect("concurrent path"),
+            ],
+        );
+        for repo in [&working, &concurrent] {
+            git(repo, &["config", "user.name", "test"]);
+            git(repo, &["config", "user.email", "test@example.test"]);
+        }
+        std::fs::write(working.join("working.txt"), "publication\n").expect("working edit");
+        git(&working, &["add", "working.txt"]);
+        git(&working, &["commit", "-m", "publication"]);
+        std::fs::write(concurrent.join("concurrent.txt"), "concurrent\n").expect("concurrent edit");
+        git(&concurrent, &["add", "concurrent.txt"]);
+        git(&concurrent, &["commit", "-m", "concurrent"]);
+        git(&concurrent, &["push", "origin", "main"]);
+        push_with_rebase_retry(&working, "main")
+            .await
+            .expect("safe push retry");
+        for path in ["working.txt", "concurrent.txt"] {
+            let shown = git(
+                temp.path(),
+                &[
+                    "--git-dir",
+                    remote.to_str().expect("remote path"),
+                    "show",
+                    &format!("main:{path}"),
+                ],
+            );
+            assert!(!shown.is_empty(), "remote lost {path}");
+        }
     }
 }

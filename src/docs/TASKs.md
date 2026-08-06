@@ -841,7 +841,7 @@ fieldهای جدید node:
 - [x] Xray batch startup، recursive split و cleanup.
 - [x] process cancellation و نبود zombie.
 - [x] upstream complete/incomplete generation.
-- [ ] publisher no-op/change/push failure/retry.
+- [x] publisher no-op/change/push failure/retry.
 - [x] network incident بدون demotion.
 
 ### 24.4 end-to-end
