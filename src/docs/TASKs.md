@@ -893,12 +893,12 @@ fieldهای جدید node:
 
 ### فاز 0: baseline و freeze قراردادها
 
-- [ ] schema و row count دیتابیس فعلی ثبت شود.
+- [x] schema و row count دیتابیس فعلی ثبت شود.
 - [ ] نمونهٔ response تمام APIها ذخیره شود.
 - [ ] صفحه‌ها و actionهای فعلی فهرست و smoke شوند.
 - [ ] CPU/RAM/FD/process/API latency و test throughput baseline ثبت شود.
 - [ ] fixtureهای parser از configهای واقعی و بدون secret ساخته شوند.
-- [ ] لینک‌های subscription و format فعلی snapshot شوند.
+- [x] لینک‌های subscription و format فعلی snapshot شوند.
 
 معیار خروج: قرارداد رفتاری و performance baseline قابل‌تکرار است.
 
