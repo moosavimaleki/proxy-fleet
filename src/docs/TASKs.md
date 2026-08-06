@@ -350,28 +350,28 @@ src/
 
 ### 6.1 مرزهای معماری
 
-- [ ] parser هیچ دسترسی مستقیمی به SQLite یا Xray نداشته باشد.
-- [ ] health model تابع deterministic از evidence و زمان باشد.
-- [ ] scheduler فقط job انتخاب کند؛ اجرای probe در worker باشد.
-- [ ] probe نتیجهٔ خام تولید کند؛ classifier آن را به failure class تبدیل کند.
-- [ ] publisher فقط snapshot transactionally خوانده‌شده از proxyهای دارای lease معتبر را ببیند.
+- [x] parser هیچ دسترسی مستقیمی به SQLite یا Xray نداشته باشد.
+- [x] health model تابع deterministic از evidence و زمان باشد.
+- [x] scheduler فقط job انتخاب کند؛ اجرای probe در worker باشد.
+- [x] probe نتیجهٔ خام تولید کند؛ classifier آن را به failure class تبدیل کند.
+- [x] publisher فقط snapshot transactionally خوانده‌شده از proxyهای دارای lease معتبر را ببیند.
 - [ ] API مستقیماً business rule تغییر ندهد و از service layer استفاده کند.
-- [ ] processهای Xray owner مشخص، cancellation token و cleanup قطعی داشته باشند.
+- [x] processهای Xray owner مشخص، cancellation token و cleanup قطعی داشته باشند.
 
 ## 7. dependencyهای برنامه‌ریزی‌شده
 
-- [ ] `tokio`: runtime، signal، process، timer، channel و synchronization.
-- [ ] `axum` و `tower-http`: HTTP API، static assets، compression، timeout و trace.
-- [ ] `serde`، `serde_json` و `yaml_serde`: serialization و config.
-- [ ] `sqlx` با SQLite bundled: pool، migration و query.
-- [ ] `reqwest` با `rustls`، `stream` و `socks`: relay/HTTP/download.
-- [ ] `url`، `base64`، `uuid`، `regex`، `ipnet` و `sha2`: parser و identity.
-- [ ] `chrono` یا `time`: timestamp و duration؛ فقط یکی انتخاب شود.
-- [ ] `rand`: full-jitter و exploration.
-- [ ] `sysinfo`: pressure و process metrics.
-- [ ] `tracing` و `tracing-subscriber`: structured logs.
-- [ ] `thiserror`: خطاهای domain؛ `anyhow` فقط در application boundary.
-- [ ] `futures-util` و `tokio-util`: stream و cancellation token.
+- [x] `tokio`: runtime، signal، process، timer، channel و synchronization.
+- [x] `axum` و `tower-http`: HTTP API، static assets، compression، timeout و trace.
+- [x] `serde`، `serde_json` و `yaml_serde`: serialization و config.
+- [x] `sqlx` با SQLite bundled: pool، migration و query.
+- [x] `reqwest` با `rustls`، `stream` و `socks`: relay/HTTP/download.
+- [x] `url`، `base64`، `uuid` و `sha2`: parser و identity؛ `regex` و `ipnet` نیاز نشدند.
+- [x] `chrono`: timestamp و duration.
+- [x] `rand`: full-jitter و exploration.
+- [x] `sysinfo`: pressure و process metrics.
+- [x] `tracing` و `tracing-subscriber`: structured logs.
+- [x] `thiserror`: خطاهای domain؛ `anyhow` فقط در application boundary.
+- [x] `futures-util` و `tokio-util`: stream و cancellation token.
 - [ ] dependency اضافی فقط با دلیل و benchmark پذیرفته شود.
 
 ## 8. مهاجرت دیتابیس
