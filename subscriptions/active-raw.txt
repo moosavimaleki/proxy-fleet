@@ -24,6 +24,7 @@ vless://431fe973-a43a-4fac-bf83-2a772e0d0625@14.137.238.144:10000?#@filembad
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.218:8080#@VpnCostumer+|+بیا+تو+وصل+باش+💙
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.16.253.69:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&insecure=0&allowInsecure=0#@meliproxyy
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.212:8080#@Shh_Proxy-New⁴
+vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.141.83:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-22
 vless://8787dd0a-095a-414e-804f-a7d16a1ae166@138.124.244.77:8443?security=tls&encryption=none&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&flow=xtls-rprx-vision&sni=fi1.hys.braidx.tech#@meliproxyy
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.244:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771/?type=tcp&encryption=none&flow=#channel_@networld_vpn
@@ -34,8 +35,8 @@ vless://SoonTeam@ge.imsoon.org:443?security=reality&encryption=none&pbk=BZumLiR7
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.26.2.173:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-11
 trojan://QV31589740@great-krill.rooster465.autos:443?type=tcp&security=tls&sni=great-krill.rooster465.autos#🇫🇷134720 | ⚡️Telegram = t.me/SOSkeyNET
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.137.54:443?encryption=none&security=tls&sni=support.zoom.us.yxls.eu.cc&insecure=0&allowInsecure=0&type=ws&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi#✅  @vistav2ray  👈👈کانال ما ✅
-vless://4d10c997-4781-4cd9-82c3-15453523e12c@198.41.209.43:443?encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&security=tls&sni=support.zoom.us.yxls.eu.cc&type=ws#👁️‍🗨️28@SHAHSERVER1
 ss://YWVzLTI1Ni1nY206UmV4bkJnVTdFVjVBRHhH@156.244.32.9:7002#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
+vless://4d10c997-4781-4cd9-82c3-15453523e12c@198.41.209.43:443?encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&security=tls&sni=support.zoom.us.yxls.eu.cc&type=ws#👁️‍🗨️28@SHAHSERVER1
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@170.114.46.6:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@icv2ray
 trojan://MiTiVPN@199.232.78.21:443?type=ws&security=tls&path=/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/NL---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN&host=s2s-mitivpn--mitivpn--mitivpn-mitivpn---mitivpn.global.ssl.fastly.net&sni=ssl.fastly.com&alpn=http/1.1&fp=chrome&insecure=1&allowInsecure=1#🇺🇸134094 | ⚡️Telegram = t.me/SOSkeyNET
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.160:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
@@ -48,7 +49,6 @@ vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.38.105:443?path=/sg-melbi&s
 trojan://humanity@104.16.71.213:443?path=/assignment&security=tls&insecure=0&host=www.calmlunch.com&type=ws&allowInsecure=0&sni=www.calmlunch.com#@EXPRESSVPN_420
 vless://2af30aff-de7a-44b9-b929-158081b4f3e6@45.144.174.171:40149?encryption=none&type=raw&security=reality&sni=www.speedtest.org&fp=chrome&pbk=9rx7JwMO-KRZZEM9TQBO19BOAmmGjJyjN86ll2J7uVc&spx=/HesarW#• 🇭🇰 | 𝗛𝗼𝗻𝗴 𝗞𝗼𝗻𝗴 - @HesarWeb
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.87.240:443#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
-vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.141.83:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-22
 trojan://ND91608427@3.64.59.246:443?fp=chrome&sni=gentle-raptor.rooster465.autos#🤖100@oneclickvpnkeys
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@172.64.146.86:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&fp=chrome&insecure=0&allowInsecure=0#@meliproxyy
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.57:443#%FREE_VPN02
