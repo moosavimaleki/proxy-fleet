@@ -995,7 +995,7 @@ fieldهای جدید node:
 
 - [ ] publisher موقتاً pause شود.
 - [ ] backup سازگار دیتابیس گرفته شود.
-- [ ] container Python متوقف ولی image آن نگه داشته شود.
+- [x] container Python متوقف ولی image آن نگه داشته شود.
 - [x] container Rust روی DB واقعی migration و start شود.
 - [x] health/API/UI/Xray/VIP/subscription smoke شوند.
 - [x] اولین publish فقط بعد از snapshot معتبر انجام شود.
@@ -1012,12 +1012,12 @@ fieldهای جدید node:
 
 ## 28. rollback
 
-- [ ] image قبلی Python با tag immutable حفظ شود.
-- [ ] snapshot pre-migration دیتابیس تا پایان rollback window حفظ شود.
-- [ ] rollback script فقط این کارها را انجام دهد: توقف Rust، بازگردانی DB snapshot، اجرای image Python، health smoke.
+- [x] image قبلی Python با tag immutable حفظ شود.
+- [x] snapshot pre-migration دیتابیس تا پایان rollback window حفظ شود.
+- [x] rollback script فقط این کارها را انجام دهد: توقف Rust، بازگردانی DB snapshot، اجرای image Python، health smoke.
 - [ ] subscription فایل سالم قبلی تا اولین publish موفق Rust overwrite نشود.
-- [ ] اگر migration forward-only شد، rollback حتماً با snapshot باشد نه downgrade query خطرناک.
-- [ ] triggerهای rollback: migration inconsistency، data loss، process leak، publisher خراب، API contract break یا افت شدید throughput.
+- [x] اگر migration forward-only شد، rollback حتماً با snapshot باشد نه downgrade query خطرناک.
+- [x] triggerهای rollback: migration inconsistency، data loss، process leak، publisher خراب، API contract break یا افت شدید throughput.
 
 ## 29. ریسک‌ها و کنترل آن‌ها
 

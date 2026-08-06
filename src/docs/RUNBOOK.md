@@ -66,3 +66,10 @@ the agreed rollback window.  The publisher writes only a de-duplicated rolling
 three-snapshot union to `subscriptions/active.txt` and
 `subscriptions/active-raw.txt`; a valid previous subscription remains
 available until a newer valid snapshot is committed.
+
+`scripts/rollback-to-python.sh` stages the only supported restoration sequence:
+stop Rust, restore a named pre-Rust snapshot, start the immutable Python image,
+then health-smoke it.  It refuses to run without `--confirm` and the explicit
+snapshot path.  Roll back on migration inconsistency, verified data loss,
+process/port/FD leak, a broken publisher, an API contract break, or a severe
+measured throughput regression.
