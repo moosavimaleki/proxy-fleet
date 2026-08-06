@@ -220,6 +220,23 @@ pub async fn claim_due(
     lease: Duration,
     active_download_interval: Duration,
 ) -> anyhow::Result<Vec<TestJob>> {
+    claim_due_with_pressure(
+        store,
+        capacity,
+        lease,
+        active_download_interval,
+        system_pressure(),
+    )
+    .await
+}
+
+async fn claim_due_with_pressure(
+    store: &Store,
+    capacity: usize,
+    lease: Duration,
+    active_download_interval: Duration,
+    pressure: f64,
+) -> anyhow::Result<Vec<TestJob>> {
     let capacity = capacity.max(1);
     let now = Utc::now();
     let mut debt = QueueDebt::from_value(store.scheduler_state("quota_debt").await?);
@@ -242,6 +259,7 @@ pub async fn claim_due(
                     now,
                     lease,
                     active_download_interval,
+                    pressure,
                 },
             )
             .await?;
@@ -360,6 +378,7 @@ struct ClaimParams<'a> {
     now: DateTime<Utc>,
     lease: Duration,
     active_download_interval: Duration,
+    pressure: f64,
 }
 
 async fn append_claims(
@@ -381,7 +400,7 @@ async fn append_claims(
         "(CASE WHEN lifecycle_state = 'WAITING_FOR_PORT' THEN waiting_from_state ELSE lifecycle_state END) = ?"
     };
     let sql = format!(
-        "SELECT id, raw_config, {effective_state} AS effective_state, last_real_download_at FROM nodes WHERE {state_clause} AND structurally_valid = 1 AND (next_test_at IS NULL OR next_test_at <= ?) AND (test_lease_until IS NULL OR test_lease_until <= ?) ORDER BY CASE WHEN publication_lease_until IS NOT NULL AND publication_lease_until <= ? THEN 100 ELSE 0 END + CASE WHEN last_real_download_at IS NOT NULL THEN 80 ELSE 0 END + CASE WHEN last_failure_class = 'TLS_TIMEOUT' THEN 50 ELSE 0 END + CASE WHEN last_test_at IS NULL OR last_test_at <= ? THEN 40 ELSE 0 END + CASE WHEN last_seen_generation IS NOT NULL THEN 30 ELSE 0 END - CASE WHEN last_real_download_at IS NULL AND failure_streak >= 5 THEN 80 ELSE 0 END DESC, next_test_at ASC LIMIT ?"
+        "SELECT id, raw_config, {effective_state} AS effective_state, last_real_download_at FROM nodes WHERE {state_clause} AND structurally_valid = 1 AND (next_test_at IS NULL OR next_test_at <= ?) AND (test_lease_until IS NULL OR test_lease_until <= ?) ORDER BY CASE WHEN publication_lease_until IS NOT NULL AND publication_lease_until <= ? THEN 100 ELSE 0 END + CASE WHEN last_real_download_at IS NOT NULL THEN 80 ELSE 0 END + CASE WHEN last_failure_class = 'TLS_TIMEOUT' THEN 50 ELSE 0 END + CASE WHEN last_test_at IS NULL OR last_test_at <= ? THEN 40 ELSE 0 END + CASE WHEN last_seen_generation IS NOT NULL THEN 30 ELSE 0 END - CASE WHEN last_real_download_at IS NULL AND failure_streak >= 5 THEN 80 ELSE 0 END - CASE WHEN ? >= 0.75 AND last_real_download_at IS NULL THEN 100 ELSE 0 END DESC, ((unicode(substr(config_hash, 1, 1)) * 31 + unicode(substr(config_hash, 2, 1))) % 17) ASC, config_hash ASC, next_test_at ASC LIMIT ?"
     );
     let mut query = sqlx::query(&sql);
     if !params.state.is_empty() {
@@ -393,6 +412,7 @@ async fn append_claims(
         .bind(params.now.to_rfc3339())
         .bind((params.now + Duration::hours(1)).to_rfc3339())
         .bind(stale.to_rfc3339())
+        .bind(params.pressure.clamp(0.0, 1.0))
         .bind(remaining as i64)
         .fetch_all(store.pool())
         .await?;
@@ -429,7 +449,9 @@ mod tests {
         probe::{ProbeEvent, ProbeReport},
     };
 
-    use super::{QueueDebt, QueueQuota, claim_due, is_mass_failure, system_metrics};
+    use super::{
+        QueueDebt, QueueQuota, claim_due, claim_due_with_pressure, is_mass_failure, system_metrics,
+    };
     use crate::storage::Store;
 
     fn report(class: FailureClass) -> ProbeReport {
@@ -542,5 +564,45 @@ mod tests {
         .await
         .expect("claim");
         assert!(jobs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn high_pressure_demotes_heavy_work_with_a_deterministic_tie_breaker() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = Store::connect(temp.path().join("fleet.db"))
+            .await
+            .expect("connect");
+        store.migrate().await.expect("migrate");
+        let now = chrono::Utc::now();
+        for (id, hash, lease, download) in [
+            ("heavy", "aa-heavy", Some(now), None),
+            ("cheap", "bb-cheap", None, Some(now)),
+        ] {
+            sqlx::query("INSERT INTO nodes(id, config_hash, raw_config, normalized_config, source_subs, status, lifecycle_state, structurally_valid, health_alpha, health_beta, health_score, created_at, updated_at, next_test_at, publication_lease_until, last_real_download_at) VALUES (?, ?, 'vless://demo', '{}', '[]', 'CANDIDATE', 'CANDIDATE', 1, 1, 1, 0.5, ?, ?, ?, ?, ?)")
+                .bind(id).bind(hash).bind(now.to_rfc3339()).bind(now.to_rfc3339()).bind((now - chrono::Duration::seconds(1)).to_rfc3339()).bind(lease.map(|value| value.to_rfc3339())).bind(download.map(|value| value.to_rfc3339()))
+                .execute(store.pool()).await.expect("fixture node");
+        }
+        let low = claim_due_with_pressure(
+            &store,
+            1,
+            chrono::Duration::seconds(30),
+            chrono::Duration::minutes(5),
+            0.1,
+        )
+        .await
+        .expect("low pressure claim");
+        assert_eq!(low[0].id, "heavy");
+        sqlx::query("UPDATE nodes SET lifecycle_state = 'CANDIDATE', status = 'CANDIDATE', testing_from_state = NULL, test_lease_until = NULL WHERE id = 'heavy'")
+            .execute(store.pool()).await.expect("release first claim");
+        let high = claim_due_with_pressure(
+            &store,
+            1,
+            chrono::Duration::seconds(30),
+            chrono::Duration::minutes(5),
+            0.9,
+        )
+        .await
+        .expect("high pressure claim");
+        assert_eq!(high[0].id, "cheap");
     }
 }

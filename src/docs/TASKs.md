@@ -563,8 +563,8 @@ leaseهای پیش‌فرض:
 - [x] مدت زیادی تست نشده: `+40`.
 - [x] در upstream جدید دیده شده: `+30`.
 - [x] هرگز موفق نشده و failure زیاد دارد: `-80`.
-- [ ] pressure بالای سیستم: job سنگین `-100`.
-- [ ] tie-breaker deterministic با مقدار کوچک jitter باشد.
+- [x] pressure بالای سیستم: job سنگین `-100`.
+- [x] tie-breaker deterministic با مقدار کوچک jitter باشد.
 
 ### 12.3 circuit breaker و full jitter
 
