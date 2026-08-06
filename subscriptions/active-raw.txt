@@ -22,8 +22,8 @@ trojan://MiTiVPN@151.101.56.7:443?path=/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@Mi
 vless://431fe973-a43a-4fac-bf83-2a772e0d0625@14.137.238.144:10000?#@filembad
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.87.240:443#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.141.83:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-22
-trojan://ND91608427@3.64.59.246:443?fp=chrome&sni=gentle-raptor.rooster465.autos#🤖100@oneclickvpnkeys
 trojan://ND91608427@13.36.175.151:443?security=tls&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&sni=classic-gator.rooster465.autos#@hex_proxy ³
+trojan://ND91608427@3.64.59.246:443?fp=chrome&sni=gentle-raptor.rooster465.autos#🤖100@oneclickvpnkeys
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771/?type=tcp&encryption=none&flow=#channel_@networld_vpn
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@51.91.251.198:443?encryption=none&type=ws&security=tls&path=/sg-melbi&host=support.zoom.us.yxls.eu.cc&sni=support.zoom.us.yxls.eu.cc&fp=chrome&insecure=0&allowInsecure=0#@EVAY_VPN 7
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.2.228:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-7
@@ -34,8 +34,8 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.218:8
 trojan://humanity@104.16.174.121:443?security=tls&sni=www.ignitelimit.com&allowinsecure=0&type=ws&host=www.ignitelimit.com&path=/assignment#🇩🇪All³ | @BigSmoke_Config
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.212:8080#@Shh_Proxy-New⁴
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@198.41.209.43:443?encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&security=tls&sni=support.zoom.us.yxls.eu.cc&type=ws#👁️‍🗨️28@SHAHSERVER1
-ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5dHFoTWRJclRrZ1E0NlB2aHlBdE1I@92.112.126.90:443#@filembad
 ss://YWVzLTI1Ni1nY206UmV4bkJnVTdFVjVBRHhH@156.244.32.9:7002#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5dHFoTWRJclRrZ1E0NlB2aHlBdE1I@92.112.126.90:443#@filembad
 vless://SoonTeam@ge.imsoon.org:443?security=reality&encryption=none&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&headerType=none&fp=chrome&spx=/446d13373223738&type=tcp&sni=wunderstation.com&sid=6636#@vmesskhodam
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.26.2.173:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-11
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.244:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
@@ -50,8 +50,8 @@ ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.236:443#@V2rayi_net
 trojan://MiTiVPN@199.232.78.21:443?type=ws&security=tls&path=/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/NL---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN&host=s2s-mitivpn--mitivpn--mitivpn-mitivpn---mitivpn.global.ssl.fastly.net&sni=ssl.fastly.com&alpn=http/1.1&fp=chrome&insecure=1&allowInsecure=1#🇺🇸134094 | ⚡️Telegram = t.me/SOSkeyNET
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.17.147.118:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-19
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.162:443#@Iran_v2ray1
-vless://78eddd19-4fd4-461e-ad75-efd8cd44e0d0@i.cloud--vpn.site:80?encryption=none&security=none&type=ws&host=cldomain.global.ssl.fastly.net&path=/#@filembad
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.20.39.109:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@hex_proxy ³
+vless://78eddd19-4fd4-461e-ad75-efd8cd44e0d0@i.cloud--vpn.site:80?encryption=none&security=none&type=ws&host=cldomain.global.ssl.fastly.net&path=/#@filembad
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFdkxmV0dlMEFLdks=@70.39.198.35:54166#@Alpha_v2rayIP
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@108.162.198.201:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@Unblocked_ir⭐️چنل تلگرام
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@162.159.38.105:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@tootffarangi🍓-8
@@ -87,8 +87,8 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpUbVhTcGNSQmJodkhEZzY2Ym8ydzg5YlRveFFzYk1vYQ=
 vless://1b25e81f-98d6-4c69-b9db-3df6c58a7500@rhn.codmaxx.ir:8484?encryption=none&type=ws&security=tls&path=live&host=vip.dokhtaroune.ir&sni=vip.dokhtaroune.ir&insecure=1&allowInsecure=1#🇮🇷IR-🚀@VPNine1
 trojan://humanity@2.144.21.112:40443?host=www.ignitelimit.com&path=/assignment&sni=www.ignitelimit.com&type=ws#🇮🇷133803 | ⚡️Telegram = t.me/SOSkeyNET
 trojan://ND91608427@15.237.49.244:443?fp=chrome&sni=star-kiwi.rooster465.autos#💫34@oneclickvpnkeys
-ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.3:8080#@Ap_Ir6
 vless://@MAconnectt@interchange.proxy.rlwy.net:40904?mode=auto&path=/&security=reality&encryption=none&extra={"mode":"auto","xPaddingBytes":"100-1000"}&pbk=Db-jocGNp1JEGSESSw52u37-6-eC2LRwyBMigrKwSSY&fp=chrome&spx=/&type=xhttp&sni=is1-ssl.mzstatic.com&sid=1393fbc2#@MAconnectt
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.3:8080#@Ap_Ir6
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.17.147.118:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#@icv2ray
 vless://SoonTeam@ge.imsoon.org:8443?mode=gun&security=reality&encryption=none&pbk=BZumLiR7Rg4gs5wa7yntqC5fyZV9Dr8ZpeoAUN5BOxQ&fp=chrome&spx=/446d13373223738&type=grpc&sni=wxug.com&sid=ce77fcf457#@FarazV2ray
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.205:8080#@hex_proxy ⁶
