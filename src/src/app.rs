@@ -221,7 +221,12 @@ impl AppState {
                             (runtime.xray_concurrency, runtime.download_concurrency, runtime.network_incident)
                         };
                         if pressure >= 0.90 || incident { continue; }
-                        let jobs = match crate::scheduler::claim_due(&state.store, concurrency, chrono::Duration::seconds(state.config.health.candidate_batch_timeout_seconds as i64)).await {
+                        let jobs = match crate::scheduler::claim_due(
+                            &state.store,
+                            concurrency,
+                            chrono::Duration::seconds(state.config.health.candidate_batch_timeout_seconds as i64),
+                            chrono::Duration::seconds(state.config.health.active_pool_download_check_interval_seconds as i64),
+                        ).await {
                             Ok(jobs) => jobs,
                             Err(error) => { warn!(%error, "scheduler claim failed"); continue; }
                         };
@@ -234,7 +239,7 @@ impl AppState {
                         // The batch owns one Xray process with routed SOCKS inbounds.  It
                         // recursively isolates startup failures, then permits only a small
                         // number of bounded downloads through that batch.
-                        let reports = crate::probe::test_batch(jobs.into_iter().map(|job| (job.id, job.raw_config)).collect(), "scheduler", &config, download_concurrency).await;
+                        let reports = crate::probe::test_batch(jobs.into_iter().map(|job| (job.id, job.raw_config, job.download_due)).collect(), "scheduler", &config, download_concurrency).await;
                         let mass_failure = crate::scheduler::is_mass_failure(
                             &reports,
                             config.network_guard.mass_failure_threshold_percent,
@@ -277,7 +282,11 @@ impl AppState {
                                     crate::domain::failure::FailureClass::EndpointFailure
                                 } else { probe_event.class };
                                 let event = crate::storage::TestEventInput { proxy_id: node_id.clone(), run_id: run_id.clone(), stage: probe_event.stage, class, fast_download: probe_event.fast_download, latency_ms: probe_event.latency_ms, download_bps: probe_event.download_bps, bytes_transferred: probe_event.bytes_transferred, duration_ms: probe_event.duration_ms, endpoint: probe_event.endpoint, system_pressure: Some(crate::scheduler::system_pressure()), incident_id: incident_id.clone(), detail_json: probe_event.detail };
-                                if let Err(error) = store.apply_test_event(event, Duration::from_secs(config.health.active_pool_download_check_interval_seconds)).await { warn!(node = %node_id, %error, "could not persist test event"); }
+                                if let Err(error) = store.apply_test_event(
+                                    event,
+                                    Duration::from_secs(config.health.active_pool_relay_check_interval_seconds),
+                                    Duration::from_secs(config.health.active_pool_download_check_interval_seconds),
+                                ).await { warn!(node = %node_id, %error, "could not persist test event"); }
                             }
                             if real_download_success {
                                 if let Some(raw_config) = raw_configs.get(&node_id) {

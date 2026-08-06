@@ -13,9 +13,9 @@
 - [x] migration افزایشی SQLite، backup پیش از اولین migration، WAL/busy timeout و نگاشت `DEAD → DORMANT` / `REMOVED → RETIRED`.
 - [x] parser و identity مستقل از remark برای VMess/VLESS/Trojan/SS/SOCKS، شامل SS SIP002.
 - [x] refresh generation با fetch bounded، ETag/Last-Modified، dedup و ingest تراکنشی انبوه؛ `304` membership generation را حفظ می‌کند.
-- [x] event append-only، Beta/decay، lifecycle hysteresis، publication lease و full-jitter.
+- [x] event append-only، Beta/decay با horizon/cap محدود برای جلوگیری از over-confidence، lifecycle hysteresis، publication lease و full-jitter.
 - [x] cascade Stage 0–4 و Xray batch با split بازگشتی هنگام startup failure؛ download با primary/fallback mirror و budget مشترک اجرا می‌شود تا خرابی mirror evidence منفی کاذب نسازد.
-- [x] scheduler queue-based، lease اتمی، AIMD جدا برای Xray/download و revalidation ACTIVE.
+- [x] scheduler queue-based، lease اتمی، AIMD جدا برای Xray/download و revalidation ACTIVE؛ ACTIVEها بین downloadهای موعددار فقط cascade سبک relay/HTTP می‌گیرند.
 - [x] network sentinel، guard شکست هم‌بستهٔ یک batch (ثبت incident و evidence inconclusive)، selection/feedback circuit و runtime/VIP پایه.
 - [x] routeهای HTTP سازگار، publisher Git lease-based و Docker multi-stage Rust؛ image محلی build و container healthy است.
 - [x] migration افزایشی روی `app.db` واقعی پس از backup سازگار، سپس startup reconciliation برای runtimeهای ACTIVE و smoke واقعی `/best`.

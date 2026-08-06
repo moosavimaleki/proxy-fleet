@@ -13,6 +13,10 @@ pub struct TestJob {
     pub raw_config: String,
     pub lifecycle_state: String,
     pub reason: String,
+    /// ACTIVE runtimes get cheap relay/HTTP observations frequently. A real
+    /// download is reserved for their slower revalidation cadence; every
+    /// other lifecycle still needs a real download to become ACTIVE.
+    pub download_due: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -150,6 +154,7 @@ pub async fn claim_due(
     store: &Store,
     capacity: usize,
     lease: Duration,
+    active_download_interval: Duration,
 ) -> anyhow::Result<Vec<TestJob>> {
     let capacity = capacity.max(1);
     let now = Utc::now();
@@ -172,6 +177,7 @@ pub async fn claim_due(
                     reason,
                     now,
                     lease,
+                    active_download_interval,
                 },
             )
             .await?;
@@ -240,6 +246,7 @@ struct ClaimParams<'a> {
     reason: &'a str,
     now: DateTime<Utc>,
     lease: Duration,
+    active_download_interval: Duration,
 }
 
 async fn append_claims(
@@ -258,7 +265,7 @@ async fn append_claims(
         "lifecycle_state = ?"
     };
     let sql = format!(
-        "SELECT id, raw_config, lifecycle_state FROM nodes WHERE {state_clause} AND structurally_valid = 1 AND (next_test_at IS NULL OR next_test_at <= ?) AND (test_lease_until IS NULL OR test_lease_until <= ?) ORDER BY CASE WHEN publication_lease_until IS NOT NULL AND publication_lease_until <= ? THEN 100 ELSE 0 END + CASE WHEN last_real_download_at IS NOT NULL THEN 80 ELSE 0 END + CASE WHEN last_failure_class = 'TLS_TIMEOUT' THEN 50 ELSE 0 END + CASE WHEN last_test_at IS NULL OR last_test_at <= ? THEN 40 ELSE 0 END + CASE WHEN last_seen_generation IS NOT NULL THEN 30 ELSE 0 END - CASE WHEN last_real_download_at IS NULL AND failure_streak >= 5 THEN 80 ELSE 0 END DESC, next_test_at ASC LIMIT ?"
+        "SELECT id, raw_config, lifecycle_state, last_real_download_at FROM nodes WHERE {state_clause} AND structurally_valid = 1 AND (next_test_at IS NULL OR next_test_at <= ?) AND (test_lease_until IS NULL OR test_lease_until <= ?) ORDER BY CASE WHEN publication_lease_until IS NOT NULL AND publication_lease_until <= ? THEN 100 ELSE 0 END + CASE WHEN last_real_download_at IS NOT NULL THEN 80 ELSE 0 END + CASE WHEN last_failure_class = 'TLS_TIMEOUT' THEN 50 ELSE 0 END + CASE WHEN last_test_at IS NULL OR last_test_at <= ? THEN 40 ELSE 0 END + CASE WHEN last_seen_generation IS NOT NULL THEN 30 ELSE 0 END - CASE WHEN last_real_download_at IS NULL AND failure_streak >= 5 THEN 80 ELSE 0 END DESC, next_test_at ASC LIMIT ?"
     );
     let mut query = sqlx::query(&sql);
     if !params.state.is_empty() {
@@ -279,10 +286,19 @@ async fn append_claims(
         let update = sqlx::query("UPDATE nodes SET testing_from_state = lifecycle_state, lifecycle_state = 'TESTING', status = 'TESTING', test_lease_until = ?, updated_at = ? WHERE id = ? AND (test_lease_until IS NULL OR test_lease_until <= ?)")
             .bind(lease_until.to_rfc3339()).bind(params.now.to_rfc3339()).bind(&id).bind(params.now.to_rfc3339()).execute(store.pool()).await?;
         if update.rows_affected() == 1 {
+            let lifecycle_state: String = row.get("lifecycle_state");
+            let last_download = row
+                .get::<Option<String>, _>("last_real_download_at")
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(&value).ok())
+                .map(|value| value.with_timezone(&Utc));
             jobs.push(TestJob {
                 id,
                 raw_config: row.get("raw_config"),
-                lifecycle_state: row.get("lifecycle_state"),
+                download_due: lifecycle_state != "ACTIVE"
+                    || last_download
+                        .map(|at| at + params.active_download_interval <= params.now)
+                        .unwrap_or(true),
+                lifecycle_state,
                 reason: params.reason.to_owned(),
             });
         }

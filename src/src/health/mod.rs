@@ -35,6 +35,7 @@ pub struct HealthInput {
     pub class: FailureClass,
     pub fast_download: bool,
     pub now: DateTime<Utc>,
+    pub active_relay_interval: Duration,
     pub active_download_interval: Duration,
 }
 
@@ -101,7 +102,10 @@ pub fn decide(input: HealthInput) -> HealthDecision {
     };
     let next_test_at = if succeeded {
         match lifecycle {
-            LifecycleState::Active => input.now + input.active_download_interval,
+            LifecycleState::Active if input.stage == TestStage::Download => {
+                input.now + input.active_download_interval
+            }
+            LifecycleState::Active => input.now + input.active_relay_interval,
             LifecycleState::Probation => input.now + Duration::minutes(15),
             LifecycleState::Dormant => input.now + Duration::hours(6),
             _ => input.now + Duration::minutes(5),
@@ -157,6 +161,7 @@ mod tests {
             class,
             fast_download: true,
             now: Utc::now(),
+            active_relay_interval: Duration::seconds(10),
             active_download_interval: Duration::minutes(5),
         }
     }
@@ -223,5 +228,18 @@ mod tests {
         assert_eq!(result.failure_streak, 4);
         assert_eq!(result.independent_failures, 3);
         assert!(result.lease_until.is_some());
+    }
+
+    #[test]
+    fn active_relay_revalidation_does_not_wait_for_the_download_interval() {
+        let mut relay = input(
+            LifecycleState::Active,
+            TestStage::Relay,
+            FailureClass::Success,
+        );
+        relay.active_relay_interval = Duration::seconds(11);
+        relay.active_download_interval = Duration::minutes(5);
+        let now = relay.now;
+        assert_eq!(decide(relay).next_test_at, now + Duration::seconds(11));
     }
 }

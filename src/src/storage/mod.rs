@@ -103,6 +103,13 @@ pub struct RuntimeCandidate {
     pub raw_config: String,
 }
 
+// Health is an estimate of current behaviour, not an ever-growing lifetime
+// counter.  These bounds prevent a busy, long-running ACTIVE node from
+// becoming mathematically impossible to demote after a real outage.
+const MAX_EFFECTIVE_ALPHA: f64 = 24.0;
+const MAX_EFFECTIVE_BETA: f64 = 64.0;
+const MAX_EVIDENCE_EVENTS_PER_NODE: i64 = 512;
+
 impl Store {
     pub async fn connect(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref();
@@ -468,6 +475,7 @@ impl Store {
     pub async fn apply_test_event(
         &self,
         event: TestEventInput,
+        active_relay_interval: std::time::Duration,
         active_download_interval: std::time::Duration,
     ) -> anyhow::Result<TestEventApplied> {
         let now = Utc::now();
@@ -530,8 +538,8 @@ impl Store {
             .bind(&event.proxy_id).bind(&event.run_id).bind(now.to_rfc3339()).bind(event.stage.as_str()).bind(result).bind(event.class.as_str())
             .bind(contribution.alpha).bind(contribution.beta).bind(contribution.half_life.num_seconds() as f64).bind(event.latency_ms).bind(event.download_bps).bind(event.bytes_transferred).bind(event.duration_ms).bind(&event.endpoint).bind(event.system_pressure).bind(&event.incident_id).bind(detail.to_string())
             .execute(&mut *transaction).await?;
-        let evidence = sqlx::query("SELECT occurred_at, evidence_alpha, evidence_beta, half_life_seconds FROM proxy_test_events WHERE proxy_id = ? AND occurred_at >= ?")
-            .bind(&event.proxy_id).bind((now - chrono::Duration::days(30)).to_rfc3339()).fetch_all(&mut *transaction).await?;
+        let evidence = sqlx::query("SELECT occurred_at, evidence_alpha, evidence_beta, half_life_seconds FROM proxy_test_events WHERE proxy_id = ? AND occurred_at >= ? ORDER BY occurred_at DESC, id DESC LIMIT ?")
+            .bind(&event.proxy_id).bind((now - chrono::Duration::days(30)).to_rfc3339()).bind(MAX_EVIDENCE_EVENTS_PER_NODE).fetch_all(&mut *transaction).await?;
         let (alpha, beta) = evidence.iter().fold((1.0, 1.0), |(alpha, beta), row| {
             let occurred = parse_time(row.get("occurred_at")).unwrap_or(now);
             let half_life =
@@ -551,6 +559,8 @@ impl Store {
                 ),
             )
         });
+        let alpha = alpha.min(MAX_EFFECTIVE_ALPHA);
+        let beta = beta.min(MAX_EFFECTIVE_BETA);
         let prior_lease = parse_time(row.get("publication_lease_until"));
         let activated_at = parse_time(row.get("activated_at"));
         let input = HealthInput {
@@ -580,6 +590,8 @@ impl Store {
             class: event.class,
             fast_download: event.fast_download,
             now,
+            active_relay_interval: chrono::Duration::from_std(active_relay_interval)
+                .unwrap_or_else(|_| chrono::Duration::seconds(10)),
             active_download_interval: chrono::Duration::from_std(active_download_interval)
                 .unwrap_or_else(|_| chrono::Duration::minutes(5)),
         };
@@ -1446,6 +1458,7 @@ mod tests {
         let first = store
             .apply_test_event(
                 event(&id, "one-run", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
             )
             .await
@@ -1453,6 +1466,7 @@ mod tests {
         let second = store
             .apply_test_event(
                 event(&id, "one-run", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
             )
             .await
@@ -1468,11 +1482,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn frequent_successes_do_not_make_health_evidence_unbounded() {
+        let (_temp, store, id) = test_store().await;
+        for run in 0..40 {
+            store
+                .apply_test_event(
+                    event(
+                        &id,
+                        &format!("relay-{run}"),
+                        TestStage::Relay,
+                        FailureClass::Success,
+                    ),
+                    std::time::Duration::from_secs(10),
+                    std::time::Duration::from_secs(300),
+                )
+                .await
+                .expect("relay success");
+        }
+        let alpha = sqlx::query_scalar::<_, f64>("SELECT health_alpha FROM nodes WHERE id = ?")
+            .bind(id)
+            .fetch_one(store.pool())
+            .await
+            .expect("alpha");
+        assert!(alpha <= MAX_EFFECTIVE_ALPHA);
+    }
+
+    #[tokio::test]
     async fn endpoint_incident_does_not_demote_or_shorten_an_active_lease() {
         let (_temp, store, id) = test_store().await;
         let active = store
             .apply_test_event(
                 event(&id, "download", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
             )
             .await
@@ -1485,6 +1526,7 @@ mod tests {
                     TestStage::Http,
                     FailureClass::EndpointFailure,
                 ),
+                std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
             )
             .await
@@ -1540,6 +1582,7 @@ mod tests {
         store
             .apply_test_event(
                 event(&id, "download", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
             )
             .await
@@ -1555,6 +1598,7 @@ mod tests {
         store
             .apply_test_event(
                 event(&id, "download", TestStage::Download, FailureClass::Success),
+                std::time::Duration::from_secs(10),
                 std::time::Duration::from_secs(300),
             )
             .await

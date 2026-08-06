@@ -80,7 +80,7 @@ pub async fn test(raw_config: &str, source: &str, config: &AppConfig) -> ProbeRe
             };
         }
     };
-    let events = test_through_xray(socks_port, config, deadline).await;
+    let events = test_through_xray(socks_port, config, deadline, true).await;
     session.stop().await;
     ProbeReport {
         proxy: Some(proxy),
@@ -93,13 +93,13 @@ pub async fn test(raw_config: &str, source: &str, config: &AppConfig) -> ProbeRe
 /// dead.  The cheap preflight remains per-proxy and happens before Xray is
 /// allocated.
 pub async fn test_batch(
-    configs: Vec<(String, String)>,
+    configs: Vec<(String, String, bool)>,
     source: &str,
     config: &AppConfig,
     download_concurrency: usize,
 ) -> Vec<(String, ProbeReport)> {
     let source = source.to_owned();
-    let preflight_results = stream::iter(configs.into_iter().map(|(id, raw)| {
+    let preflight_results = stream::iter(configs.into_iter().map(|(id, raw, download_due)| {
         let source = source.clone();
         async move {
             let deadline = probe_deadline(config);
@@ -124,7 +124,7 @@ pub async fn test_batch(
                     )],
                 },
             };
-            (id, report, deadline)
+            (id, report, deadline, download_due)
         }
     }))
     .buffer_unordered(download_concurrency.max(1).saturating_mul(2))
@@ -133,10 +133,10 @@ pub async fn test_batch(
 
     let mut results = std::collections::BTreeMap::<String, ProbeReport>::new();
     let mut survivors = Vec::new();
-    for (id, report, deadline) in preflight_results {
+    for (id, report, deadline, download_due) in preflight_results {
         if let Some(proxy) = report.proxy.clone() {
             if report.events.is_empty() {
-                survivors.push((id.clone(), proxy, deadline));
+                survivors.push((id.clone(), proxy, deadline, download_due));
             }
         }
         results.insert(id, report);
@@ -241,7 +241,7 @@ async fn preflight(
 }
 
 async fn test_survivor_batch(
-    survivors: Vec<(String, ParsedProxy, Instant)>,
+    survivors: Vec<(String, ParsedProxy, Instant, bool)>,
     config: &AppConfig,
     download_concurrency: usize,
 ) -> Vec<(String, Vec<ProbeEvent>)> {
@@ -258,7 +258,7 @@ async fn test_survivor_batch(
         Err(error) => {
             return survivors
                 .into_iter()
-                .map(|(id, _, _)| {
+                .map(|(id, _, _, _)| {
                     (
                         id,
                         vec![event(
@@ -274,7 +274,7 @@ async fn test_survivor_batch(
     };
     let proxies: Vec<_> = survivors
         .iter()
-        .map(|(_, proxy, _)| proxy.clone())
+        .map(|(_, proxy, _, _)| proxy.clone())
         .collect();
     let ports: Vec<_> = reservations
         .iter()
@@ -283,8 +283,11 @@ async fn test_survivor_batch(
     match XrayBatchSession::start(&config.xray_bin, &proxies, reservations).await {
         Ok(mut session) => {
             let results = stream::iter(survivors.into_iter().zip(ports).map(
-                |((id, _, deadline), port)| async move {
-                    (id, test_through_xray(port, config, deadline).await)
+                |((id, _, deadline, download_due), port)| async move {
+                    (
+                        id,
+                        test_through_xray(port, config, deadline, download_due).await,
+                    )
                 },
             ))
             .buffer_unordered(download_concurrency.max(1))
@@ -327,6 +330,7 @@ async fn test_through_xray(
     socks_port: u16,
     config: &AppConfig,
     deadline: Instant,
+    run_download: bool,
 ) -> Vec<ProbeEvent> {
     let client = match reqwest::Client::builder()
         .proxy(
@@ -386,7 +390,7 @@ async fn test_through_xray(
                     endpoint: Some(endpoint.clone()),
                     detail: serde_json::json!({"status":response.status().as_u16()}),
                 });
-                if config.download_test.enabled {
+                if config.download_test.enabled && run_download {
                     events.push(download(&client, config, deadline).await);
                 }
                 return events;
