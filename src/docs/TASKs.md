@@ -382,8 +382,8 @@ src/
 - [x] migrationها idempotent و داخل transaction باشند.
 - [x] WAL، busy timeout و foreign key فعال شوند.
 - [x] pool نوشتن کوچک و bounded باشد تا writer contention ایجاد نشود.
-- [ ] تاریخچهٔ فعلی حدود ۷۰۰ مگابایت کپی یا rewrite نشود.
-- [ ] هیچ node id، config hash، feedback، assignment یا usage حذف نشود.
+- [x] تاریخچهٔ فعلی حدود ۷۰۰ مگابایت کپی یا rewrite نشود.
+- [x] هیچ node id، config hash، feedback، assignment یا usage حذف نشود.
 - [x] schema version و binary version ثبت شود.
 
 ### 8.2 تغییرات جدول `nodes`
