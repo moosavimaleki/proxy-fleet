@@ -48,6 +48,10 @@ Node listings clamp `page_size` to 1–200 and never include raw credentials in
 their summary response.  Retrieve a single config only through the explicit
 node-config endpoint when operationally necessary.
 
+Sanitized representative JSON payloads live at
+`src/tests/fixtures/api-response-samples.json`; contract tests retain legacy
+keys and reject accidental credential exposure.
+
 ## Database, backups and rollback
 
 SQLite migrations are forward-only and run before background workers start.

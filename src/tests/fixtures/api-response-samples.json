@@ -1,0 +1,14 @@
+{
+  "health": {"status": "ok", "service": "config-orchestrator", "version": "0.1.0", "counts": {}},
+  "nodes": {"nodes": [], "page": 1, "page_size": 50, "pagination": {"page": 1, "page_size": 50, "total": 0}, "filtered_total": 0},
+  "scheduler": {"runtime": {"scheduler_ticks": 0, "open_fds": 0, "child_processes": 0}, "policy": {"new": 40, "successful_probation": 30, "recoverable_dormant": 20, "exploration": 10}, "snapshot": {"queues": []}},
+  "network": {"enabled": true, "status": "HEALTHY", "message": "baseline pending"},
+  "vip": {"enabled": true, "running": false, "port": 5050, "node_id": null, "score": null},
+  "upstream": {"latest": null, "sources": []},
+  "publisher": {"enabled": true, "status": null},
+  "clients": {"clients": []},
+  "logs": {"logs": []},
+  "manual_import": {"ok": true, "accepted": 1, "rejected": 0, "inserted": 1, "errors": []},
+  "scheduled_node_test": {"ok": true, "node_id": "sanitized-node-id", "scheduled": true},
+  "error": {"error": {"code": "INVALID_CLIENT", "message": "request validation failed", "details": {}}}
+}
