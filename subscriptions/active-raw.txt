@@ -27,3 +27,4 @@ vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.230.163:62145?&type=tcp&hea
 vless://14c44521-e28f-4561-a12c-337d8cc44d87@104.27.66.214:443?security=tls&type=xhttp&path=/TiMbErSaW&host=beaver.paxr.ir&alpn=h3,h2,http/1.1&sni=beaver.paxr.ir&fp=chrome&mode=auto&extra={"xPaddingBytes":"100-1000"}&encryption=none#🔵@chillguy_vpn
 vless://33a31dc6-6bbc-46c0-9685-fb5e327d3c7d@152.233.43.71:443?encryption=none&flow=xtls-rprx-vision&type=tcp&security=reality&sni=api-maps.yandex.ru&pbk=DaQjKlJbC2ksBaItYb0fjt1xkIcxRh_STIQ4rkrydjY&sid=7db44191&fp=chrome#🔵@chillguy_vpn
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.226.67:62145?&packet-encoding=xudp&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
+vless://22448df3-17f8-40a6-9199-babaca108b46@95.85.251.116:59631?encryption=none&fp=&pbk=bymilcd_vnDoof7qAq4QpFTm-hMeFPZwXPTMFXdasSg&security=reality&sid=4b&sni=google.com&type=grpc#🧅62@oneclickvpnkeys
