@@ -20,3 +20,4 @@ trojan://MiTiVPN@104.254.140.62:443?type=ws&security=tls&path=/---@MiTiVPN---@Mi
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.230.163:62145?&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
 vless://01a95af3-a2f6-453e-9f88-b2fc011627cc@92.114.24.95:43630?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&security=none&encryption=none&headerType=none&type=tcp#@GozargahAzad|🇮🇷
 vless://22448df3-17f8-40a6-9199-babaca108b46@95.85.251.116:59631?encryption=none&fp=&pbk=bymilcd_vnDoof7qAq4QpFTm-hMeFPZwXPTMFXdasSg&security=reality&sid=4b&sni=google.com&type=grpc#🧅62@oneclickvpnkeys
+vless://9b44bfb4-9d28-4870-9fc3-5154d6d462ff@147.45.253.97:4100?path=/v1&security=none&encryption=none&host=live.ok.ru&type=ws#@v2rayng3
