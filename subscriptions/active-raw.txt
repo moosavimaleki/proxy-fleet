@@ -25,6 +25,6 @@ trojan://MiTiVPN@104.254.140.62:443?type=ws&security=tls&path=/---@MiTiVPN---@Mi
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.230.163:62145?&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
 vless://14c44521-e28f-4561-a12c-337d8cc44d87@104.27.66.214:443?security=tls&type=xhttp&path=/TiMbErSaW&host=beaver.paxr.ir&alpn=h3,h2,http/1.1&sni=beaver.paxr.ir&fp=chrome&mode=auto&extra={"xPaddingBytes":"100-1000"}&encryption=none#🔵@chillguy_vpn
 vless://33a31dc6-6bbc-46c0-9685-fb5e327d3c7d@152.233.43.71:443?encryption=none&flow=xtls-rprx-vision&type=tcp&security=reality&sni=api-maps.yandex.ru&pbk=DaQjKlJbC2ksBaItYb0fjt1xkIcxRh_STIQ4rkrydjY&sid=7db44191&fp=chrome#🔵@chillguy_vpn
-vless://112912a9-cedf-485d-b8ed-d8f8d4774437@31.129.96.186:2200/?type=ws&encryption=none&flow=&path=/v1#🧅33@oneclickvpnkeys
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.226.67:62145?&packet-encoding=xudp&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
+vless://112912a9-cedf-485d-b8ed-d8f8d4774437@31.129.96.186:2200/?type=ws&encryption=none&flow=&path=/v1#🧅33@oneclickvpnkeys
 vless://0865df7d-77da-40c0-b16a-6df47a779005@dyar3.javanrooo.ir:443?security=&encryption=none&headerType=none&type=tcp#🇩🇪136719 | ⚡️Telegram = t.me/SOSkeyNET
