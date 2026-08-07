@@ -27,7 +27,6 @@ vless://14c44521-e28f-4561-a12c-337d8cc44d87@104.27.66.214:443?security=tls&type
 vless://33a31dc6-6bbc-46c0-9685-fb5e327d3c7d@152.233.43.71:443?encryption=none&flow=xtls-rprx-vision&type=tcp&security=reality&sni=api-maps.yandex.ru&pbk=DaQjKlJbC2ksBaItYb0fjt1xkIcxRh_STIQ4rkrydjY&sid=7db44191&fp=chrome#🔵@chillguy_vpn
 vless://859a537b-09cf-4bce-8da4-ecbb72950e3a@159.195.44.159:443/?type=tcp&encryption=none&flow=xtls-rprx-vision&sni=5.oncloudnineservicestreang.com&security=reality&pbk=RurLbpOTStqCjS3lhwB0d3MEZ3629j3atv_r1dT5zjM&sid=273940fba6ad8250#channel_@networld_vpn
 vless://7e8f7489-e65f-4be6-93ed-867a74ec6759@95.85.228.161:8443?mode=gun&security=none&encryption=none&type=grpc&serviceName=grpc#@FarazV2ray
-ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.243:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 vless://112912a9-cedf-485d-b8ed-d8f8d4774437@31.129.96.186:2200/?type=ws&encryption=none&flow=&path=/v1#🧅33@oneclickvpnkeys
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.226.67:62145?&packet-encoding=xudp&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
 vless://0865df7d-77da-40c0-b16a-6df47a779005@dyar3.javanrooo.ir:443?security=&encryption=none&headerType=none&type=tcp#🇩🇪136719 | ⚡️Telegram = t.me/SOSkeyNET
