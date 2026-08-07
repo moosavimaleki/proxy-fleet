@@ -16,8 +16,8 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA
 vless://01a95af3-a2f6-453e-9f88-b2fc011627cc@92.114.24.95:43630?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&security=none&encryption=none&headerType=none&type=tcp#@GozargahAzad|🇮🇷
 vless://22448df3-17f8-40a6-9199-babaca108b46@95.85.251.116:59631?encryption=none&fp=&pbk=bymilcd_vnDoof7qAq4QpFTm-hMeFPZwXPTMFXdasSg&security=reality&sid=4b&sni=google.com&type=grpc#🧅62@oneclickvpnkeys
 vless://59525c39-e731-4c27-bc9e-6d8cef67572c@72.56.247.70:2200?path=/v1&security=none&encryption=none&host=rzd.ru&type=ws#@erfanandroid
+vless://9b44bfb4-9d28-4870-9fc3-5154d6d462ff@147.45.253.97:4100?path=/v1&security=none&encryption=none&host=live.ok.ru&type=ws#@v2rayng3
 vless://60ba3369-9a78-40fe-98c3-233a6f107043@143.246.182.7:443?path=/assets/build/_app/immutable/chunks/stream-one/&security=tls&alpn=h2,http/1.1&encryption=none&insecure=0&host=uk7.jailever.org&fp=chrome&type=xhttp&allowInsecure=0&sni=uk7.jailever.org#@Capoit
 vless://7e8f7489-e65f-4be6-93ed-867a74ec6759@95.85.228.161:8443?mode=gun&security=none&encryption=none&authority=BIA_TELEGRAM@TOOTFFARANGI_TOOTFFARANGI_TOOTFFARANGI&type=grpc&serviceName=grpc#@filembad
 trojan://MiTiVPN@104.254.140.62:443?type=ws&security=tls&path=/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/dde---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN&host=Dde1-mehrosaboran--mehrosaboran--mehrosaboran---mehrosaboran.kingnetwork.ir&sni=ddp-mehrosaboran--mehrosaboran--mehrosaboran.kingnetwork.ir&alpn=http/1.1&fp=chrome&insecure=0&allowInsecure=0#@mehrosaboran
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.230.163:62145?&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
-vless://9b44bfb4-9d28-4870-9fc3-5154d6d462ff@147.45.253.97:4100?path=/v1&security=none&encryption=none&host=live.ok.ru&type=ws#@v2rayng3
