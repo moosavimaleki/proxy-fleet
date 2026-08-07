@@ -34,3 +34,4 @@ vless://7e8f7489-e65f-4be6-93ed-867a74ec6759@95.85.228.161:8443?mode=gun&securit
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.243:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206UXkwc2JrRWxINTRuKzdDekxZSzJreG1ZelhobFc1dWU1cEwvRWJpbkpycz06MlE0blNwT0JWSG5VbE5rWE5IWkJxN3JMZDhud0dsV2I0WGQ1WEYvSm9iND0@65.109.208.236:21871#none
 vless://112912a9-cedf-485d-b8ed-d8f8d4774437@31.129.96.186:2200/?type=ws&encryption=none&flow=&path=/v1#🧅33@oneclickvpnkeys
+vless://0865df7d-77da-40c0-b16a-6df47a779005@dyar3.javanrooo.ir:443?security=&encryption=none&headerType=none&type=tcp#🇩🇪136719 | ⚡️Telegram = t.me/SOSkeyNET
