@@ -28,8 +28,8 @@ ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.243:443#🇺🇸 Join+Telegram:@
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA1YzQ@r3mrcg00129437x.cybervena.com:50099#🇹🇼 Join+Telegram:@Farah_VPN 🇹🇼
 trojan://humanity@104.19.229.21:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#@Filtershekan_channel |3
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA1YzQ@36.224.147.65:50099#@ShadowProxy66 🇹🇼
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpCTlh0ZTI3ekJ5dU52VHNR@20.223.129.129:443#@filembad
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.208.150:62145?packet-encoding=xudp&type=tcp&headerType=none&path=/#🇨🇴CO-🚀@VPNine1
 ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206UXkwc2JrRWxINTRuKzdDekxZSzJreG1ZelhobFc1dWU1cEwvRWJpbkpycz06MlE0blNwT0JWSG5VbE5rWE5IWkJxN3JMZDhud0dsV2I0WGQ1WEYvSm9iND0@65.109.208.236:21871#none
 vless://166ef05e-8ab5-43b7-8910-d1bb0a4326a5@188.72.103.3:443?path=/api/v1/rooms/63368e3dbb/sync&security=tls&encryption=none&insecure=0&host=sync.watchwave.link&fp=chrome&type=ws&allowInsecure=0&sni=cdn.tracker.yandex.net#🧅6@ConfigV2RayNG
-ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpCTlh0ZTI3ekJ5dU52VHNR@20.223.129.129:443#@filembad
 vless://59525c39-e731-4c27-bc9e-6d8cef67572c@72.56.247.70:2200?path=/v1&security=none&encryption=none&host=rzd.ru&type=ws#@erfanandroid
