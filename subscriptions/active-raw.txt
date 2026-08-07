@@ -18,8 +18,8 @@ trojan://ND91608427@3.64.59.246:443?security=tls&insecure=0&headerType=none&fp=c
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.87.240:443#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?&type=tcp&headerType=none&path=/#🇵🇹 Join+Telegram:@Farah_VPN 🇵🇹
 vless://859a537b-09cf-4bce-8da4-ecbb72950e3a@159.195.22.155:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=2.oncloudnineservicestreang.com&fp=chrome&pbk=Mg3ZxHNUFbX96q1HpS3WReeM7rnhEsXXtlEzxALeTDc&sid=d8d3dc6c3ca45dd4&type=tcp&headerType=none#🇩🇪 Join+Telegram:@Farah_VPN 🇩🇪
-ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpYRjBrbHc3ODcwdlhuM3VRSXhlMTlR@84.247.49.211:1080#@ShadowProxy66 🇸🇬
 vmess://eyJhZGQiOiI2Ni4xNjMuMTE3LjU4IiwiYWlkIjoiMCIsImFscG4iOiIiLCJmcCI6IiIsImhvc3QiOiJAUHJveHlWUE4xMSIsImlkIjoiMDQ2MjFiYWUtYWIzNi0xMWVjLWI5MDktMDI0MmFjMTIwMDAyIiwiaW5zZWN1cmUiOiIwIiwibmV0IjoidGNwIiwicGF0aCI6Ii8gQFByb3h5VlBOMTEiLCJwb3J0IjoiMjIzMjQiLCJwcyI6IvCfh6zwn4enIEBwcm94eV9rYWZlZSIsInNjeSI6ImF1dG8iLCJzbmkiOiIiLCJ0bHMiOiIiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0=
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpYRjBrbHc3ODcwdlhuM3VRSXhlMTlR@84.247.49.211:1080#@ShadowProxy66 🇸🇬
 vless://3bbef30d-9e00-7825-ab5d-8a69f9169d89@x4g-production-5360.up.railway.app:443?encryption=none&security=tls&type=ws&host=x4g-production-5360.up.railway.app&path=/ws/3bbef30d-9e00-7825-ab5d-8a69f9169d89&sni=x4g-production-5360.up.railway.app&fp=chrome&alpn=http/1.1#🇺🇸136567 | ⚡️Telegram = t.me/SOSkeyNET
 vless://28d0edc6-93c9-4465-bac9-720274d8b8c4@201.51.1.11:40443?encryption=none&flow=xtls-rprx-vision&fp=&pbk=WRveYv8IuUyvai4jgnQ6nWCL971-wKboe8evES5arlg&security=reality&sid=69d4&sni=deepl.com&type=tcp#🧅30@oneclickvpnkeys
 vless://14c44521-e28f-4561-a12c-337d8cc44d87@104.27.66.214:443?security=tls&type=xhttp&path=/TiMbErSaW&host=beaver.paxr.ir&alpn=h3,h2,http/1.1&sni=beaver.paxr.ir&fp=chrome&mode=auto&extra={"xPaddingBytes":"100-1000"}&encryption=none#🔵@chillguy_vpn
@@ -36,4 +36,3 @@ vless://166ef05e-8ab5-43b7-8910-d1bb0a4326a5@188.72.103.3:443?path=/api/v1/rooms
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpCTlh0ZTI3ekJ5dU52VHNR@20.223.129.129:443#[🇮🇪]t.me/ConfigV2RayNG
 vless://33a31dc6-6bbc-46c0-9685-fb5e327d3c7d@87.121.86.251:443?security=reality&encryption=none&pbk=qeBbCJY3sSjVSuxbUOf3pCtABiqwHqJVrlMRowDRYSk&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=api-maps.yandex.ru&sid=b1e2e720#@filembad
 vless://59525c39-e731-4c27-bc9e-6d8cef67572c@72.56.247.70:2200?path=/v1&security=none&encryption=none&host=rzd.ru&type=ws#@erfanandroid
-trojan://ND91608427@sure-humpback.rooster465.autos:443?allowInsecure=1&sni=sure-humpback.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
