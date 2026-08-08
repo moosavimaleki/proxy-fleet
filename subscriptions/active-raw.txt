@@ -63,4 +63,3 @@ trojan://humanity@104.18.152.246:443?path=/assignment&security=tls&insecure=0&ho
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpqaVVUemZkUG83Zlc@70.39.178.204:42747#@Begoo_VPN ²⁵⁷
 vless://2001e98b-e06e-4244-910f-7ff640746eda@168.222.202.15:4100?encryption=none&host=live.ok.ru&path=/v1&security=none&type=ws#🇷🇺137804 | ⚡️Telegram = t.me/SOSkeyNET
 vless://03707fb7-0990-440f-88f6-b0e0f7242a38@104.16.75.251:443?&security=tls&fp=chrome&alpn=http/1.1&sni=germany-2.ariyuz.org&type=ws&headerType=none&host=germany-2.ariyuz.org&path=/#🇩🇪 Join+Telegram:@Farah_VPN 🇩🇪
-vless://94588101-79f2-42f5-9a3a-9521ab05df81@91.228.227.231:29509?path=/&security=none&encryption=none&host=play.google.com&type=ws#@filembad
