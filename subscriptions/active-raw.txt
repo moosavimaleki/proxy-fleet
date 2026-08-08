@@ -28,5 +28,4 @@ trojan://ND91608427@44.242.235.129:443?fp=chrome&sni=devoted-tapir.rooster465.au
 vless://888193f6-6818-42f4-b223-64c9fd323b76@45.13.119.221:20513?encryption=none&type=tcp&security=reality&headerType=none&host=play.google.com&sni=updates.cdn-apple.com&fp=chrome&insecure=1&allowInsecure=1&pbk=CTfSuRE6fUPYVBJGsmOYnP3UketmmTJSQP45OcoGI2k&sid=285db1978fd0d8c1#@meliproxyy
 vless://2d8bd4f3-bd18-4257-bd6c-b1108486dd4f@ip1.amirggg.shop:2053?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&encryption=none&security=tls&type=xhttp&headerType=none&path=/&host=sv6.takvend.com&mode=auto&sni=sv6.takvend.com#@GozargahAzad|🏁
 vless://9a9fe945246a431ebd051cb981464c8d@2.59.163.45:59992?&type=tcp&headerType=none&path=/#🇵🇱 Join+Telegram:@Farah_VPN 🇵🇱
-vless://5b3fa4fc-0533-4023-b99e-ccb6ee03a44e@185.141.213.168:8880?security=&encryption=mlkem768x25519plus.native.0rtt.RGsrmjEh1INvgoYhtnXh8UYG6BJUmkyipIWtR_AUSTA&headerType=none&type=tcp#filembad-221
 vless://512a764b-846f-4d51-b337-74aabfa13663@panel.northforex.ir:997?path=/mmd&security=none&encryption=none&type=ws#[16792] - Telegram : @V2All
