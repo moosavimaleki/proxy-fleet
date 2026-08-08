@@ -73,4 +73,3 @@ vless://63ae5b68-f6f8-432e-b440-d975053cfbc2@www.true.th:80/?type=ws&encryption=
 vless://94588101-79f2-42f5-9a3a-9521ab05df81@91.228.227.231:29509?path=/&security=none&encryption=none&host=play.google.com&type=ws#@filembad
 vless://2001e98b-e06e-4244-910f-7ff640746eda@168.222.202.15:4100?encryption=none&host=live.ok.ru&path=/v1&security=none&type=ws#🇷🇺137804 | ⚡️Telegram = t.me/SOSkeyNET
 trojan://ND91608427@real-werewolf.rooster465.autos:443?allowInsecure=1&sni=real-werewolf.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
-vless://4d10c997-4781-4cd9-82c3-15453523e12c@104.26.9.48:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc#ProxyMtpVPN-208
