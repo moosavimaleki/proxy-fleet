@@ -16,4 +16,5 @@ vless://01a95af3-a2f6-453e-9f88-b2fc011627cc@92.114.24.95:43630?Telegram=@Gozarg
 vless://59525c39-e731-4c27-bc9e-6d8cef67572c@72.56.247.70:2200?path=/v1&security=none&encryption=none&host=rzd.ru&type=ws#@erfanandroid
 vless://9b44bfb4-9d28-4870-9fc3-5154d6d462ff@147.45.253.97:4100?path=/v1&security=none&encryption=none&host=live.ok.ru&type=ws#@v2rayng3
 vless://0b9bcbc1-b289-4a64-86fa-a5b731b65384@hk.vrsvpn.com:444?encryption=none&security=reality&type=grpc&sni=web.max.ru&fp=chrome&pbk=lxq7uAa7l0ozobBgTRrQIF_aCxDeJqZZFaNv8CFA9TQ&sid=8622176789abcdef&serviceName=web.max.ru&mode=gun#🇭🇰 Join+Telegram:@Farah_VPN 🇭🇰
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA1YzQ@r3mrcg001286ek2.cybervena.com:50099#🇹🇼 Join+Telegram:@Farah_VPN 🇹🇼
 vless://60ba3369-9a78-40fe-98c3-233a6f107043@143.246.182.7:443?path=/assets/build/_app/immutable/chunks/stream-one/&security=tls&alpn=h2,http/1.1&encryption=none&insecure=0&host=uk7.jailever.org&fp=chrome&type=xhttp&allowInsecure=0&sni=uk7.jailever.org#@Capoit
