@@ -44,7 +44,6 @@ vless://888193f6-6818-42f4-b223-64c9fd323b76@hub.docker.com:2086?encryption=none
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@45.128.76.171:443?encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&security=tls&sni=support.zoom.us.yxls.eu.cc&type=ws#🐻11@oneclickvpnkeys
 vless://888193f6-6818-42f4-b223-64c9fd323b76@45.80.111.1:8880?encryption=none&type=httpupgrade&path=/?ed=2082&host=eEhdfhhgln.5.postshup.ir#@freenettir
 trojan://humanity@165.215.250.14:443?path=/assignment&security=tls&host=www.ignitelimit.com&fp=chrome&type=ws&sni=www.ignitelimit.com#@v2rayng3
-vless://44ae52b9-76fc-444d-8e43-186b4384b80a@free-amsterdam-node-1.cloudwidecdn.com:443?security=reality&encryption=none&pbk=PryGoq51ilG0eLUPl9i0xCvmk1xpwkyFSr_tG4GNLlU&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=www.apple.com&sid=1d86d17709852910#[🏁]t.me/ConfigV2RayNG
 vless://60ba3369-9a78-40fe-98c3-233a6f107043@143.246.182.7:443?alpn=h2,http/1.1&encryption=none&fp=chrome&host=uk7.jailever.org&mode=auto&path=/assets/build/_app/immutable/chunks/stream-one/&security=tls&sni=uk7.jailever.org&type=xhttp#🐻38@oneclickvpnkeys
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.49:8080#@hex_proxy ³
 vless://0ad98b97-1071-4fcf-bd3e-fb86bd60c14e@155.103.69.93:8443?mode=auto&path=/&security=reality&encryption=none&pbk=xCLBuyzvjwCCXJy3mZKG_ZvTTbQFQyBKlzg9gtseDj4&fp=chrome&spx=/&type=xhttp&sni=play.google.com&sid=1179#@V2ray_Alpha👜 11
