@@ -15,8 +15,6 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpqaVVUemZkUG83Zlc@70.39.178.204:42747#@Begoo_
 vless://2001e98b-e06e-4244-910f-7ff640746eda@168.222.202.15:4100?encryption=none&host=live.ok.ru&path=/v1&security=none&type=ws#🐻64@oneclickvpnkeys
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFQkRSbzlUSHg0Q3FpRlU3aDVnZm92NzZvTnd6WlVSQWgwWndiV2pCS2RkdFVodno@103.120.178.193:31348#🇮🇳 Join+Telegram:@Farah_VPN 🇮🇳
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@time.is:443?path=/sg-melbi?ed=443&security=tls&alpn=h3,h2,http/1.1&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc.&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc.#@icv2ray
-ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.87.241:443#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
-vless://4d10c997-4781-4cd9-82c3-15453523e12c@49.13.64.206:443?sni=support.zoom.us.yxls.eu.cc&allowInsecure=0&type=ws&encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&insecure=0&security=tls#@meliproxyy
 vless://25d25f21-7a9e-426f-8c14-0c06782585ff@81.94.148.119:43000?encryption=none&flow=xtls-rprx-vision&fp=&pbk=CH7SpnfklhoBKYhez8VhcLzr9wzFkvbKAThOU_3y9lE&security=reality&sid=7523ef69&sni=iv.kommersant.ru&type=tcp#🐻75@oneclickvpnkeys
 trojan://ND91608427@15.237.219.234:443?sni=careful-tadpole.rooster465.autos#🧅100@oneclickvpnkeys
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@149.130.188.226:62145?type=tcp&headerType=none&path=/#🇨🇴CO-🚀@VPNine1
