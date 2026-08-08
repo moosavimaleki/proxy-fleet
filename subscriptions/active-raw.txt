@@ -18,11 +18,11 @@ ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.87.204:443#🇯🇵 Join+Telegram:@
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFQkRSbzlUSHg0Q3FpRlU3aDVnZm92NzZvTnd6WlVSQWgwWndiV2pCS2RkdFVodno@103.120.178.193:31348#🇮🇳 Join+Telegram:@Farah_VPN 🇮🇳
 vless://41784775-8846-4579-9d9d-9ad6ea802e2e@185.141.227.141:40006?security=reality&sni=ads.x5.ru&fp=chrome&pbk=uHCIeXxIcEoZ89kaNNBIKsy4axPMsBb2xeOMww7d1DY&sid=1a6b1f9d0e&type=tcp&flow=xtls-rprx-vision&packetEncoding=xudp&encryption=none#@filembad
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@time.is:443?path=/sg-melbi?ed=443&security=tls&alpn=h3,h2,http/1.1&encryption=none&insecure=0&host=support.zoom.us.yxls.eu.cc.&fp=chrome&type=ws&allowInsecure=0&sni=support.zoom.us.yxls.eu.cc.#@icv2ray
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpSRkszOENnN0FQbmVTQjVjV0RjcGJt@92.112.126.90:443#🇳🇱 Amsterdam
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpUbVhTcGNSQmJodkhEZzY2Ym8ydzg5YlRveFFzYk1vYQ==@31.76.30.79:10808#@confiig_hub
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.207:8080#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.213:8080#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
 vless://4d10c997-4781-4cd9-82c3-15453523e12c@188.114.97.3:443?encryption=none&fp=chrome&host=support.zoom.us.yxls.eu.cc&path=/sg-melbi&security=tls&sni=support.zoom.us.yxls.eu.cc&type=ws#🐻42@oneclickvpnkeys
-ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpSRkszOENnN0FQbmVTQjVjV0RjcGJt@92.112.126.90:443#🇳🇱 Amsterdam
 trojan://humanity@104.19.229.21:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#@Filtershekan_channel |3
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpUV0c3SjFLUjVLc1BhVjVxWkkrcmlldWVLeHhhZlpTcENI@45.77.232.213:15675#🇦🇺 Join+Telegram:@Farah_VPN 🇦🇺
 trojan://humanity@172.67.149.60:443?insecure=0&host=www.ignitelimit.com&allowInsecure=0&sni=www.ignitelimit.com&ech=ip.gs+udp://8.8.8.8&security=tls&type=ws&path=/assignment#@v2rayng3
