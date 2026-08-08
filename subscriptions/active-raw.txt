@@ -13,7 +13,6 @@ vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?encryption=non
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpqaVVUemZkUG83Zlc@70.39.178.204:42747#@Begoo_VPN ²⁵⁷
 vless://86c50e3a-5b87-49dd-bd20-03c7f2735e40@fuckfangbinxing.pusytroller.gq:2095?encryption=none&security=none&type=ws#🧅87@oneclickvpnkeys
 vless://2001e98b-e06e-4244-910f-7ff640746eda@168.222.202.15:4100?encryption=none&host=live.ok.ru&path=/v1&security=none&type=ws#🐻64@oneclickvpnkeys
-vless://25d25f21-7a9e-426f-8c14-0c06782585ff@81.94.148.119:43000?encryption=none&flow=xtls-rprx-vision&fp=&pbk=CH7SpnfklhoBKYhez8VhcLzr9wzFkvbKAThOU_3y9lE&security=reality&sid=7523ef69&sni=iv.kommersant.ru&type=tcp#🐻75@oneclickvpnkeys
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@149.130.188.226:62145?type=tcp&headerType=none&path=/#🇨🇴CO-🚀@VPNine1
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.213.216:62145?&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
 vless://564082ff-cf3c-48db-9e10-8ad2312847b4@77.239.123.224:443?encryption=none&flow=xtls-rprx-vision&fp=&pbk=TlpXTLz1Y-v8B6q9MX55U6eypjfL0LCSNE5zQP4yRHw&security=reality&sid=bbc68cec8bb8d2e3&sni=node20.mxvpn.dev&type=tcp#🐻12@oneclickvpnkeys
