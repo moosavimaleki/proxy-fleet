@@ -30,7 +30,6 @@ vless://02e2d68f-9982-4467-ad47-00cbeeae30e6@31.76.246.59:443/?type=tcp&encrypti
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.224.100:62145?&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
 trojan://humanity@104.18.152.187:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#🇨🇦138722 | ⚡️Telegram = t.me/SOSkeyNET
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.210:8080#@hex_proxy ⁶
-vless://564082ff-cf3c-48db-9e10-8ad2312847b4@77.239.123.219:443?flow=xtls-rprx-vision&encryption=none&security=reality&sni=node19.mxvpn.dev&pbk=TlpXTLz1Y-v8B6q9MX55U6eypjfL0LCSNE5zQP4yRHw&sid=bbc68cec8bb8d2e3&allowinsecure=0&type=tcp&headerType=none#🇩🇪All² | @BigSmoke_Config
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.149:8080#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
 vless://4c614fc2-8b75-4e3c-89c6-46de8e8da622@chatgpt.com:443?alpn=h2,http/1.1&fp=chrome&ech=cloudflare-ech.com+https://adl.adfilter.net/dns-query&type=xhttp&sni=pa.suts.info&mode=auto&path=/edu&security=tls&encryption=mlkem768x25519plus.native.0rtt.8LhKLmHAP_EeccBnbUcDjRg-S2565et63vC3aAmAP3I&extra={"xPaddingBytes":"100-1000"}&insecure=0&host=pa.suts.info&allowInsecure=0#MTMVPN 12
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?&type=tcp&headerType=none&path=/#🇵🇹 Join+Telegram:@Farah_VPN 🇵🇹
