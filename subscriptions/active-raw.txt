@@ -18,7 +18,6 @@ vless://9a9fe945246a431ebd051cb981464c8d@2.59.163.45:59992?type=tcp&headerType=n
 vless://41784775-8846-4579-9d9d-9ad6ea802e2e@185.141.227.141:40006?security=reality&sni=ads.x5.ru&fp=chrome&pbk=uHCIeXxIcEoZ89kaNNBIKsy4axPMsBb2xeOMww7d1DY&sid=1a6b1f9d0e&type=tcp&flow=xtls-rprx-vision&packetEncoding=xudp&encryption=none#🇪🇪 Join+Telegram:@Farah_VPN 🇪🇪
 vless://22448df3-17f8-40a6-9199-babaca108b46@95.85.251.116:59631?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&mode=gun&security=reality&encryption=none&pbk=bymilcd_vnDoof7qAq4QpFTm-hMeFPZwXPTMFXdasSg&type=grpc&sni=google.com&sid=4b#@GozargahAzad|🇫🇮
 vless://5d0206d9-fb42-4c8b-a84b-3d95ab0f42c7@109.73.196.160:4100?encryption=none&host=live.ok.ru&path=/v1&security=none&type=ws#🐻78@oneclickvpnkeys
-vless://3fd3909b-238f-42c4-9170-38d10014b1d8@135.125.184.182:50559?path=/&security=&encryption=none&host=Play.googel.com&type=ws#@HoosheMasnui 🇩🇪
 vless://31f345f3-b8eb-4ca6-8b14-bb555ae2c1f9@172.67.190.141:8880?path=/pyip&security=none&encryption=none&host=tiny-feather-4c41.227.workers.dev&type=ws#@Unblocked_ir³
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTowVjhvM2krWHZGRUs5UW0va0loaS9MUXo3NFhZWHVCSXRJU2JmWFVFUDNBPQ@e3.cover20.ir:56985?type=tcp#@v2rayng3
 vless://1a8aa3c0-7741-49dd-adbc-dcc629f6b938@178.154.208.44:443?encryption=none&flow=xtls-rprx-vision&type=raw&security=reality&sni=smartcaptcha.yandexcloud.net&pbk=oX_8IyRmI_X4pPWaGTbduLyvlZWwLkZlxJKmtvjmqEg&sid=03a70b17f8036009&spx=/HesarWeb#@filembad
