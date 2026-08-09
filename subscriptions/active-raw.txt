@@ -34,7 +34,6 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@193.29.139.132
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpDSm1UQ0N4N0x0dWQ@108.181.126.122:8388#👁️‍🗨️3@SHAHSERVER1
 vless://06d44c57-8e1a-41f4-b9c4-65d35869e078@ire01.skorostnet.space:13868?type=tcp&security=reality&sni=amd.com&pbk=XkqVl2cyWFosUZRHlg55Iek6KzLEoT_OPzuoErgWfWg&sid=e852dc&fp=chrome&encryption=none&flow=xtls-rprx-vision#🇮🇪IE-🚀@VPNine1
 vless://0c6b632a-cd96-4b74-9b51-151e3b5697db@using.neobo-tooth.ru:2083?security=tls&encryption=none&insecure=0&type=grpc&serviceName=grpc&allowInsecure=0#@MDvpnSec 🌀
-vless://501b6afa-f955-473f-8440-1010110a1548@85.234.100.49:7443?security=reality&encryption=none&pbk=UJASCPCy2vuNWu3q2C7vVte-HxG0r0XI83pgxBFBv1E&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=images.apple.com&sid=9c56af76#🇩🇪 ConfigV2RayNG
 vless://06d44c57-8e1a-41f4-b9c4-65d35869e078@78.17.105.52:13868?security=reality&encryption=none&pbk=XxzDVidmyjuPnBKrFDwCpowaIdLth4-kJsqrDvdPPx8&headerType=&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=amd.com&sid=e852dc#@filembad
 vless://60ba3369-9a78-40fe-98c3-233a6f107043@uk1.denverpresents.top:443?path=/assets/build/_app/immutable/chunks/stream-one/&security=tls&alpn=h2,http/1.1&encryption=none&insecure=0&host=uk1.denverpresents.top&fp=chrome&type=xhttp&allowInsecure=0&sni=uk1.denverpresents.top#@meliproxyy
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpZamxpWW1GbE56Vm1NbUU0Wm1Ka1lqQXhOelEyTldVeU56WmxOamhrWkdVPQ@137.131.204.232:59319#🇧🇷 Join+Telegram:@Farah_VPN 🇧🇷
