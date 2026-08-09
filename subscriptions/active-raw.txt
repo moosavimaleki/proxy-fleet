@@ -41,6 +41,7 @@ trojan://ND91608427@ace-starling.rooster465.autos:443?allowInsecure=1&sni=ace-st
 trojan://ND91608427@upright-impala.rooster465.autos:443?allowInsecure=1&sni=upright-impala.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.205:8080#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@173.244.56.9:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFQkRSbzlUSHg0Q3FpRlU3aDVnZm92NzZvTnd6WlVSQWgwWndiV2pCS2RkdFVodno@103.120.178.193:31348#🇮🇳 Join+Telegram:@Farah_VPN 🇮🇳
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpsaHVVTFJ3TzRzbE02azI2MnBBQzRjYnE1QTFINno4ZWFPSFYyN3ZpN1l3PQ@47.81.56.202:44617#🇹🇭 Join+Telegram:@Farah_VPN 🇹🇭
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTphZHVCOUhHeFFIakEyU0JNUmprSFg2@102.37.156.224:443#🇿🇦 Join+Telegram:@Farah_VPN 🇿🇦
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.95.183:443#🇨🇦 Join+Telegram:@Farah_VPN 🇨🇦
@@ -72,6 +73,5 @@ vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?&type=tcp&head
 vless://431fe973-a43a-4fac-bf83-2a772e0d0625@180.178.60.252:10000?security=none&encryption=none&headerType=none&type=tcp#@tootffarangi🍓-11
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpRRld6Q3cydVg5QjlpNnFBWWVGQklF@154.46.31.106:443#🇷🇴 Join+Telegram:@Farah_VPN 🇷🇴
 ss://YWVzLTI1Ni1nY206WEtGS2wyclVMaklwNzQ@185.226.172.8:8008#🇩🇪 Join+Telegram:@Farah_VPN 🇩🇪
-ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFQkRSbzlUSHg0Q3FpRlU3aDVnZm92NzZvTnd6WlVSQWgwWndiV2pCS2RkdFVodno@103.120.178.193:31348#🇮🇳 Join+Telegram:@Farah_VPN 🇮🇳
 ss://YWVzLTI1Ni1nY206WTZSOXBBdHZ4eHptR0M@103.106.231.82:5600#@V2raysCollector
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@149.130.188.226:62145?&type=tcp&headerType=none&path=/#🔵@chillguy_vpn
