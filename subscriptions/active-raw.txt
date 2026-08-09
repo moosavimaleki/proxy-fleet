@@ -25,8 +25,8 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.32:44
 trojan://ND91608427@communal-sunbird.rooster465.autos:443?allowInsecure=1&sni=communal-sunbird.rooster465.autos#🇰🇷 Join+Telegram:@Farah_VPN 🇰🇷
 trojan://ND91608427@upright-impala.rooster465.autos:443?allowInsecure=1&sni=upright-impala.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 trojan://ND91608427@distinct-llama.rooster465.autos:443?allowInsecure=1&sni=distinct-llama.rooster465.autos#🇰🇷 Join+Telegram:@Farah_VPN 🇰🇷
-trojan://65c56e1f-5c41-40bc-b0b5-9346772476ca@cf.130209.xyz:2053/?type=ws&host=v4.ipsb.us.ci&path=/api/v2/check_update&security=tls&sni=v4.ipsb.us.ci&fp=chrome#香港
 trojan://ND91608427@stunning-mite.rooster465.autos:443?allowInsecure=1&sni=stunning-mite.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
+trojan://65c56e1f-5c41-40bc-b0b5-9346772476ca@cf.130209.xyz:2053/?type=ws&host=v4.ipsb.us.ci&path=/api/v2/check_update&security=tls&sni=v4.ipsb.us.ci&fp=chrome#香港
 vless://86c50e3a-5b87-49dd-bd20-03c7f2735e40@172.64.146.153:2095?encryption=none&type=ws&path=/&host=fangbinxingnmsl.pusytroller.gq#@MDvpnSECفوق سرعت ☄️
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTplRGZON1NPRFFjZUlPbUlBYnRKSnRL@198.98.53.130:443#United+States
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFQkRSbzlUSHg0Q3FpRlU3aDVnZm92NzZvTnd6WlVSQWgwWndiV2pCS2RkdFVodno@103.120.178.193:31348#🇮🇳 Join+Telegram:@Farah_VPN 🇮🇳
