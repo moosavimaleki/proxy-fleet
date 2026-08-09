@@ -25,6 +25,7 @@ vless://8fdf6dde-a1ca-456d-9b18-86b74d5768e6@193.233.255.16:443?fp=chrome&header
 vless://74ed8b25-5ff1-40bf-bcd7-3db03be19f53@uiv.taguenaby-backend.com:443?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&mode=auto&path=/&security=reality&encryption=none&extra={"scMaxEachPostBytes":"4194304-8388608","uplinkHTTPMethod":"POST","seqPlacement":"query","uplinkChunkSize":"32768-65536"}&pbk=VHidBoU58xA5kEh8pmXf0gQYzvz-KVH9-XAuM4TrMUs&host=status.play.google.com&fp=chrome&spx=/&type=xhttp&sni=status.play.google.com&sid=49bcf0de6392f0#@GozargahAzad|🇫🇷
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpYRjBrbHc3ODcwdlhuM3VRSXhlMTlR@193.42.38.209:1080#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
 vless://02e2d68f-9982-4467-ad47-00cbeeae30e6@31.76.246.59:443/?type=tcp&encryption=none&flow=xtls-rprx-vision&sni=v.gb-cdn.ru&fp=chrome&security=reality&pbk=nFJCJ2tvxLdLrc9G-O1laW8KDir5SDnaOTmYndVaOGQ&sid=7a3f9e2b1c8d4f6a#英国
+vless://3d0135ce-97f0-4b2f-90c3-e8aaa01be795@206.72.205.152:40296?security=none&encryption=none&headerType=none&type=tcp#@Net2ray 2
 vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.224.100:62145?&type=tcp&headerType=none&path=/#🇨🇴 Join+Telegram:@Farah_VPN 🇨🇴
 trojan://humanity@104.18.152.187:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#🇨🇦138722 | ⚡️Telegram = t.me/SOSkeyNET
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.210:8080#@hex_proxy ⁶
