@@ -51,9 +51,7 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.149:8
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.18:8080#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
 trojan://ND91608427@discrete-basilisk.rooster465.autos:443?allowInsecure=1&sni=discrete-basilisk.rooster465.autos#🇵🇱 Join+Telegram:@Farah_VPN 🇵🇱
 vless://4c614fc2-8b75-4e3c-89c6-46de8e8da622@chatgpt.com:443?alpn=h2,http/1.1&fp=chrome&ech=cloudflare-ech.com+https://adl.adfilter.net/dns-query&type=xhttp&sni=pa.suts.info&mode=auto&path=/edu&security=tls&encryption=mlkem768x25519plus.native.0rtt.8LhKLmHAP_EeccBnbUcDjRg-S2565et63vC3aAmAP3I&extra={"xPaddingBytes":"100-1000"}&insecure=0&host=pa.suts.info&allowInsecure=0#MTMVPN 12
-ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M@158.173.24.73:443#🇬🇧 Join+Telegram:@Farah_VPN 🇬🇧
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?&type=tcp&headerType=none&path=/#🇵🇹 Join+Telegram:@Farah_VPN 🇵🇹
-vless://431fe973-a43a-4fac-bf83-2a772e0d0625@180.178.60.252:10000?security=none&encryption=none&headerType=none&type=tcp#@tootffarangi🍓-11
 trojan://ND91608427@real-werewolf.rooster465.autos:443?allowInsecure=1&sni=real-werewolf.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 trojan://ND91608427@sure-humpback.rooster465.autos:443?allowInsecure=1&sni=sure-humpback.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpoQ0NXT2NJc0s1d3JGejRPWDcwcldm@216.105.168.18:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
