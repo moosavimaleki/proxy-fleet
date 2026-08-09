@@ -18,4 +18,5 @@ vless://954e582b-339e-482f-91ca-62a021469766@parsiran.amirrezamydamane.info:4295
 vless://5f505e1f-3dd7-a1f1-94d2-c1bee24cb28d@69.46.46.20:443?path=/ws/5f505e1f-3dd7-a1f1-94d2-c1bee24cb28d&security=tls&alpn=http/1.1&encryption=none&host=rvg-production-7de5.up.railway.app&fp=chrome&type=ws&sni=rvg-production-7de5.up.railway.app#✅  @vistav2ray  👈👈کانال ما ✅
 vless://50e636af-b554-4526-94ad-d0f4b34adecc@147.45.47.39:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=sellflow.org&pbk=SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc&type=tcp&headerType=none#@filembad
 vless://50e636af-b554-4526-94ad-d0f4b34adecc@147.45.47.39:443?encryption=none&flow=xtls-rprx-vision&fp=&pbk=SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc&security=reality&sni=sellflow.org&type=tcp#1✨@oneclickvpnkeys
+vless://55009b9b-7b9c-4830-86c6-cb058a7a2e2f@147.45.235.14:2200?path=/v1&security=none&encryption=none&host=rzd.ru&type=ws#@filembad
 vless://50e636af-b554-4526-94ad-d0f4b34adecc@147.45.47.47:443?encryption=none&flow=xtls-rprx-vision&fp=&pbk=SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc&security=reality&sni=sellflow.org&type=tcp#5✨@oneclickvpnkeys
