@@ -46,7 +46,6 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpsaHVVTFJ3TzRzbE02azI2MnBBQzRjYnE1QTFINno4ZWF
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTphZHVCOUhHeFFIakEyU0JNUmprSFg2@102.37.156.224:443#🇿🇦 Join+Telegram:@Farah_VPN 🇿🇦
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.95.183:443#🇨🇦 Join+Telegram:@Farah_VPN 🇨🇦
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@173.244.56.6:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
-vless://06d44c57-8e1a-41f4-b9c4-65d35869e078@78.17.105.52:13868?flow=xtls-rprx-vision&encryption=none&security=reality&sni=amd.com&fp=chrome&pbk=XxzDVidmyjuPnBKrFDwCpowaIdLth4-kJsqrDvdPPx8&sid=e852dc&type=tcp&headerType=none#@meliproxyy
 vless://2c26ed61-be8a-45d1-978c-3774e062ac2b@199.232.237.80:443?encryption=none&security=tls&type=xhttp&headerType=none&path=/&host=metali8492.global.ssl.fastly.net&mode=auto&sni=global.fastly.com&fp=chrome&alpn=h2,http/1.1#🇺🇸US-🚀@VPNine1
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@193.29.139.132:8080#@hex_proxy ⁴
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpDSm1UQ0N4N0x0dWQ@108.181.126.122:8388#👁️‍🗨️3@SHAHSERVER1
