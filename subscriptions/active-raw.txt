@@ -61,6 +61,7 @@ ss://YWVzLTI1Ni1nY206Y2RCSURWNDJEQ3duZklO@38.180.113.194:8119#🏳️ Join+Teleg
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.198:8080#@v2rayng3
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@193.29.139.235:8080#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp6ejBkSGpEZm9hU2FadVJGTEdILWhOZkJBTFNFSlVZRA@68.168.222.210:1234#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
+ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.210:8080#@hex_proxy ⁶
 trojan://Aimer@167.68.4.199:2053?host=epge.muarua.filegear-sg.me&path=/?ed&sni=epge.muarua.filegear-sg.me&type=ws#🧬41@SHAHSERVER1
 vless://564082ff-cf3c-48db-9e10-8ad2312847b4@77.239.123.219:443?flow=xtls-rprx-vision&encryption=none&security=reality&sni=node19.mxvpn.dev&pbk=TlpXTLz1Y-v8B6q9MX55U6eypjfL0LCSNE5zQP4yRHw&sid=bbc68cec8bb8d2e3&allowinsecure=0&type=tcp&headerType=none#🇩🇪All² | @BigSmoke_Config
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.18:8080#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
