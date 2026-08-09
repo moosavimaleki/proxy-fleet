@@ -31,6 +31,7 @@ vless://8fb65472-5957-4f64-ba2d-b5812b2f155a@157.137.224.100:62145?&type=tcp&hea
 ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206eW1VRUl3Ukwzb1VtMC9PUkhhZGR2UXU1aUtVcW1oNzFWaDlLUGtMMTltVT06SGtpNEkyTUhrak9WcFRTelBQOUJlMjNFQ0U3MXJKU1h2TWdZN1dsLzRhaz0@irntu.libertyspeed.ir:2030?security=none&type=tcp#🇮🇷IR-🚀@VPNine1
 trojan://humanity@104.18.152.187:443?path=/assignment&security=tls&insecure=0&host=www.ignitelimit.com&type=ws&allowInsecure=0&sni=www.ignitelimit.com#🇨🇦138722 | ⚡️Telegram = t.me/SOSkeyNET
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.210:8080#@hex_proxy ⁶
+vless://954e582b-339e-482f-91ca-62a021469766@parsiran.amirrezamydamane.info:42951?security=tls&encryption=mlkem768x25519plus.native.0rtt.hr_B27q0XLj8gjJlo_IFJOwOV8R8R3h6IK5EjNw7Exk&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&sni=parsiran.amirrezamydamane.info#@mtmvpn 1
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.149:8080#🇳🇱 Join+Telegram:@Farah_VPN 🇳🇱
 vless://4c614fc2-8b75-4e3c-89c6-46de8e8da622@chatgpt.com:443?alpn=h2,http/1.1&fp=chrome&ech=cloudflare-ech.com+https://adl.adfilter.net/dns-query&type=xhttp&sni=pa.suts.info&mode=auto&path=/edu&security=tls&encryption=mlkem768x25519plus.native.0rtt.8LhKLmHAP_EeccBnbUcDjRg-S2565et63vC3aAmAP3I&extra={"xPaddingBytes":"100-1000"}&insecure=0&host=pa.suts.info&allowInsecure=0#MTMVPN 12
 vless://060a5db6-7ff9-4a64-87c1-8a27be4f11ab@93.119.168.215:60771?&type=tcp&headerType=none&path=/#🇵🇹 Join+Telegram:@Farah_VPN 🇵🇹
