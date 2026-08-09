@@ -55,6 +55,8 @@ vless://859a537b-09cf-4bce-8da4-ecbb72950e3a@159.195.45.129:443?encryption=none&
 vless://63ae5b68-f6f8-432e-b440-d975053cfbc2@www.true.th:80/?type=ws&encryption=none&flow=&host=d16l6nb4do0zu4.cloudfront.net&path=/than#泰国
 trojan://65c56e1f-5c41-40bc-b0b5-9346772476ca@cf.130209.xyz:2053/?type=ws&host=v4.ipsb.us.ci&path=/api/v2/check_update&security=tls&sni=v4.ipsb.us.ci&fp=chrome#香港
 vless://86c50e3a-5b87-49dd-bd20-03c7f2735e40@172.67.202.17:2095?&type=ws&headerType=none&host=nmslfangbinxing.pusytroller.gq&path=/#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
+vless://4038f946-bd95-5505-a111-196c05d6d92f@92.42.96.240:443?ed=2560&eh=Sec-WebSocket-Protocol&encryption=none&fp=chrome&host=mAhaNrEaliteAm.MaHkHan.iR&path=/&security=tls&sni=mAhaNrEaliteAm.MaHkHan.iR&type=ws#🇩🇪138681 | ⚡️Telegram = t.me/SOSkeyNET
+trojan://ND91608427@exotic-chow.rooster465.autos:443?allowInsecure=1&sni=exotic-chow.rooster465.autos#🇰🇷 Join+Telegram:@Farah_VPN 🇰🇷
 trojan://ND91608427@stunning-mite.rooster465.autos:443?allowInsecure=1&sni=stunning-mite.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 trojan://ND91608427@distinct-llama.rooster465.autos:443?allowInsecure=1&sni=distinct-llama.rooster465.autos#🇰🇷 Join+Telegram:@Farah_VPN 🇰🇷
 vless://05caca6c-9e97-4c0f-8edf-7b88a6e572c5@mypanel.unixzone.us:12068?path=/&security=none&encryption=none&host=mypanel.unixzone.us&type=ws#@hex_proxy ⁶
@@ -66,9 +68,7 @@ trojan://ND91608427@real-werewolf.rooster465.autos:443?allowInsecure=1&sni=real-
 trojan://ND91608427@sure-humpback.rooster465.autos:443?allowInsecure=1&sni=sure-humpback.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 vless://86c50e3a-5b87-49dd-bd20-03c7f2735e40@172.64.146.153:2095?encryption=none&type=ws&path=/&host=fangbinxingnmsl.pusytroller.gq#@MDvpnSECفوق سرعت ☄️
 trojan://ND91608427@chief-bluegill.rooster465.autos:443?allowInsecure=1&sni=chief-bluegill.rooster465.autos#🇰🇷 Join+Telegram:@Farah_VPN 🇰🇷
-vless://4038f946-bd95-5505-a111-196c05d6d92f@92.42.96.240:443?ed=2560&eh=Sec-WebSocket-Protocol&encryption=none&fp=chrome&host=mAhaNrEaliteAm.MaHkHan.iR&path=/&security=tls&sni=mAhaNrEaliteAm.MaHkHan.iR&type=ws#🇩🇪138681 | ⚡️Telegram = t.me/SOSkeyNET
 trojan://ND91608427@ace-starling.rooster465.autos:443?allowInsecure=1&sni=ace-starling.rooster465.autos#🇭🇰 Join+Telegram:@Farah_VPN 🇭🇰
 ss://YWVzLTI1Ni1nY206WTZSOXBBdHZ4eHptR0M@103.106.231.82:5600#🇦🇺
-trojan://ND91608427@exotic-chow.rooster465.autos:443?allowInsecure=1&sni=exotic-chow.rooster465.autos#🇰🇷 Join+Telegram:@Farah_VPN 🇰🇷
 trojan://Aimer@167.68.4.199:2053?host=epge.muarua.filegear-sg.me&path=/&sni=epge.muarua.filegear-sg.me&type=ws#🧬34@SHAHSERVER1
 trojan://ND91608427@adjusted-labrador.rooster465.autos:443?allowInsecure=1&sni=adjusted-labrador.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
