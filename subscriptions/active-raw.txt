@@ -14,3 +14,4 @@ vless://44ae52b9-76fc-444d-8e43-186b4384b80a@free-amsterdam-node-1.cloudwidecdn.
 vless://501b6afa-f955-473f-8440-1010110a1548@85.234.100.49:7443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=images.apple.com&fp=chrome&pbk=UJASCPCy2vuNWu3q2C7vVte-HxG0r0XI83pgxBFBv1E&sid=9c56af76&type=tcp&headerType=none#@filembad
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpZamxpWW1GbE56Vm1NbUU0Wm1Ka1lqQXhOelEyTldVeU56WmxOamhrWkdVPQ@137.131.204.232:59319#🇧🇷 Join+Telegram:@Farah_VPN 🇧🇷
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpQOXJ0Q0NMU2J5M1VEVmlVOXdEY00rV0Y2RFM3SGh4K1U0RHB0amRSL1FBPQ@e1.cover20.ir:51570?type=tcp#🇮🇷IR-🚀@VPNine1
+vless://30099a4e-6c9f-4de6-b6b3-bfee811f60ab@awexai.ir:443?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&encryption=mlkem768x25519plus.native.0rtt.LgTfn_8Dmlx616j58NVfUxT9rUOVukMUiHtB_HvDY2c&security=none&type=tcp&headerType=none#@GozargahAzad|🇩🇪
