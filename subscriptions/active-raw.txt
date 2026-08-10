@@ -10,4 +10,3 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA
 vless://9b44bfb4-9d28-4870-9fc3-5154d6d462ff@147.45.253.97:4100?path=/v1&security=none&encryption=none&host=live.ok.ru&type=ws#@v2rayng3
 trojan://zzkgsr3jAG@138.124.90.40:12591?security=reality&sni=www.apple.com&fp=chrome&pbk=COM-TsWGCziK_rYUm13rR5yoHN1Bia7svHRTliekTHY&sid=30de905f7ea0&spx=/&type=xhttp&path=/&mode=auto&extra={"xPaddingBytes":"100-1000"}#🎀𝑀𝐸𝐻𝒟𝐼🎀
 vless://74ed8b25-5ff1-40bf-bcd7-3db03be19f53@31.220.86.213:443?mode=auto&path=/&security=reality&encryption=none&extra={"scMaxEachPostBytes":"4194304-8388608","uplinkHTTPMethod":"POST","seqPlacement":"query","uplinkChunkSize":"32768-65536"}&pbk=VHidBoU58xA5kEh8pmXf0gQYzvz-KVH9-XAuM4TrMUs&host=status.play.google.com&fp=chrome&spx=/&type=xhttp&sni=status.play.google.com&sid=49bcf0de6392f0#@filembad
-vless://26c0589f-79e5-4789-8ff7-914f2e26e8e5@okb.lorqina.ir:40813?security=&encryption=none&headerType=&type=tcp#🇫🇷FR-🚀@VPNine1
