@@ -5,6 +5,7 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp3d3pWbjJabkhmcVlhNmw4RVdoM2VZ@92.112.126.90:
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5dHFoTWRJclRrZ1E0NlB2aHlBdE1I@92.112.126.90:443#[🏁]t.me/ConfigV2RayNG
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFdkxmV0dlMEFLdks@70.39.198.35:54166#@Begoo_VPN ²⁴¹
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo3ZTczMWVjMy1mOGUxLTQzZjYtOTJjZi0zOTc4ZDE0NzA1YzQ@r3mrcg00129437x.cybervena.com:50099#🇹🇼 Join+Telegram:@Farah_VPN 🇹🇼
+vless://9b44bfb4-9d28-4870-9fc3-5154d6d462ff@147.45.253.97:4100?path=/v1&security=none&encryption=none&host=live.ok.ru&type=ws#@v2rayng3
 vless://9a9fe945246a431ebd051cb981464c8d@2.59.163.45:59992?&type=tcp&headerType=none&path=/#🇵🇱 Join+Telegram:@Farah_VPN 🇵🇱
 vless://577699f7-468d-4b63-ae21-cdcdfd8d11c2@104.26.0.7:443?encryption=none&security=tls&sni=baguette.adaspoloandco.com&fp=chrome&alpn=h2,http/1.1&insecure=0&allowInsecure=0&type=ws&host=baguette.adaspoloandco.com&path=/GoorBah#🔵@chillguy_vpn
 trojan://jqTODRjQr1@138.124.92.103:49095?security=reality&sni=aws.amazon.com&fp=chrome&pbk=xv97ZtwvnqYKL4Ma7iR8eTfBgYPLYT0QTjcaoUXuWjM&sid=fdd089&spx=/&type=xhttp&path=/&mode=auto&extra={"xPaddingBytes":"100-1000"}#🎀𝑀𝐸𝐻𝒟𝐼🎀
