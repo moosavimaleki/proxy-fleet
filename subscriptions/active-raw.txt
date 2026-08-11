@@ -9,7 +9,5 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0dW5uZWwtZmJyb2Y@tr-1.stunnel.cc:8444#🏳�
 vless://5d0fbb28-3be3-4044-bc5b-e4b7ca1916c7@5.129.241.247:4100?path=/v1&security=none&encryption=none&host=live.ok.ru&type=ws#@filembad
 vless://8033102198@95.85.246.104:443?encryption=none&flow=xtls-rprx-vision&security=tls&sni=pl7.fast-connect-service.site&fp=chrome&alpn=http/1.1&type=tcp&headerType=none#@meliproxyy
 vless://81cd0fd8-57ad-7962-7f31-566c6dc0e6a7@69.46.46.11:443?path=/ws/81cd0fd8-57ad-7962-7f31-566c6dc0e6a7&security=tls&alpn=http/1.1&encryption=none&insecure=0&host=rvg-production-9ca8.up.railway.app&fp=chrome&type=ws&allowInsecure=0&sni=rvg-production-9ca8.up.railway.app#𝗝𝗼𝗶𝗻 ➠ @TAK_VPN12 جوین چنل
-vless://22199ed8-5f22-4906-9917-67e3609d8776@95.216.165.45:443?security=reality&encryption=none&pbk=XS_4X8Ti1WuBEYbWCFuN2gEc-YG0EwN3cNPRV4dAvCg&headerType=none&fp=chrome&spx=/&type=tcp&sni=www.cloudflare.com&sid=29fd3dc0210c#@filembad
 vless://8033102198@64.188.77.184:443?security=tls&alpn=http/1.1&encryption=none&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&flow=xtls-rprx-vision&sni=nl13.fast-connect-service.site#@TEHRANARGO
-vless://22199ed8-5f22-4906-9917-67e3609d8776@95.216.161.19:443?encryption=none&security=reality&sni=www.cloudflare.com&fp=chrome&pbk=XS_4X8Ti1WuBEYbWCFuN2gEc-YG0EwN3cNPRV4dAvCg&sid=29fd3dc0210c&spx=/&type=tcp&headerType=none#@meliproxyy
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpyU2VZY2lnX1hCeThxM2szM05wSzNB@65.109.178.10:1080#NormanConf
