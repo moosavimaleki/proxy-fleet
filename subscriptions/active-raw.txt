@@ -4,7 +4,6 @@ vless://112912a9-cedf-485d-b8ed-d8f8d4774437@31.129.96.186:2200/?type=ws&encrypt
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp3d3pWbjJabkhmcVlhNmw4RVdoM2VZ@92.112.126.90:443#@prrofile_purple | 𝗙𝗮𝗦𝗧 💚
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5dHFoTWRJclRrZ1E0NlB2aHlBdE1I@92.112.126.90:443#@vmesskhodam
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFdkxmV0dlMEFLdks@70.39.198.35:54166#@Begoo_VPN ²⁴¹
-vless://1369d309-51db-4822-8ba0-229a015fc53c@46.8.224.46:37202?security=reality&encryption=none&pbk=qTJhC_rpwRUQSRFiGxUifpXAnfL4W-EuoBauKKIiBQY&headerType=none&fp=chrome&spx=/c9fde6171a440fc&type=tcp&sni=support-shield.nvidia.pl&sid=fe25b809a631bacb#@FarazV2ray
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTp0dW5uZWwtZmJyb2Y@tr-1.stunnel.cc:8444#🏳️ Join+Telegram:@Farah_VPN 🏳️
 vless://a06119a7-4f1a-4592-86d9-e050a332b2b3@apro.foot8all.ir:3389?security=reality&encryption=none&pbk=NSlhQMA6VBgHPp7RsErk3hEdKuWPO0eeLdxgssfwbmY&headerType=none&fp=chrome&type=tcp&sni=play.google.com&sid=c6cbc90da6316b21#🚀t.me/iProxyChannel
 vless://@MAconnectt@reseau.proxy.rlwy.net:22506?mode=auto&path=/&security=reality&encryption=none&extra={"mode":"auto","xPaddingBytes":"100-1000"}&pbk=MqaPWSJqrzxoc2ps-WdOrhMnWjavFHJ63l8gDu19AWE&fp=chrome&spx=/&type=xhttp&sni=is1-ssl.mzstatic.com&sid=8fcd31b2df5c1c#@MAconnectt
