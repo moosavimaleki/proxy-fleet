@@ -10,4 +10,3 @@ vless://22199ed8-5f22-4906-9917-67e3609d8776@95.216.165.45:443?encryption=none&s
 vless://8033102198@64.188.77.184:443?security=tls&alpn=http/1.1&encryption=none&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&flow=xtls-rprx-vision&sni=nl13.fast-connect-service.site#@TEHRANARGO
 vless://22199ed8-5f22-4906-9917-67e3609d8776@95.216.161.19:443?encryption=none&security=reality&sni=www.cloudflare.com&fp=chrome&pbk=XS_4X8Ti1WuBEYbWCFuN2gEc-YG0EwN3cNPRV4dAvCg&sid=29fd3dc0210c&spx=/&type=tcp&headerType=none#@filembad
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpyU2VZY2lnX1hCeThxM2szM05wSzNB@65.109.178.10:1080#NormanConf
-vless://06d44c57-8e1a-41f4-b9c4-65d35869e078@isp05.skorostnet.space:13868?type=tcp&security=reality&sni=www.ea.com&pbk=W24D31y_1ZaASX1bq3d85DQaQd_3NcJQCvg1wmCn-Uo&sid=e852dc&fp=chrome&encryption=none&flow=xtls-rprx-vision#🇪🇸140213 | ⚡️Telegram = t.me/SOSkeyNET
