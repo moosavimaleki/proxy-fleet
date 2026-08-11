@@ -34,10 +34,11 @@ ss://YWVzLTI1Ni1nY206WEtGS2wyclVMaklwNzQ@185.226.172.8:8008#🇩🇪 Join+Telegr
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTprMWRCT21PQjRvcWk3VW1wMzdhMWJR@82.38.31.205:8080#@hex_proxy ⁴
 trojan://ND91608427@discrete-basilisk.rooster465.autos:443?allowInsecure=1&sni=discrete-basilisk.rooster465.autos#🇵🇱 Join+Telegram:@Farah_VPN 🇵🇱
 vless://03707fb7-0990-440f-88f6-b0e0f7242a38@104.16.75.251:443?&security=tls&fp=chrome&alpn=http/1.1&sni=germany-2.ariyuz.org&type=ws&headerType=none&host=germany-2.ariyuz.org&path=/#🇨🇦140352 | ⚡️Telegram = t.me/SOSkeyNET
-trojan://ND91608427@ace-starling.rooster465.autos:443?allowInsecure=1&sni=ace-starling.rooster465.autos#🇭🇰 Join+Telegram:@Farah_VPN 🇭🇰
 vless://47fcef29-ab4e-4aa6-932b-d95a18f28a4e@162.159.137.204:443?encryption=none&type=ws&path=/&host=0h3qt.oqwt.pl0.hh.vavava.kdns.fr&security=tls&sni=0h3qt.oqwt.pl0.hh.vavava.kdns.fr&fp=chrome#🇨🇦140466 | ⚡️Telegram = t.me/SOSkeyNET
 vless://76713d07-5a6b-49c2-abd8-bc450a2fa7fc@64.188.82.57:443?encryption=none&flow=xtls-rprx-vision&fp=&pbk=P2MV0I11JvKg-G3wfg64YVGUEh0Wvy6C4MTVsMPWdyQ&security=reality&sid=7b1c7d9a3f2a&sni=ee-download.spectrum.vu&type=tcp#🔖60@oneclickvpnkeys
+trojan://ND91608427@ace-starling.rooster465.autos:443?allowInsecure=1&sni=ace-starling.rooster465.autos#🇭🇰 Join+Telegram:@Farah_VPN 🇭🇰
 trojan://ND91608427@exotic-chow.rooster465.autos:443?allowInsecure=1&sni=exotic-chow.rooster465.autos#🇰🇷 Join+Telegram:@Farah_VPN 🇰🇷
+vless://8033102198@144.31.171.233:443?security=tls&alpn=h2,http/1.1&encryption=none&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&flow=xtls-rprx-vision&sni=pl6.fast-connect-service.site#@Capoit
 vless://52bc7468-0c2f-4e9d-bdfa-e266242ab44b@193.37.213.44:443?security=reality&encryption=none&pbk=fu-_qH499aSXYcsyiJIUf9o28LYahPCIFyRHrLWuCDI&headerType=none&fp=chrome&type=tcp&sid=0a077a46#@filembad
 vless://83afd88f-200f-4d89-bfc7-66eff160c1d8@172.66.44.97:443?path=/?TELEGRAM-MARAMBASHI_MARAMBASHI_MARAMBASHI_MARAMBASHI_MARAMBASHI?ed=512&security=tls&encryption=none&insecure=0&host=josni.hoyes.cloudns.ch&ech=ip.gs+udp://8.8.8.8&type=ws&allowInsecure=0&sni=josni.hoyes.cloudns.ch#@ConfigV2RayNG 🫁
 trojan://MITIVPN@104.19.229.21:443?path=/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/D-e2---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN/---@MiTiVPN---@MiTiVPN&security=tls&alpn=http/1.1&host=DeA-G-MiTiVPN--MiTiVPN--MiTiVPN---MiTiVPN--MiTiVPN--MiTiVPN.mitiVpN.lIfeStyLe&fp=chrome&type=ws&sni=d--AA-ia-MiTiVPN--MiTiVPN--MiTiVPN---MiTiVPN--MiTiVPN--MiTiVPN.mitiVpN.lIfeStyLe#🇨🇦140398 | ⚡️Telegram = t.me/SOSkeyNET
