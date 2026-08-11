@@ -6,7 +6,7 @@ ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo5dHFoTWRJclRrZ1E0NlB2aHlBdE1I@92.112.126.90:
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpFdkxmV0dlMEFLdks@70.39.198.35:54166#@Begoo_VPN ²⁴¹
 vless://1369d309-51db-4822-8ba0-229a015fc53c@46.8.224.46:37202?security=reality&encryption=none&pbk=qTJhC_rpwRUQSRFiGxUifpXAnfL4W-EuoBauKKIiBQY&headerType=none&fp=chrome&spx=/c9fde6171a440fc&type=tcp&sni=support-shield.nvidia.pl&sid=fe25b809a631bacb#@FarazV2ray
 vless://06d44c57-8e1a-41f4-b9c4-65d35869e078@78.17.4.20:13868?encryption=none&type=tcp&security=reality&pbk=8SX8GXMe3lXOyY_acO4HFXXYJn_rOOf4zkYFrifV1Tk&sid=e852dc&sni=www.epicgames.com&fp=chrome&flow=xtls-rprx-vision#[🇫🇮]t.me/ConfigsHub
-ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206Z2w0VWpNWUppVHVCSHEzdWFHbmtmMXJzdEx6cDdjdWgwd1VPNTg2Zmdmdz06RmJtRUZ5VGRZclJyc1FXMFB4N2V4V2ZZWkJFU0J2TGN1d2FybW9jMnUrbz0@193.233.133.152:50820#🇫🇷FR-🚀@VPNine1
+ss://MjAyMi1ibGFrZTMtYWVzLTI1Ni1nY206Z2w0VWpNWUppVHVCSHEzdWFHbmtmMXJzdEx6cDdjdWgwd1VPNTg2Zmdmdz06RmJtRUZ5VGRZclJyc1FXMFB4N2V4V2ZZWkJFU0J2TGN1d2FybW9jMnUrbz0@193.233.133.152:50820?#🎀𝑀𝐸𝐻𝒟𝐼🎀
 vless://XpnTeam-25@140.248.186.45:443?path=/&security=tls&alpn=http/1.1&encryption=none&insecure=0&host=Appxdn.global.ssl.fastly.net&fp=chrome&type=ws&allowInsecure=0&sni=ssl.fastly.com#@bored_vpn
 vless://@MAconnectt@reseau.proxy.rlwy.net:22506?mode=auto&path=/&security=reality&encryption=none&extra={"mode":"auto","xPaddingBytes":"100-1000"}&pbk=MqaPWSJqrzxoc2ps-WdOrhMnWjavFHJ63l8gDu19AWE&fp=chrome&spx=/&type=xhttp&sni=is1-ssl.mzstatic.com&sid=8fcd31b2df5c1c#@MAconnectt
 vless://06d44c57-8e1a-41f4-b9c4-65d35869e078@78.17.4.20:13868?security=reality&encryption=none&pbk=8SX8GXMe3lXOyY_acO4HFXXYJn_rOOf4zkYFrifV1Tk&headerType=none&fp=chrome&type=tcp&flow=xtls-rprx-vision&sni=www.epicgames.com&sid=e852dc#@filembad
