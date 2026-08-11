@@ -10,6 +10,7 @@ vless://47fcef29-ab4e-4aa6-932b-d95a18f28a4e@162.159.137.204:443?encryption=none
 ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpvWklvQTY5UTh5aGNRVjhrYTNQYTNB@82.38.31.149:8080#🇳🇱140552 | ⚡️Telegram = t.me/SOSkeyNET
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.95.183:443#🇨🇦 Join+Telegram:@Farah_VPN 🇨🇦
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@37.19.198.244:443#🇺🇸 Join+Telegram:@Farah_VPN 🇺🇸
+trojan://ND91608427@ace-starling.rooster465.autos:443?allowInsecure=1&sni=ace-starling.rooster465.autos#🇭🇰 Join+Telegram:@Farah_VPN 🇭🇰
 vless://4593aa27-a2a1-412f-935f-3829495c0970@91.235.234.186:443?encryption=none&flow=xtls-rprx-vision&type=tcp&security=reality&sni=us7fs3.proxen.pdevinfra.com&fp=chrome&pbk=g-WqfHKjac71MMtkmq5bIvTFavzXTCAnEI_17KoTNSQ#🇪🇪 Join+Telegram:@Farah_VPN 🇪🇪
 vless://23bda1f5-da85-4de6-aacb-ce77acb88808@5.75.202.32:7190?encryption=none&type=tcp&security=reality&pbk=mPyGyFIPaIJskk9IhHv9rkv7amf77CYUV0KVeqDsPU8&sid=7398e0c72f7d5c0e&sni=www.yahoo.com&fp=chrome#🇩🇪140618 | ⚡️Telegram = t.me/SOSkeyNET
 vless://60ba3369-9a78-40fe-98c3-233a6f107043@ru6.ethicsdinnerpave.online:443?type=xhttp&headerType=none&security=tls&encryption=none&sni=ru6.ethicsdinnerpave.online&alpn=h2,http/1.1&path=/assets/build/_app/immutable/chunks/stream-one/&host=ru6.ethicsdinnerpave.online&fp=chrome#kurdconfig
@@ -38,7 +39,6 @@ vless://3a4dbd51-72ea-4c20-a764-f51de001c0ab@193.17.183.81:8433?security=reality
 vless://83afd88f-200f-4d89-bfc7-66eff160c1d8@172.66.44.97:443?path=/?TELEGRAM-MARAMBASHI_MARAMBASHI_MARAMBASHI_MARAMBASHI_MARAMBASHI?ed=512&security=tls&encryption=none&insecure=0&host=josni.hoyes.cloudns.ch&ech=ip.gs+udp://8.8.8.8&type=ws&allowInsecure=0&sni=josni.hoyes.cloudns.ch#@ConfigV2RayNG 🫁
 vless://83afd88f-200f-4d89-bfc7-66eff160c1d8@one-for-all.levikogjgfdd.ir:443?path=/sg-melbi&security=tls&encryption=none&insecure=0&host=josni.hoyes.cloudns.ch&type=ws&allowInsecure=0&sni=josni.hoyes.cloudns.ch#@V2ray_Alpha☠️ 6
 vless://76713d07-5a6b-49c2-abd8-bc450a2fa7fc@64.188.82.57:443?encryption=none&flow=xtls-rprx-vision&fp=&pbk=P2MV0I11JvKg-G3wfg64YVGUEh0Wvy6C4MTVsMPWdyQ&security=reality&sid=7b1c7d9a3f2a&sni=ee-download.spectrum.vu&type=tcp#🔖60@oneclickvpnkeys
-trojan://ND91608427@ace-starling.rooster465.autos:443?allowInsecure=1&sni=ace-starling.rooster465.autos#🇭🇰 Join+Telegram:@Farah_VPN 🇭🇰
 vless://8033102198@144.31.171.233:443?security=tls&alpn=h2,http/1.1&encryption=none&insecure=0&headerType=none&fp=chrome&type=tcp&allowInsecure=0&flow=xtls-rprx-vision&sni=pl6.fast-connect-service.site#@Capoit
 vless://22199ed8-5f22-4906-9917-67e3609d8776@95.216.161.1:443?encryption=none&type=raw&security=reality&sni=www.cloudflare.com&fp=chrome&pbk=XS_4X8Ti1WuBEYbWCFuN2gEc-YG0EwN3cNPRV4dAvCg&sid=29fd3dc0210c&spx=/HesarWeb#• 🇫🇮 | 𝗙𝗶𝗻𝗹𝗮𝗻𝗱 - @HesarWeb
 vless://52bc7468-0c2f-4e9d-bdfa-e266242ab44b@193.37.213.44:443?security=reality&encryption=none&pbk=fu-_qH499aSXYcsyiJIUf9o28LYahPCIFyRHrLWuCDI&headerType=none&fp=chrome&type=tcp&sid=0a077a46#@filembad
