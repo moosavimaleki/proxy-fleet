@@ -33,6 +33,7 @@ ss://YWVzLTI1Ni1nY206WTZSOXBBdHZ4eHptR0M@103.106.231.82:5600#🇶🇦telegram➠
 trojan://65c56e1f-5c41-40bc-b0b5-9346772476ca@cf.130209.xyz:2053/?type=ws&host=v4.ipsb.us.ci&path=/api/v2/check_update&security=tls&sni=v4.ipsb.us.ci&fp=chrome#香港
 vless://83afd88f-200f-4d89-bfc7-66eff160c1d8@172.66.44.97:443?Telegram=@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad,@GozargahAzad&host=josni.hoyes.cloudns.ch&path=musiclovers85_musiclovers85&insecure=0&type=ws&security=tls&sni=josni.hoyes.cloudns.ch&allowInsecure=0&encryption=none#@GozargahAzad|🏁
 trojan://ND91608427@stunning-mite.rooster465.autos:443?allowInsecure=1&sni=stunning-mite.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
+trojan://ND91608427@casual-bee.rooster465.autos:443?allowInsecure=1&sni=casual-bee.rooster465.autos#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.87.241:443#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
 trojan://ND91608427@exotic-chow.rooster465.autos:443?allowInsecure=1&sni=exotic-chow.rooster465.autos#🇰🇷 Join+Telegram:@Farah_VPN 🇰🇷
 ss://YWVzLTEyOC1nY206c2hhZG93c29ja3M=@149.22.87.240:443#🇯🇵 Join+Telegram:@Farah_VPN 🇯🇵
